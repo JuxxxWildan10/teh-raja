@@ -15,56 +15,56 @@ export type Product = {
 export const products: Product[] = [
     {
         id: '1',
-        name: 'Royal Golden Milk Tea',
-        price: 18000,
-        description: 'Signature black tea blended with premium fresh milk and golden brown sugar.',
+        name: 'Royale Milk Tea',
+        price: 5000,
+        description: 'Teh melati signature dipadukan dengan susu segar premium .',
         image: '/images/royal-milk-tea.png',
         category: 'signature',
         attributes: { sweet: 8, creamy: 9, fruity: 0 }
     },
     {
         id: '2',
-        name: 'Imperial Jasmine Honey',
-        price: 15000,
-        description: 'Fragrant jasmine tea with organic honey and aloe vera toppings.',
+        name: 'Imperial Jasmine',
+        price: 3000,
+        description: 'Teh melati wangi yang harum dan menenangkan .',
         image: '/images/jasmine-honey.png',
         category: 'classic',
         attributes: { sweet: 6, creamy: 0, fruity: 2 }
     },
     {
         id: '3',
-        name: 'Sakura Berry Frappe',
-        price: 22000,
-        description: 'Japanese sakura essence blended with strawberry and cream cheese foam.',
+        name: 'Teh Tarik Istimewa',
+        price: 7000,
+        description: 'Paduan yang istimewa antara teh dan susu segar.',
         image: '/images/sakura-berry.png',
         category: 'fruit',
         attributes: { sweet: 9, creamy: 7, fruity: 9 }
     },
     {
         id: '4',
-        name: 'Kyoto Macha Latte',
-        price: 20000,
-        description: 'Imported matcha from Kyoto with fresh milk, rich and earthy.',
+        name: 'The Great Matcha Latte',
+        price: 7000,
+        description: 'Matcha otentik  dengan susu segar, pekat dan bersahaja.',
         image: '/images/matcha-latte.png',
         category: 'milk',
         attributes: { sweet: 5, creamy: 8, fruity: 0 }
     },
     {
         id: '5',
-        name: 'Tropical Mango Breeze',
-        price: 18000,
-        description: 'Refreshing mango tea with real mango chunks and mint leaves.',
+        name: 'Tropical Milk Tea Mango ',
+        price: 7000,
+        description: 'Teh mangga menyegarkan dan creamy.',
         image: '/images/mango-breeze.png',
         category: 'fruit',
-        attributes: { sweet: 7, creamy: 1, fruity: 10 }
+        attributes: { sweet: 7, creamy: 2, fruity: 10 }
     },
     {
         id: '6',
-        name: 'Dark Roasted Oolong',
-        price: 14000,
-        description: 'Pure roasted oolong tea, strong and energetic.',
+        name: 'Lychee Tea',
+        price: 7000,
+        description: 'Sajian minuman teh dengan leci yang segar.',
         image: '/images/oolong.png',
         category: 'classic',
-        attributes: { sweet: 1, creamy: 0, fruity: 0 }
+        attributes: { sweet: 1, creamy: 0, fruity: 5 }
     }
 ];

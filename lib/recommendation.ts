@@ -15,9 +15,9 @@ function calculateDistance(pref: UserPreferences, input: UserPreferences): numbe
     );
 }
 
-export function getRecommendations(preferences: UserPreferences): Product[] {
+export function getRecommendations(preferences: UserPreferences, currentProducts: Product[]): Product[] {
     // Sort products by distance (closest is best match)
-    const ranked = products.map((product) => {
+    const ranked = currentProducts.map((product) => {
         const distance = calculateDistance(preferences, product.attributes);
         return { ...product, score: distance };
     }).sort((a, b) => a.score - b.score);

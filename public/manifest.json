@@ -1,0 +1,17 @@
+{
+  "name": "TEH RAJA - Authentic Tea",
+  "short_name": "Teh Raja",
+  "description": "Authentic premium tea shop with smart recommendation system.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1A4D3E",
+  "theme_color": "#D4AF37",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "orientation": "portrait"
+}
