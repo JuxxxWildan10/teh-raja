@@ -233,6 +233,10 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 if (typeof window !== 'undefined') {
     console.log("Initializing Firebase Listeners...");
 
+    if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        console.error("CRITICAL: Firebase API Key is missing! Check environment variables.");
+    }
+
     // 1. Sync Products
     onSnapshot(collection(db, "products"), (snapshot) => {
         console.log("Products snapshot received. Empty:", snapshot.empty);
