@@ -18,7 +18,7 @@ export const products: Product[] = [
         name: 'Royale Milk Tea',
         price: 5000,
         description: 'Teh melati signature dipadukan dengan susu segar premium .',
-        image: '/images/royal-milk-tea.png',
+        image: 'https://i.pinimg.com/736x/0b/e7/b8/0be7b87d66b4d16ec60455d1d81abbe8.jpg',
         category: 'signature',
         attributes: { sweet: 8, creamy: 9, fruity: 0 }
     },
@@ -27,7 +27,7 @@ export const products: Product[] = [
         name: 'Imperial Jasmine',
         price: 3000,
         description: 'Teh melati wangi yang harum dan menenangkan .',
-        image: '/images/jasmine-honey.png',
+        image: 'https://i.pinimg.com/736x/15/0d/e4/150de4882a02714ec9c4f585f29a433e.jpg',
         category: 'classic',
         attributes: { sweet: 6, creamy: 0, fruity: 2 }
     },
@@ -36,7 +36,7 @@ export const products: Product[] = [
         name: 'Teh Tarik Istimewa',
         price: 7000,
         description: 'Paduan yang istimewa antara teh dan susu segar.',
-        image: '/images/sakura-berry.png',
+        image: 'https://i.pinimg.com/736x/2a/74/7d/2a747d0502b31ca988ccbb4b8ac9af84.jpg',
         category: 'fruit',
         attributes: { sweet: 9, creamy: 7, fruity: 9 }
     },
@@ -45,7 +45,7 @@ export const products: Product[] = [
         name: 'The Great Matcha Latte',
         price: 7000,
         description: 'Matcha otentik  dengan susu segar, pekat dan bersahaja.',
-        image: '/images/matcha-latte.png',
+        image: 'https://i.pinimg.com/736x/dc/c9/ce/dcc9cece545e7f612d6ad61fd4f3f552.jpg',
         category: 'milk',
         attributes: { sweet: 5, creamy: 8, fruity: 0 }
     },
@@ -54,7 +54,7 @@ export const products: Product[] = [
         name: 'Tropical Milk Tea Mango ',
         price: 7000,
         description: 'Teh mangga menyegarkan dan creamy.',
-        image: '/images/mango-breeze.png',
+        image: 'https://i.pinimg.com/1200x/88/ea/83/88ea83064077c3bc9aac22a359f02180.jpg',
         category: 'fruit',
         attributes: { sweet: 7, creamy: 2, fruity: 10 }
     },
@@ -63,7 +63,7 @@ export const products: Product[] = [
         name: 'Lychee Tea',
         price: 7000,
         description: 'Sajian minuman teh dengan leci yang segar.',
-        image: '/images/oolong.png',
+        image: 'https://i.pinimg.com/736x/8d/43/37/8d4337f052681194d09bc7af73d93c44.jpg',
         category: 'classic',
         attributes: { sweet: 1, creamy: 0, fruity: 5 }
     }
