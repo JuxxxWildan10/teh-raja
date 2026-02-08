@@ -231,22 +231,34 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 // --- Initialization & Real-time Listeners ---
 
 if (typeof window !== 'undefined') {
+    console.log("Initializing Firebase Listeners...");
+
     // 1. Sync Products
     onSnapshot(collection(db, "products"), (snapshot) => {
+        console.log("Products snapshot received. Empty:", snapshot.empty);
         if (snapshot.empty) {
+            console.log("Seeding products...");
             // Seed if empty
             initialProducts.forEach(async (p) => {
-                await setDoc(doc(db, "products", p.id), {
-                    ...p,
-                    isAvailable: true,
-                    stock: 50,
-                    minStockThreshold: 10
-                });
+                try {
+                    await setDoc(doc(db, "products", p.id), {
+                        ...p,
+                        isAvailable: true,
+                        stock: 50,
+                        minStockThreshold: 10
+                    });
+                    console.log(`Seeded: ${p.name}`);
+                } catch (err) {
+                    console.error("Error seeding product:", err);
+                }
             });
         } else {
             const products = snapshot.docs.map(doc => doc.data() as ExtendedProduct);
+            console.log("Products loaded from Firestore:", products.length);
             useProductStore.getState().setProducts(products);
         }
+    }, (error) => {
+        console.error("Firestore Products Listener Error:", error);
     });
 
     // 2. Sync Orders
@@ -254,6 +266,8 @@ if (typeof window !== 'undefined') {
     onSnapshot(ordersQuery, (snapshot) => {
         const orders = snapshot.docs.map(doc => doc.data() as Order);
         useSalesStore.getState().setOrders(orders);
+    }, (error) => {
+        console.error("Firestore Orders Listener Error:", error);
     });
 
     // 3. Sync Logs
@@ -261,6 +275,9 @@ if (typeof window !== 'undefined') {
     onSnapshot(logsQuery, (snapshot) => {
         const logs = snapshot.docs.map(doc => doc.data() as ActivityLog);
         useSalesStore.getState().setLogs(logs);
+    }, (error) => {
+        console.error("Firestore Logs Listener Error:", error);
     });
 }
+
 
