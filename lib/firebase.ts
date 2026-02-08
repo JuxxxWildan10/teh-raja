@@ -11,6 +11,10 @@ const firebaseConfig = {
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
+if (typeof window !== 'undefined') {
+    console.log("Firebase Init - Project ID:", !!firebaseConfig.projectId ? "✅ Loaded" : "❌ UNDEFINED");
+}
+
 // Initialize Firebase
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
