@@ -31,7 +31,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         return outOfStockItems;
     };
 
-    const handleCheckout = async () => {
+    const handleCheckout = () => {
         if (!name) {
             alert("Mohon isi nama Anda");
             return;
@@ -57,9 +57,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             cashierName: "Web Store"
         };
 
-        await addOrder(newOrder);
-        await addLog("SALE", `Order ${newOrder.id.slice(0, 6)} by ${name}`, "Customer (Web)");
-        await decrementStock(itemsWithNotes);
+        addOrder(newOrder);
+        addLog("SALE", `Order ${newOrder.id.slice(0, 6)} by ${name}`, "Customer (Web)");
+        decrementStock(itemsWithNotes);
 
         setLastOrder(newOrder);
 
