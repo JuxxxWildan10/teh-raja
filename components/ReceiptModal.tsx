@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { Order } from "@/lib/store";
-import { X, Download, Share2 } from "lucide-react";
+import { X, Download } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface ReceiptModalProps {
@@ -59,7 +59,7 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
                                     </div>
                                     {item.note && (
                                         <div className="text-xs text-gray-500 italic pl-5">
-                                            "{item.note}"
+                                            &quot;{item.note}&quot;
                                         </div>
                                     )}
                                 </div>

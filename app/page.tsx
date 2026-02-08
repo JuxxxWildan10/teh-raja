@@ -4,30 +4,36 @@ import Navbar from "@/components/Navbar";
 import RecommendationQuiz from "@/components/RecommendationQuiz";
 import { useCartStore, useProductStore } from "@/lib/store"; // Use dynamic store
 import { motion } from "framer-motion";
-import { ShoppingBag, Star, ArrowDown, AlertTriangle, Download } from "lucide-react";
-import Image from "next/image";
+import { Star, ArrowDown, AlertTriangle, Download } from "lucide-react";
 import { useState, useEffect } from "react";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => void;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 
 export default function Home() {
   const addToCart = useCartStore((state) => state.addToCart);
   const products = useProductStore((state) => state.products); // Dynamic products
   const [isClient, setIsClient] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     setIsClient(true);
 
     // PWA Install Prompt
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
     });
   }, []);
 
   const handleInstall = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
-      deferredPrompt.userChoice.then((choiceResult: any) => {
+      deferredPrompt.userChoice.then((choiceResult: { outcome: 'accepted' | 'dismissed' }) => {
         if (choiceResult.outcome === 'accepted') {
           console.log('User accepted the install prompt');
         }

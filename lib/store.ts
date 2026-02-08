@@ -132,7 +132,7 @@ export const useCartStore = create<CartState>()(
 
 export const useProductStore = create<ProductState>()(
     persist(
-        (set, get) => ({
+        (set) => ({
             products: initialProducts.map(p => ({
                 ...p,
                 isAvailable: true,

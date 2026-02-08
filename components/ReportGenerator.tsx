@@ -3,7 +3,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Order } from "@/lib/store";
-import { Download, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 
 interface ReportGeneratorProps {
     orders: Order[];
@@ -40,7 +40,7 @@ export default function ReportGenerator({ orders }: ReportGeneratorProps) {
 
         // --- Table ---
         const tableColumn = ["Order", "Waktu", "Kasir", "Detail", "Total"];
-        const tableRows: any[] = [];
+        const tableRows: string[][] = [];
 
         orders.forEach(order => {
             const itemsString = order.items.map(i => `${i.name} (x${i.quantity})`).join(', ');
@@ -54,7 +54,6 @@ export default function ReportGenerator({ orders }: ReportGeneratorProps) {
             tableRows.push(orderData);
         });
 
-        // @ts-ignore
         autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
@@ -64,8 +63,8 @@ export default function ReportGenerator({ orders }: ReportGeneratorProps) {
         });
 
         // --- Footer ---
-        // @ts-ignore
-        const finalY = doc.lastAutoTable.finalY || 150;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const finalY = (doc as any).lastAutoTable?.finalY || 150;
 
         doc.setFontSize(10);
         doc.text("Mengetahui,", 160, finalY + 20, { align: 'center' });

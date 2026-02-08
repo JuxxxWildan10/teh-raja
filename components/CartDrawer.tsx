@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useCartStore, useSalesStore, useProductStore } from "@/lib/store";
+import { useCartStore, useSalesStore, useProductStore, Order } from "@/lib/store";
 import { X, Minus, Plus, Trash2, MessageCircle, Edit3 } from "lucide-react";
 import { useState } from "react";
 import ReceiptModal from "./ReceiptModal";
@@ -21,7 +21,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     const [table, setTable] = useState("");
     const [notes, setNotes] = useState<Record<string, string>>({});
     const [showReceipt, setShowReceipt] = useState(false);
-    const [lastOrder, setLastOrder] = useState<any>(null);
+    const [lastOrder, setLastOrder] = useState<Order | null>(null);
 
     const checkStock = () => {
         const outOfStockItems = items.filter(cartItem => {

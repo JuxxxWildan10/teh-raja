@@ -3,19 +3,19 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRecommendations } from "@/lib/recommendation";
-import { Product } from "@/data/menu";
-import { useCartStore, useProductStore } from "@/lib/store"; // Import product store
+import { useCartStore, useProductStore, ExtendedProduct } from "@/lib/store"; // Import product store
 import { ShoppingBag, RefreshCcw } from "lucide-react";
 
 export default function RecommendationQuiz() {
     const [step, setStep] = useState(0);
     const [prefs, setPrefs] = useState({ sweet: 5, creamy: 5, fruity: 5 });
-    const [results, setResults] = useState<Product[]>([]);
+    const [results, setResults] = useState<ExtendedProduct[]>([]);
     const addToCart = useCartStore((state) => state.addToCart);
     const products = useProductStore((state) => state.products); // Use dynamic products
     const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         setIsClient(true);
     }, []);
 

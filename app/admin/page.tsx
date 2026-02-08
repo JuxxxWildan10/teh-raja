@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useProductStore, useSalesStore, useAuthStore, ExtendedProduct, ActivityLog } from "@/lib/store";
+import { useProductStore, useSalesStore, useAuthStore, ExtendedProduct } from "@/lib/store";
 import { Line, Bar } from "react-chartjs-2";
 import {
     Chart as ChartJS,
@@ -17,8 +17,8 @@ import {
 import {
     Plus, Trash, Edit, LogOut, X, Save,
     Image as ImageIcon, Download,
-    CheckCircle, XCircle, ShieldAlert,
-    History, User, AlertTriangle
+    ShieldAlert,
+    History, AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
 import { nanoid } from "nanoid";
@@ -42,7 +42,7 @@ export default function AdminPage() {
     const [loginError, setLoginError] = useState("");
 
     // Stores
-    const { products, addProduct, updateProduct, deleteProduct, toggleAvailability } = useProductStore();
+    const { products, addProduct, updateProduct, deleteProduct } = useProductStore();
     const { getDailySales, getProductPopularity, orders, logs, addLog, resetData } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
 
@@ -57,6 +57,7 @@ export default function AdminPage() {
         isAvailable: true, stock: 50, minStockThreshold: 10
     });
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { setIsClient(true); }, []);
 
     const handleLogin = (e: React.FormEvent) => {
@@ -486,7 +487,7 @@ export default function AdminPage() {
                                     <select
                                         className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest bg-white"
                                         value={formData.category}
-                                        onChange={e => setFormData({ ...formData, category: e.target.value as any })}
+                                        onChange={e => setFormData({ ...formData, category: e.target.value as 'signature' | 'classic' | 'milk' | 'fruit' })}
                                     >
                                         <option value="signature">Signature (Khas)</option>
                                         <option value="classic">Classic Tea</option>

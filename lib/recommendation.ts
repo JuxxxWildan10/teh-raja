@@ -1,4 +1,4 @@
-import { products, Product } from '@/data/menu';
+import { Product } from '@/data/menu';
 
 type UserPreferences = {
     sweet: number;
@@ -15,7 +15,7 @@ function calculateDistance(pref: UserPreferences, input: UserPreferences): numbe
     );
 }
 
-export function getRecommendations(preferences: UserPreferences, currentProducts: Product[]): Product[] {
+export function getRecommendations<T extends Product>(preferences: UserPreferences, currentProducts: T[]): T[] {
     // Sort products by distance (closest is best match)
     const ranked = currentProducts.map((product) => {
         const distance = calculateDistance(preferences, product.attributes);
