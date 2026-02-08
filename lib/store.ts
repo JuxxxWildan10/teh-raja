@@ -231,17 +231,19 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 // --- Initialization & Real-time Listeners ---
 
 if (typeof window !== 'undefined') {
-    console.log("Initializing Firebase Listeners...");
+    console.log("🚀 Initializing Firebase Listeners...");
 
     if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-        console.error("CRITICAL: Firebase API Key is missing! Check environment variables.");
+        console.error("❌ CRITICAL: Firebase API Key is missing! Check environment variables in Netlify/Local.");
+    } else {
+        console.log("✅ Firebase Config detected for Project:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
     }
 
     // 1. Sync Products
     onSnapshot(collection(db, "products"), (snapshot) => {
-        console.log("Products snapshot received. Empty:", snapshot.empty);
+        console.log("📦 Products snapshot received. Empty:", snapshot.empty, "Size:", snapshot.size);
         if (snapshot.empty) {
-            console.log("Seeding products...");
+            console.log("⚠️ Seeding initial products to Firestore...");
             // Seed if empty
             initialProducts.forEach(async (p) => {
                 try {
@@ -251,37 +253,40 @@ if (typeof window !== 'undefined') {
                         stock: 50,
                         minStockThreshold: 10
                     });
-                    console.log(`Seeded: ${p.name}`);
+                    console.log(`✅ Seeded: ${p.name}`);
                 } catch (err) {
-                    console.error("Error seeding product:", err);
+                    console.error(`❌ Error seeding ${p.name}:`, err);
                 }
             });
         } else {
             const products = snapshot.docs.map(doc => doc.data() as ExtendedProduct);
-            console.log("Products loaded from Firestore:", products.length);
+            console.log("✨ Products loaded successfully:", products.length);
             useProductStore.getState().setProducts(products);
         }
     }, (error) => {
-        console.error("Firestore Products Listener Error:", error);
+        console.error("❌ Firestore Products Error:", error.code, error.message);
     });
 
     // 2. Sync Orders
     const ordersQuery = query(collection(db, "orders"), orderBy("date", "desc"), limit(500));
     onSnapshot(ordersQuery, (snapshot) => {
+        console.log("📝 Orders synced. Count:", snapshot.size);
         const orders = snapshot.docs.map(doc => doc.data() as Order);
         useSalesStore.getState().setOrders(orders);
     }, (error) => {
-        console.error("Firestore Orders Listener Error:", error);
+        console.error("❌ Firestore Orders Error:", error.code, error.message);
     });
 
     // 3. Sync Logs
     const logsQuery = query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(100));
     onSnapshot(logsQuery, (snapshot) => {
+        console.log("📜 Logs synced. Count:", snapshot.size);
         const logs = snapshot.docs.map(doc => doc.data() as ActivityLog);
         useSalesStore.getState().setLogs(logs);
     }, (error) => {
-        console.error("Firestore Logs Listener Error:", error);
+        console.error("❌ Firestore Logs Error:", error.code, error.message);
     });
 }
+
 
 
