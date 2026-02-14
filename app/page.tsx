@@ -2,6 +2,7 @@
 
 import Navbar from "@/components/Navbar";
 import RecommendationQuiz from "@/components/RecommendationQuiz";
+import OrderStatusOverlay from "@/components/OrderStatusOverlay"; // [NEW] 
 import { useCartStore, useProductStore } from "@/lib/store"; // Use dynamic store
 import { motion } from "framer-motion";
 import { Star, ArrowDown, AlertTriangle, Download } from "lucide-react";
@@ -209,6 +210,9 @@ export default function Home() {
       <footer className="bg-black/40 py-10 border-t border-white/5 text-center text-sm opacity-40">
         <p>TEH RAJA &copy; 2026. M. YARZUQ WILDANI [0402231058]. Dibuat untuk Praktik Kerja Lapangan.</p>
       </footer>
+
+      {/* OVERLAYS */}
+      <OrderStatusOverlay />
     </main>
   );
 }

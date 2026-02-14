@@ -13,7 +13,7 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
-    const { items, removeFromCart, updateQuantity, total, clearCart } = useCartStore();
+    const { items, removeFromCart, updateQuantity, total, clearCart, setActiveOrder } = useCartStore(); // [NEW] setActiveOrder
     const { addOrder, addLog } = useSalesStore();
     const { products, decrementStock } = useProductStore();
 
@@ -48,13 +48,14 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             note: notes[item.id] || ""
         }));
 
-        const newOrder = {
+        const newOrder: Order = {
             id: nanoid(),
             date: new Date().toISOString(),
             items: itemsWithNotes,
             total: total(),
             customerName: name,
-            cashierName: "Web Store"
+            cashierName: "Web Store",
+            status: 'pending' // [NEW] Default status
         };
 
         addOrder(newOrder);
@@ -63,23 +64,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
         setLastOrder(newOrder);
 
-        let message = `*PESANAN BARU - TEH RAJA*\n`;
-        message += `Nama: ${name}\n`;
-        message += `Meja: ${table || 'Takeaway/Bungkus'}\n`;
-        message += `Order ID: ${newOrder.id.slice(0, 6)}\n`;
-        message += `----------------\n`;
-        itemsWithNotes.forEach(item => {
-            message += `${item.quantity}x ${item.name} (${(item.quantity * item.price).toLocaleString('id-ID')})\n`;
-            if (item.note) message += `   _catatan: ${item.note}_\n`;
-        });
-        message += `----------------\n`;
-        message += `Total: Rp ${total().toLocaleString('id-ID')}\n`;
-        message += `Mohon diproses pesanan saya. Terima kasih!`;
-
-        const url = `https://wa.me/6285166500741?text=${encodeURIComponent(message)}`;
-        window.open(url, '_blank');
-
+        // [MODIFIED] Removed WhatsApp redirection. 
+        // Direct success feedback via Receipt Modal.
         setShowReceipt(true);
+        setActiveOrder(newOrder.id); // [NEW] Trigger status overlay
         clearCart();
         setNotes({});
     };
@@ -217,7 +205,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                 className="w-full py-4 bg-gold text-forest font-bold rounded-xl hover:bg-gold-light transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <MessageCircle size={20} />
-                                Pesan via WhatsApp
+                                Proses Pesanan
                             </button>
                         </div>
                     </motion.div>

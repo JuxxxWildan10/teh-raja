@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Product, products as initialProducts } from '@/data/menu';
+import { rtdb } from '@/lib/firebase'; // [NEW]
+import { ref, set as firebaseSet, update as firebaseUpdate } from 'firebase/database'; // [NEW]
 
 // --- Types ---
 export type Role = 'admin' | 'cashier';
@@ -37,16 +39,19 @@ export interface Order {
     total: number;
     customerName?: string;
     cashierName?: string;
+    status: 'pending' | 'processing' | 'completed' | 'cancelled'; // [NEW] Status tracking
 }
 
 // --- Stores ---
 
 interface CartState {
     items: CartItem[];
+    activeOrderId: string | null; // [NEW] Track active order
     addToCart: (product: ExtendedProduct) => void;
     removeFromCart: (productId: string) => void;
     updateQuantity: (productId: string, quantity: number) => void;
     clearCart: () => void;
+    setActiveOrder: (id: string | null) => void; // [NEW]
     total: () => number;
 }
 
@@ -63,6 +68,7 @@ interface SalesState {
     orders: Order[];
     logs: ActivityLog[];
     addOrder: (order: Order) => void;
+    updateOrderStatus: (orderId: string, status: Order['status']) => void; // [NEW]
     addLog: (action: string, details: string, user: string) => void;
     getDailySales: () => { date: string; total: number; count: number }[];
     getProductPopularity: () => { name: string; count: number }[];
@@ -92,6 +98,8 @@ export const useCartStore = create<CartState>()(
     persist(
         (set, get) => ({
             items: [],
+            activeOrderId: null, // [NEW]
+            setActiveOrder: (id) => set({ activeOrderId: id }), // [NEW]
             addToCart: (product) => {
                 set((state) => {
                     if (product.stock <= 0) return state;
@@ -163,11 +171,24 @@ export const useSalesStore = create<SalesState>()(
         (set, get) => ({
             orders: [],
             logs: [],
-            addOrder: (order) => set((state) => ({ orders: [...state.orders, order] })),
+            addOrder: (order) => {
+                set((state) => ({ orders: [...state.orders, order] }));
+                // [NEW] Sync to Firebase
+                const orderRef = ref(rtdb, `orders/${order.id}`);
+                firebaseSet(orderRef, order).catch(err => console.error("Firebase Add Error:", err));
+            },
+            updateOrderStatus: (orderId, status) => {
+                set((state) => ({
+                    orders: state.orders.map(o => o.id === orderId ? { ...o, status } : o)
+                }));
+                // [NEW] Sync to Firebase
+                const orderRef = ref(rtdb, `orders/${orderId}`);
+                firebaseUpdate(orderRef, { status }).catch(err => console.error("Firebase Update Error:", err));
+            },
             addLog: (action, details, user) => set((state) => ({
                 logs: [{
                     id: crypto.randomUUID(),
-                    timestamp: new Date().toISOString(),
+                    timestamp: new Date().toISOString(), // Use local/client time for now
                     action,
                     details,
                     user

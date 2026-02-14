@@ -18,7 +18,8 @@ import {
     Plus, Trash, Edit, LogOut, X, Save,
     Image as ImageIcon, Download,
     ShieldAlert,
-    History, AlertTriangle
+    History, AlertTriangle,
+    CheckCircle, XCircle, Clock, Loader // [NEW] Icons
 } from "lucide-react";
 import Link from "next/link";
 import { nanoid } from "nanoid";
@@ -43,11 +44,11 @@ export default function AdminPage() {
 
     // Stores
     const { products, addProduct, updateProduct, deleteProduct } = useProductStore();
-    const { getDailySales, getProductPopularity, orders, logs, addLog, resetData } = useSalesStore();
+    const { getDailySales, getProductPopularity, orders, logs, addLog, resetData, updateOrderStatus } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
 
     // UI State
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders'>('dashboard');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState<ExtendedProduct>({
@@ -118,9 +119,9 @@ export default function AdminPage() {
     }
 
     const handleReset = () => {
-        if (confirm("PERINGATAN: Semua data penjualan akan dihapus permanen. Lanjutkan?")) {
+        if (confirm("PERINGATAN: Semua data penjualan dan pesanan akan dihapus permanen. Lanjutkan?")) {
             resetData();
-            addLog("RESET_DATA", "All sales data reset", user?.name || "Unknown");
+            addLog("RESET_DATA", "All sales and order data reset", user?.name || "Unknown");
             alert("Data berhasil direset.");
             window.location.reload();
         }
@@ -248,6 +249,21 @@ export default function AdminPage() {
                         >
                             Menu & Stok
                         </button>
+                        <button
+                            onClick={() => setActiveTab('orders')}
+                            data-pending={orders.filter(o => o.status === 'pending').length} // [NEW] for debugging
+                            className={`px-4 py-1.5 rounded-md transition relative ${activeTab === 'orders' ? 'bg-gold text-forest font-bold' : 'hover:bg-white/5'}`}
+                        >
+                            Pesanan
+                            {orders.some(o => o.status === 'pending') && (
+                                <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[10px] text-white font-bold items-center justify-center">
+                                        {orders.filter(o => o.status === 'pending').length}
+                                    </span>
+                                </span>
+                            )}
+                        </button>
                         {user.role === 'admin' && (
                             <button
                                 onClick={() => setActiveTab('logs')}
@@ -315,6 +331,107 @@ export default function AdminPage() {
                                 </button>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {activeTab === 'orders' && (
+                    <div className="animate-fade-in bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <div>
+                                <h2 className="text-xl font-bold font-serif">Daftar Pesanan Masuk</h2>
+                                <p className="text-sm text-gray-400">Pantau dan kelola pesanan pelanggan.</p>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
+                                    <tr>
+                                        <th className="p-4">Order ID</th>
+                                        <th className="p-4">Waktu</th>
+                                        <th className="p-4">Pelanggan</th>
+                                        <th className="p-4">Menu</th>
+                                        <th className="p-4">Total</th>
+                                        <th className="p-4">Status</th>
+                                        <th className="p-4 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {orders.slice().reverse().map(order => ( // Show newest first
+                                        <tr key={order.id} className="hover:bg-blue-50/50 transition bg-white">
+                                            <td className="p-4 font-mono text-xs text-gray-500">#{order.id.slice(0, 6)}</td>
+                                            <td className="p-4 text-sm">
+                                                {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="p-4 font-bold text-gray-800">{order.customerName || "Guest"}</td>
+                                            <td className="p-4 text-sm text-gray-600 max-w-xs">
+                                                {order.items.map(i => `${i.quantity}x ${i.name}`).join(", ")}
+                                            </td>
+                                            <td className="p-4 font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</td>
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 text-xs rounded-full font-bold uppercase tracking-wide flex w-fit items-center gap-1
+                                                    ${order.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                        order.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                                                            order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                                                'bg-yellow-100 text-yellow-700'}`}>
+                                                    {order.status === 'completed' && <CheckCircle size={12} />}
+                                                    {order.status === 'processing' && <Loader size={12} className="animate-spin" />}
+                                                    {order.status === 'cancelled' && <XCircle size={12} />}
+                                                    {order.status === 'pending' && <Clock size={12} />}
+                                                    {order.status || 'pending'}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    {(!order.status || order.status === 'pending') && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    updateOrderStatus(order.id, 'processing');
+                                                                    addLog("PROCESS_ORDER", `Processing order #${order.id.slice(0, 6)}`, user?.name || "Admin");
+                                                                }}
+                                                                className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 transition"
+                                                            >
+                                                                Proses
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (confirm("Batalkan pesanan ini?")) {
+                                                                        updateOrderStatus(order.id, 'cancelled');
+                                                                        addLog("CANCEL_ORDER", `Cancelled order #${order.id.slice(0, 6)}`, user?.name || "Admin");
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-1 bg-gray-200 text-gray-600 rounded text-xs font-bold hover:bg-gray-300 transition"
+                                                            >
+                                                                Batal
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {order.status === 'processing' && (
+                                                        <button
+                                                            onClick={() => {
+                                                                updateOrderStatus(order.id, 'completed');
+                                                                addLog("COMPLETE_ORDER", `Completed order #${order.id.slice(0, 6)}`, user?.name || "Admin");
+                                                            }}
+                                                            className="px-3 py-1 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700 transition"
+                                                        >
+                                                            Selesai
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {orders.length === 0 && (
+                                        <tr>
+                                            <td colSpan={7} className="p-8 text-center text-gray-400 italic">
+                                                Belum ada pesanan masuk hari ini.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
 
