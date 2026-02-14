@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, set, update } from "firebase/database";
 import { useSalesStore, useCartStore, Order } from "@/lib/store";
@@ -19,32 +19,45 @@ export default function FirebaseSync() {
     const prevOrdersLength = useRef(orders.length);
     const prevStatus = useRef<string | null>(null);
 
+    const [isConnected, setIsConnected] = useState<boolean>(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
     // 1. Listen for Firebase Changes (Cloud -> Client)
     useEffect(() => {
         const ordersRef = ref(rtdb, 'orders');
+
+        // Listen for value changes
         const unsubscribe = onValue(ordersRef, (snapshot) => {
+            setIsConnected(true);
+            setErrorMsg(null);
+
             const data = snapshot.val();
             if (data) {
-                // Convert object to array
                 const loadedOrders: Order[] = Object.values(data);
-
-                // Sync to Zustand (avoid infinite loop by checking JSON stringify or simplified check? 
-                // leveraging Zustand's setter is fine, but we need to avoid re-triggering "addOrder" logic if we had that.)
-                // Actually, useSalesStore just sets state.
-                // We need a way to set orders directly without triggering side effects if any.
-                // For now, I'll assume useSalesStore.setState is accessible or I'll add a 'setOrders' action.
-                // Wait, useSalesStore doesn't have 'setOrders'. I should check store.ts.
-                // It has 'addOrder'. I might need to add 'syncOrders'.
-
-                // Let's rely on the store's current implementation to just REPLACE the orders if I add a setOrders.
-                // For now, I'll just skip this implementation detail until I update store.ts.
-                // But wait, I need to write this file now. 
-                // I will assume I will add `setOrders` to the store.
                 useSalesStore.setState({ orders: loadedOrders });
+            }
+        }, (error) => {
+            console.error("Firebase Sync Error:", error);
+            setIsConnected(false);
+            setErrorMsg(error.message);
+        });
+
+        // Optional: Check explicit connection state
+        const connectedRef = ref(rtdb, ".info/connected");
+        const unsubscribeStatus = onValue(connectedRef, (snap) => {
+            if (snap.val() === true) {
+                console.log("Firebase RTDB Connected");
+                setIsConnected(true);
+            } else {
+                console.log("Firebase RTDB Disconnected");
+                setIsConnected(false);
             }
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            unsubscribeStatus();
+        };
     }, []);
 
     // 2. Audio Logic: New Order (Admin)
@@ -75,5 +88,19 @@ export default function FirebaseSync() {
         }
     }, [orders, activeOrderId]);
 
-    return null; // Headless component
+    return (
+        <div className="fixed bottom-4 left-4 z-[9999] pointer-events-none opacity-80 backdrop-blur top-auto right-auto">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${errorMsg
+                ? 'bg-red-900/80 text-white border-red-500'
+                : isConnected
+                    ? 'bg-green-900/80 text-green-100 border-green-500'
+                    : 'bg-yellow-900/80 text-yellow-100 border-yellow-500'
+                }`}>
+                <div className={`w-2 h-2 rounded-full ${errorMsg ? 'bg-red-500 animate-pulse' : isConnected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'
+                    }`} />
+                {errorMsg ? "Sync Error" : isConnected ? "Realtime On" : "Connecting..."}
+            </div>
+            {errorMsg && <div className="mt-1 text-[10px] bg-black text-red-300 p-1 rounded max-w-[200px]">{errorMsg}</div>}
+        </div>
+    );
 }
