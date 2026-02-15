@@ -222,7 +222,7 @@ export default function AdminPage() {
 
                     <div className="mt-8 pt-6 border-t border-white/10 text-xs text-white/30 flex justify-between">
                         <span>© 2024 Teh Raja</span>
-                        <span>v2.0.0 (Pro)</span>
+                        <span>v2.1.0 (Notes Fixed)</span>
                     </div>
                 </div>
             </div>
@@ -365,7 +365,16 @@ export default function AdminPage() {
                                             </td>
                                             <td className="p-4 font-bold text-gray-800">{order.customerName || "Guest"}</td>
                                             <td className="p-4 text-sm text-gray-600 max-w-xs">
-                                                {order.items.map(i => `${i.quantity}x ${i.name}`).join(", ")}
+                                                {order.items.map((i, idx) => (
+                                                    <div key={idx} className="mb-1 border-b border-gray-50 last:border-0 pb-1">
+                                                        <span className="font-bold text-gray-700">{i.quantity}x {i.name}</span>
+                                                        {i.note && (
+                                                            <div className="text-xs text-blue-600 italic flex items-center gap-1">
+                                                                📝 {i.note}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
                                             </td>
                                             <td className="p-4 font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</td>
                                             <td className="p-4">

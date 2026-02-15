@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🍵 Teh Raja - Premium Tea Shop Management System
 
-## Getting Started
+A Modern, Real-time Point of Sale (POS) and Ordering System built for **Teh Raja**.
+Designed to bridge the gap between customers and cashiers with instant synchronization.
 
-First, run the development server:
+![Teh Raja Banner](/public/icons/icon-512x512.png)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Key Features (Fitur Unggulan)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 1. ⚡ Real-time Synchronization
+-   **Instant Order Updates**: Orders placed by customers on their device appear **instantly** on the Admin Dashboard without refreshing (powered by **Firebase Realtime Database**).
+-   **Live Status Tracking**: Customers can see their tea being made ("Is Preparing") and finished ("Ready") in real-time.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 2. 🔔 Interactive Audio Feedback
+-   **Admin Alert**: "Chime" sound when a new order arrives.
+-   **Customer Alert**: "Ding" sound when order status changes.
+-   Increases engagement and ensures no order is missed during busy hours.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. 📱 PWA (Progressive Web App) Support
+-   **Installable**: Can be installed on Android/iOS/Windows as a native-like app.
+-   **Offline Capable**: Basic UI loads even without internet.
+-   **App-like Feel**: Fullscreen experience with smooth animations.
 
-## Learn More
+### 4. 🛠️ Comprehensive Admin Dashboard
+-   **Order Management**: Process, Complete, or Cancel orders.
+-   **Sales Logging**: Tracks every action for accountability.
+-   **Notification Badge**: Visual counter for pending orders.
 
-To learn more about Next.js, take a look at the following resources:
+### 5. 🎨 Premium UI/UX
+-   **Gold & Forest Theme**: Elegant design matching the brand identity.
+-   **Smart Cart**: "Add to Cart" with quantity controls and receipt generation.
+-   **Recommendation Quiz**: Helps customers choose their perfect tea.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🛠️ Technology Stack (Teknologi yang Digunakan)
 
-## Deploy on Vercel
+-   **Frontend**: [Next.js 15](https://nextjs.org/) (React Framework)
+-   **Language**: [TypeScript](https://www.typescriptlang.org/) (Strict Type Safety)
+-   **Styling**: [Tailwind CSS](https://tailwindcss.com/) + Framer Motion (Animations)
+-   **State Management**: [Zustand](https://github.com/pmndrs/zustand) (Local & Global State)
+-   **Backend / Database**: [Firebase Realtime Database](https://firebase.google.com/)
+-   **Deployment**: Vercel / Netlify
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📦 Installation & Setup
+
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/username/teh-raja.git
+    cd teh-raja
+    ```
+
+2.  **Install Dependencies**
+    ```bash
+    npm install
+    ```
+
+3.  **Setup Environment Variables**
+    Create a `.env.local` file and add your Firebase credentials:
+    ```env
+    NEXT_PUBLIC_FIREBASE_API_KEY=...
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+    NEXT_PUBLIC_FIREBASE_DATABASE_URL=...
+    # (See Firebase Console for full list)
+    ```
+
+4.  **Run Development Server**
+    ```bash
+    npm run dev
+    ```
+
+5.  **Open Browser**
+    Visit `http://localhost:3000`
+
+---
+
+## 👨‍💻 Project Structure
+
+-   `/app`: Next.js App Router pages (Admin & User).
+-   `/components`: Reusable UI components (Cart, Overlay, Sync).
+-   `/lib`: Helper functions (Firebase init, Zustand Stores).
+-   `/data`: Static menu data.
+
+---
+
+Built with ❤️ for **PKL Project 2026**.
