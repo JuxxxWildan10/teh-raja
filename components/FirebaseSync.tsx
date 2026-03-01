@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { rtdb } from "@/lib/firebase";
-import { ref, onValue, set, update } from "firebase/database";
-import { useSalesStore, useCartStore, Order } from "@/lib/store";
+import { ref, onValue, set as firebaseSet } from "firebase/database";
+import { useSalesStore, useCartStore, useProductStore, Order, ActivityLog, ExtendedProduct } from "@/lib/store";
 
 // Audio Assets (Base64 placeholder - replace with actual short sounds if needed, 
 // but for now I'll use simple generated beeps or just console logs if assets aren't provided.
@@ -12,7 +12,7 @@ const SUCCESS_SOUND = "https://assets.mixkit.co/active_storage/sfx/2000/2000-pre
 const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"; // Alert
 
 export default function FirebaseSync() {
-    const { orders, addOrder, updateOrderStatus } = useSalesStore();
+    const { orders } = useSalesStore();
     const { activeOrderId } = useCartStore();
 
     // Refs to track previous state for audio triggers
@@ -34,12 +34,43 @@ export default function FirebaseSync() {
             const data = snapshot.val();
             if (data) {
                 const loadedOrders: Order[] = Object.values(data);
-                useSalesStore.setState({ orders: loadedOrders });
+                useSalesStore.setState((state) => ({ ...state, orders: loadedOrders }));
+            } else {
+                useSalesStore.setState((state) => ({ ...state, orders: [] }));
             }
         }, (error) => {
             console.error("Firebase Sync Error:", error);
             setIsConnected(false);
             setErrorMsg(error.message);
+        });
+
+        const productsRef = ref(rtdb, 'products');
+        const unsubProducts = onValue(productsRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedProducts: ExtendedProduct[] = Object.values(data);
+                useProductStore.setState({ products: loadedProducts });
+            } else {
+                // If remote DB is empty, push default products to Firebase
+                const localProducts = useProductStore.getState().products;
+                if (localProducts.length > 0) {
+                    localProducts.forEach(p => {
+                        firebaseSet(ref(rtdb, `products/${p.id}`), p).catch(console.error);
+                    });
+                }
+            }
+        });
+
+        const logsRef = ref(rtdb, 'logs');
+        const unsubLogs = onValue(logsRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedLogs: ActivityLog[] = Object.values(data);
+                loadedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                useSalesStore.setState((state) => ({ ...state, logs: loadedLogs }));
+            } else {
+                useSalesStore.setState((state) => ({ ...state, logs: [] }));
+            }
         });
 
         // Optional: Check explicit connection state
@@ -56,14 +87,14 @@ export default function FirebaseSync() {
 
         return () => {
             unsubscribe();
+            unsubProducts();
+            unsubLogs();
             unsubscribeStatus();
         };
     }, []);
 
     // 2. Audio Logic: New Order (Admin)
     useEffect(() => {
-        const pendingCount = orders.filter(o => o.status === 'pending').length;
-        const prevPending = orders.length; // Simplified check: just length increase
 
         // If orders length increased AND the new order is pending (likely)
         if (orders.length > prevOrdersLength.current) {

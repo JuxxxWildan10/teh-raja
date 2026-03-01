@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Product, products as initialProducts } from '@/data/menu';
 import { rtdb } from '@/lib/firebase'; // [NEW]
 import { ref, set as firebaseSet, update as firebaseUpdate } from 'firebase/database'; // [NEW]
+import { nanoid } from 'nanoid';
 
 // --- Types ---
 export type Role = 'admin' | 'cashier';
@@ -141,26 +142,51 @@ export const useProductStore = create<ProductState>()(
                 stock: 50,
                 minStockThreshold: 10
             })),
-            addProduct: (product) => set((state) => ({ products: [...state.products, product] })),
-            updateProduct: (id, updated) => set((state) => ({
-                products: state.products.map((p) => (p.id === id ? { ...p, ...updated } : p))
-            })),
-            deleteProduct: (id) => set((state) => ({
-                products: state.products.filter((p) => p.id !== id)
-            })),
-            toggleAvailability: (id) => set((state) => ({
-                products: state.products.map((p) => (p.id === id ? { ...p, isAvailable: !p.isAvailable } : p))
-            })),
-            decrementStock: (items) => set((state) => ({
-                products: state.products.map(p => {
-                    const found = items.find(i => i.id === p.id);
-                    if (found) {
-                        const newStock = Math.max(0, p.stock - found.quantity);
-                        return { ...p, stock: newStock, isAvailable: newStock > 0 };
-                    }
-                    return p;
+            addProduct: (product) => {
+                set((state) => ({ products: [...state.products, product] }));
+                firebaseSet(ref(rtdb, `products/${product.id}`), product).catch(err => console.error(err));
+            },
+            updateProduct: (id, updated) => {
+                set((state) => ({
+                    products: state.products.map((p) => (p.id === id ? { ...p, ...updated } : p))
+                }));
+                // Only update the specific fields
+                firebaseUpdate(ref(rtdb, `products/${id}`), updated).catch(err => console.error(err));
+            },
+            deleteProduct: (id) => {
+                set((state) => ({
+                    products: state.products.filter((p) => p.id !== id)
+                }));
+                firebaseSet(ref(rtdb, `products/${id}`), null).catch(err => console.error(err));
+            },
+            toggleAvailability: (id) => {
+                set((state) => {
+                    const newProducts = state.products.map((p) => {
+                        if (p.id === id) {
+                            const updated = { ...p, isAvailable: !p.isAvailable };
+                            firebaseUpdate(ref(rtdb, `products/${id}`), { isAvailable: updated.isAvailable }).catch(err => console.error(err));
+                            return updated;
+                        }
+                        return p;
+                    });
+                    return { products: newProducts };
+                });
+            },
+            decrementStock: (items) => {
+                set((state) => {
+                    const newProducts = state.products.map(p => {
+                        const found = items.find(i => i.id === p.id);
+                        if (found) {
+                            const newStock = Math.max(0, p.stock - found.quantity);
+                            const updated = { ...p, stock: newStock, isAvailable: newStock > 0 };
+                            firebaseUpdate(ref(rtdb, `products/${p.id}`), { stock: newStock, isAvailable: newStock > 0 }).catch(err => console.error(err));
+                            return updated;
+                        }
+                        return p;
+                    });
+                    return { products: newProducts };
                 })
-            }))
+            }
         }),
         { name: 'teh-raja-products-v4' }
     )
@@ -185,15 +211,19 @@ export const useSalesStore = create<SalesState>()(
                 const orderRef = ref(rtdb, `orders/${orderId}`);
                 firebaseUpdate(orderRef, { status }).catch(err => console.error("Firebase Update Error:", err));
             },
-            addLog: (action, details, user) => set((state) => ({
-                logs: [{
-                    id: crypto.randomUUID(),
-                    timestamp: new Date().toISOString(), // Use local/client time for now
+            addLog: (action, details, user) => {
+                const newLog = {
+                    id: nanoid(),
+                    timestamp: new Date().toISOString(),
                     action,
                     details,
                     user
-                }, ...state.logs].slice(0, 100)
-            })),
+                };
+                set((state) => ({
+                    logs: [newLog, ...state.logs].slice(0, 100)
+                }));
+                firebaseSet(ref(rtdb, `logs/${newLog.id}`), newLog).catch(err => console.error(err));
+            },
             getDailySales: () => {
                 const orders = get().orders;
                 const salesMap = new Map<string, { total: number; count: number }>();
@@ -223,7 +253,11 @@ export const useSalesStore = create<SalesState>()(
                     .sort((a, b) => b.count - a.count)
                     .slice(0, 5);
             },
-            resetData: () => set({ orders: [], logs: [] })
+            resetData: () => {
+                set({ orders: [], logs: [] });
+                firebaseSet(ref(rtdb, 'orders'), null).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, 'logs'), null).catch(err => console.error(err));
+            }
         }),
         { name: 'teh-raja-sales-v3' }
     )

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import FirebaseSync from "@/components/FirebaseSync"; // [NEW]
+import PWAInstall from "@/components/PWAInstall";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -28,10 +29,13 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#D4AF37" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body
         className={`${inter.variable} ${playfair.variable} antialiased`}
       >
+        <PWAInstall />
         <FirebaseSync /> {/* [NEW] Realtime Sync & Audio */}
         {children}
       </body>

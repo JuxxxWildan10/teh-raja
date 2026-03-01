@@ -12,72 +12,93 @@ interface CartDrawerProps {
     onClose: () => void;
 }
 
+// Komponen CartDrawer menangani tampilan keranjang belanja samping (drawer).
+// Di sini pengguna dapat melihat, memodifikasi kuantitas, menambahkan catatan, dan melakukan checkout.
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
-    const { items, removeFromCart, updateQuantity, total, clearCart, setActiveOrder } = useCartStore(); // [NEW] setActiveOrder
+    // Mengakses keadaan keranjang dari Zustand store: items, fungsi hapus, update, hitung total, dsb.
+    const { items, removeFromCart, updateQuantity, total, clearCart, setActiveOrder } = useCartStore();
+    // Mengakses fungsi untuk menyimpan pesanan baru ke store penjualan
     const { addOrder, addLog } = useSalesStore();
+    // Mengakses daftar produk untuk mengecek ketersediaan stok secara real-time
     const { products, decrementStock } = useProductStore();
 
+    // State lokal untuk form checkout (Nama pelanggan, nomor meja, dan catatan khusus per produk)
     const [name, setName] = useState("");
     const [table, setTable] = useState("");
     const [notes, setNotes] = useState<Record<string, string>>({});
+
+    // State lokal untuk mengontrol modal struk dan menyimpan data pesanan terakhir untuk ditampilkan di struk
     const [showReceipt, setShowReceipt] = useState(false);
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
 
+    // Fungsi utilitas untuk memeriksa apakah ada item dalam keranjang yang stoknya kurang
     const checkStock = () => {
         const outOfStockItems = items.filter(cartItem => {
             const product = products.find(p => p.id === cartItem.id);
             return !product || product.stock < cartItem.quantity;
         });
-        return outOfStockItems;
+        return outOfStockItems; // Mengembalikan produk yang stoknya tidak memenuhi permintaan
     };
 
+    // Fungsi yang dijalankan ketika user menekan tombol "Proses Pesanan"
     const handleCheckout = () => {
+        // Validasi input nama
         if (!name) {
             alert("Mohon isi nama Anda");
             return;
         }
 
+        // Cek ketersediaan stok sebelum checkout
         const outOfStock = checkStock();
         if (outOfStock.length > 0) {
             alert(`Maaf, stok tidak cukup untuk: ${outOfStock.map(i => i.name).join(", ")}`);
             return;
         }
 
+        // Menyisipkan teks catatan (notes) ke dalam item-item keranjang
         const itemsWithNotes = items.map(item => ({
             ...item,
             note: notes[item.id] || ""
         }));
 
+        // Membuat objek pesanan baru yang akan disimpan
         const newOrder: Order = {
-            id: nanoid(),
+            id: nanoid(), // Membuat ID unik secara acak
             date: new Date().toISOString(),
             items: itemsWithNotes,
             total: total(),
             customerName: name,
-            cashierName: "Web Store",
-            status: 'pending' // [NEW] Default status
+            cashierName: "Web Store", // Menandai bahwa ini pesanan online lewat website
+            status: 'pending' // Status standar saat baru dibuat
         };
 
+        // Menyimpan pesanan dan mencatat log aktivitas sistem 
         addOrder(newOrder);
         addLog("SALE", `Order ${newOrder.id.slice(0, 6)} by ${name}`, "Customer (Web)");
+
+        // Memotong stok produk sesuai dengan kuantitas yang dibeli di pesanan ini
         decrementStock(itemsWithNotes);
 
+        // Menyiapkan data untuk dirender ke layar Struk
         setLastOrder(newOrder);
-
-        // [MODIFIED] Removed WhatsApp redirection. 
-        // Direct success feedback via Receipt Modal.
         setShowReceipt(true);
-        setActiveOrder(newOrder.id); // [NEW] Trigger status overlay
+
+        // Mengubah status keranjang menjadi Order Aktif (ini akan memicu Popup Order Status Overlay)
+        setActiveOrder(newOrder.id);
+
+        // Mengosongkan keranjang dan isi form setelah sukses 
         clearCart();
         setNotes({});
     };
 
     return (
         <AnimatePresence>
+            {/* Modal untuk menampilkan struk jika checkout sukses */}
             {showReceipt && lastOrder && (
                 <ReceiptModal
                     order={lastOrder}
                     onClose={() => {
+                        // Menutup struk, laci, serta mengosongkan form input meja & nama
                         setShowReceipt(false);
                         onClose();
                         setName("");
@@ -86,8 +107,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 />
             )}
 
+            {/* Jika drawer harus terbuka dan opsi struk sedang tidak ditampilkan */}
             {isOpen && !showReceipt && (
                 <>
+                    {/* Background gelap (overlay) di belakang laci yg dapat diklik untuk menutup laci */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 0.5 }}
@@ -95,6 +118,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         onClick={onClose}
                         className="fixed inset-0 bg-black/80 z-40 backdrop-blur-sm"
                     />
+
+                    {/* Komponen Laci Keranjang masuk dari sisi kanan layar */}
                     <motion.div
                         initial={{ x: "100%" }}
                         animate={{ x: 0 }}
@@ -102,6 +127,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         transition={{ type: "spring", damping: 25, stiffness: 200 }}
                         className="fixed right-0 top-0 h-full w-full max-w-md bg-forest z-50 border-l border-gold/20 shadow-2xl flex flex-col"
                     >
+                        {/* Header Laci menampilkan judul dan tombol tutup */}
                         <div className="p-6 border-b border-white/10 flex justify-between items-center bg-forest-light/50">
                             <h2 className="text-2xl font-serif text-gold">Tray Pesanan</h2>
                             <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full">
@@ -109,14 +135,18 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             </button>
                         </div>
 
+                        {/* List Produk yang masuk keranjang, dapat di scroll */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             {items.length === 0 ? (
+                                // Pesan jika keranjang masih kosong
                                 <div className="text-center opacity-40 mt-20">
                                     <p>Tray Anda kosong.</p>
                                     <p className="text-sm">Silakan pilih minuman kesukaan Anda.</p>
                                 </div>
                             ) : (
+                                // Mapping setiap produk yang dipesan menjadi list UI card
                                 items.map((item) => {
+                                    // Pengecekan status ketersediaan di store master secara langsung
                                     const productLive = products.find(p => p.id === item.id);
                                     const isAvailable = productLive ? (productLive.stock > 0 && productLive.isAvailable) : false;
                                     const currentStock = productLive?.stock || 0;
@@ -128,12 +158,14 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                                 <div className="flex-1">
                                                     <h4 className="font-serif font-bold text-gold-light">{item.name}</h4>
 
+                                                    {/* Alert jika stok sudah habis */}
                                                     {!isAvailable ? (
                                                         <p className="text-xs text-red-400 font-bold uppercase tracking-wider">Stok Habis</p>
                                                     ) : (
                                                         <p className="text-sm opacity-60">Rp {item.price.toLocaleString('id-ID')}</p>
                                                     )}
 
+                                                    {/* Konfigurasi Kuantitas Produk (+, -, angka jumlah pesanan) */}
                                                     <div className="flex items-center gap-3 mt-2">
                                                         <button
                                                             onClick={() => updateQuantity(item.id, item.quantity - 1)}
@@ -156,10 +188,14 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                                         </button>
                                                     </div>
                                                 </div>
+
+                                                {/* Tombol membuang (menghapus) item spesifik ini dari array keranjang */}
                                                 <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-300">
                                                     <Trash2 size={18} />
                                                 </button>
                                             </div>
+
+                                            {/* Input untuk menambah catatan per pesanan, misalnya level es dan gula */}
                                             <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5 focus-within:border-gold/50 transition">
                                                 <Edit3 size={14} className="opacity-50" />
                                                 <input
@@ -176,6 +212,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             )}
                         </div>
 
+                        {/* Footer Laci berisi Form Informasi Pembeli dan Tombol Konfirmasi Akhir */}
                         <div className="p-6 bg-forest-light border-t border-gold/20 space-y-4">
                             <div className="flex justify-between text-xl font-serif text-gold">
                                 <span>Total</span>
@@ -199,6 +236,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                 />
                             </div>
 
+                            {/* Tombol klik akan memicu fungsi handleCheckout (menyimpan Order & munculin Popup) */}
                             <button
                                 onClick={handleCheckout}
                                 disabled={items.length === 0}
