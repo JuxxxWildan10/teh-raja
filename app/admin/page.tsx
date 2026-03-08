@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useProductStore, useSalesStore, useAuthStore, ExtendedProduct } from "@/lib/store";
+import { useProductStore, useSalesStore, useAuthStore, ExtendedProduct, Order } from "@/lib/store";
 import { Line, Bar } from "react-chartjs-2";
 import {
     Chart as ChartJS,
@@ -19,11 +19,12 @@ import {
     Image as ImageIcon, Download,
     ShieldAlert,
     History, AlertTriangle,
-    CheckCircle, XCircle, Clock, Loader // [NEW] Icons
+    CheckCircle, XCircle, Clock, Loader,
+    Menu, // [NEW] hamburger icon
 } from "lucide-react";
 import Link from "next/link";
 import { nanoid } from "nanoid";
-import ReportGenerator from "@/components/ReportGenerator"; // [NEW]
+import ReportGenerator from "@/components/ReportGenerator";
 
 ChartJS.register(
     CategoryScale,
@@ -51,6 +52,7 @@ export default function AdminPage() {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders'>('dashboard');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // [NEW]
     const [formData, setFormData] = useState<ExtendedProduct>({
         id: '', name: '', price: 0, description: '',
         image: '/images/royal-milk-tea.png', category: 'signature',
@@ -151,6 +153,12 @@ export default function AdminPage() {
         addLog("EXPORT_CSV", "Exported sales data to CSV", user?.name || "Unknown");
     }
 
+    // Handle tab change + close mobile menu
+    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders') => {
+        setActiveTab(tab);
+        setIsMobileMenuOpen(false);
+    };
+
     // Charts Data
     const dailySales = getDailySales();
     const popularity = getProductPopularity();
@@ -190,11 +198,11 @@ export default function AdminPage() {
 
     if (!user) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-forest relative overflow-hidden">
+            <div className="min-h-screen flex items-center justify-center bg-forest relative overflow-hidden px-4">
                 <div className="absolute inset-0 z-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                <div className="p-8 glass rounded-2xl w-full max-w-md text-center bg-black/40 backdrop-blur-md border border-white/10 shadow-2xl z-10">
+                <div className="p-6 sm:p-8 glass rounded-2xl w-full max-w-md text-center bg-black/40 backdrop-blur-md border border-white/10 shadow-2xl z-10">
                     <div className="mb-6">
-                        <h1 className="text-4xl font-serif text-gold font-bold">TEH RAJA</h1>
+                        <h1 className="text-3xl sm:text-4xl font-serif text-gold font-bold">TEH RAJA</h1>
                         <p className="text-cream opacity-60 text-sm tracking-widest mt-2 uppercase">Official Admin Panel</p>
                     </div>
 
@@ -229,104 +237,171 @@ export default function AdminPage() {
         );
     }
 
+    const pendingCount = orders.filter(o => o.status === 'pending').length;
+
+    const tabs = [
+        { id: 'dashboard' as const, label: 'Dashboard' },
+        { id: 'products' as const, label: 'Menu & Stok' },
+        { id: 'orders' as const, label: 'Pesanan', badge: pendingCount },
+        ...(user.role === 'admin' ? [{ id: 'logs' as const, label: 'Log Aktivitas' }] : []),
+    ];
+
     return (
         <div className="min-h-screen bg-gray-50 text-forest relative flex flex-col">
-            {/* Admin Navbar */}
-            <nav className="bg-forest text-cream px-6 py-4 flex justify-between items-center shadow-lg sticky top-0 z-30">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-serif font-bold text-gold">TEH RAJA</h1>
-                    <span className="opacity-30">|</span>
-                    <div className="flex gap-1 text-sm bg-black/20 rounded-lg p-1">
+            {/* ============ ADMIN NAVBAR ============ */}
+            <nav className="bg-forest text-cream shadow-lg sticky top-0 z-30">
+                {/* Top Row: Logo + User Info + Actions */}
+                <div className="px-4 sm:px-6 py-3 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        {/* Hamburger button - visible on small screens */}
                         <button
-                            onClick={() => setActiveTab('dashboard')}
-                            className={`px-4 py-1.5 rounded-md transition ${activeTab === 'dashboard' ? 'bg-gold text-forest font-bold' : 'hover:bg-white/5'}`}
+                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                            className="md:hidden p-2 hover:bg-white/10 rounded-lg transition"
+                            aria-label="Toggle menu"
                         >
-                            Dashboard
+                            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
                         </button>
-                        <button
-                            onClick={() => setActiveTab('products')}
-                            className={`px-4 py-1.5 rounded-md transition ${activeTab === 'products' ? 'bg-gold text-forest font-bold' : 'hover:bg-white/5'}`}
-                        >
-                            Menu & Stok
+                        <h1 className="text-lg sm:text-xl font-serif font-bold text-gold">TEH RAJA</h1>
+                        <span className="opacity-30 hidden sm:block">|</span>
+                        <span className="text-xs opacity-50 hidden sm:block uppercase tracking-wider">Admin Panel</span>
+                    </div>
+
+                    <div className="flex gap-3 sm:gap-4 items-center">
+                        <div className="text-right leading-tight hidden sm:block">
+                            <p className="font-bold text-sm text-gold">{user.name}</p>
+                            <p className="text-xs opacity-60 uppercase tracking-wider">{user.role}</p>
+                        </div>
+                        <div className="h-8 w-[1px] bg-white/10 hidden sm:block"></div>
+                        <Link href="/" target="_blank" className="opacity-70 hover:opacity-100 flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+                            <span className="hidden sm:inline">Web Live</span>
+                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></span>
+                        </Link>
+                        <button onClick={handleLogout} className="p-2 hover:bg-red-500/20 text-red-300 rounded-full transition" title="Logout">
+                            <LogOut size={18} />
                         </button>
+                    </div>
+                </div>
+
+                {/* Desktop Nav Tabs - hidden on mobile */}
+                <div className="hidden md:flex px-6 pb-0 gap-1 text-sm bg-black/20">
+                    {tabs.map(tab => (
                         <button
-                            onClick={() => setActiveTab('orders')}
-                            data-pending={orders.filter(o => o.status === 'pending').length} // [NEW] for debugging
-                            className={`px-4 py-1.5 rounded-md transition relative ${activeTab === 'orders' ? 'bg-gold text-forest font-bold' : 'hover:bg-white/5'}`}
+                            key={tab.id}
+                            onClick={() => handleTabChange(tab.id)}
+                            className={`px-4 py-2 rounded-t-md transition relative font-medium ${activeTab === tab.id
+                                ? 'bg-gray-50 text-forest font-bold shadow-sm'
+                                : 'hover:bg-white/5 text-cream/80'
+                                }`}
                         >
-                            Pesanan
-                            {orders.some(o => o.status === 'pending') && (
+                            {tab.label}
+                            {tab.badge && tab.badge > 0 && (
                                 <span className="absolute -top-1 -right-1 flex h-4 w-4">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                     <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[10px] text-white font-bold items-center justify-center">
-                                        {orders.filter(o => o.status === 'pending').length}
+                                        {tab.badge}
                                     </span>
                                 </span>
                             )}
                         </button>
-                        {user.role === 'admin' && (
-                            <button
-                                onClick={() => setActiveTab('logs')}
-                                className={`px-4 py-1.5 rounded-md transition ${activeTab === 'logs' ? 'bg-gold text-forest font-bold' : 'hover:bg-white/5'}`}
-                            >
-                                Log Aktivitas
-                            </button>
-                        )}
-                    </div>
+                    ))}
                 </div>
 
-                <div className="flex gap-6 items-center">
-                    <div className="text-right leading-tight hidden md:block">
-                        <p className="font-bold text-sm text-gold">{user.name}</p>
-                        <p className="text-xs opacity-60 uppercase tracking-wider">{user.role}</p>
+                {/* Mobile Menu Dropdown */}
+                {isMobileMenuOpen && (
+                    <div className="md:hidden border-t border-white/10 bg-forest-light">
+                        {/* User info in mobile menu */}
+                        <div className="px-4 py-3 border-b border-white/10 flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center">
+                                <span className="text-gold font-bold text-sm">{user.name.charAt(0)}</span>
+                            </div>
+                            <div>
+                                <p className="font-bold text-sm text-gold">{user.name}</p>
+                                <p className="text-xs opacity-60 uppercase tracking-wider">{user.role}</p>
+                            </div>
+                        </div>
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => handleTabChange(tab.id)}
+                                className={`w-full text-left px-4 py-3 flex items-center justify-between transition ${activeTab === tab.id
+                                    ? 'bg-gold/20 text-gold font-bold border-l-4 border-gold'
+                                    : 'text-cream/80 hover:bg-white/5 border-l-4 border-transparent'
+                                    }`}
+                            >
+                                <span>{tab.label}</span>
+                                {tab.badge && tab.badge > 0 && (
+                                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                        {tab.badge}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
                     </div>
-                    <div className="h-8 w-[1px] bg-white/10"></div>
-                    <Link href="/" target="_blank" className="opacity-70 hover:opacity-100 flex items-center gap-2 text-sm">
-                        Web Live <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                    </Link>
-                    <button onClick={handleLogout} className="p-2 hover:bg-red-500/20 text-red-300 rounded-full transition" title="Logout">
-                        <LogOut size={18} />
-                    </button>
+                )}
+
+                {/* Mobile Scrollable Tab Bar - visible on small screens (alternative compact nav) */}
+                <div className="md:hidden flex gap-1 px-3 py-2 overflow-x-auto scrollbar-hide bg-black/20">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => handleTabChange(tab.id)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition relative flex-shrink-0 ${activeTab === tab.id
+                                ? 'bg-gold text-forest'
+                                : 'bg-white/10 text-cream/70 hover:bg-white/20'
+                                }`}
+                        >
+                            {tab.label}
+                            {tab.badge && tab.badge > 0 && (
+                                <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                    {tab.badge}
+                                </span>
+                            )}
+                        </button>
+                    ))}
                 </div>
             </nav>
 
-            <div className="flex-1 container mx-auto p-8">
+            {/* ============ MAIN CONTENT ============ */}
+            <div className="flex-1 container mx-auto p-4 md:p-8">
 
+                {/* === DASHBOARD TAB === */}
                 {activeTab === 'dashboard' && (
-                    <div className="animate-fade-in space-y-8">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-bold">Laporan Kinerja</h2>
-                            <div className="flex gap-2">
-                                <button onClick={handleExportCSV} className="flex items-center gap-2 text-forest bg-white border border-gray-200 px-4 py-2 rounded hover:bg-gray-50 shadow-sm">
+                    <div className="animate-fade-in space-y-6 md:space-y-8">
+                        {/* Header */}
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                            <h2 className="text-xl md:text-2xl font-bold">Laporan Kinerja</h2>
+                            <div className="flex gap-2 flex-wrap">
+                                <button onClick={handleExportCSV} className="flex items-center gap-2 text-forest bg-white border border-gray-200 px-3 py-2 rounded text-sm hover:bg-gray-50 shadow-sm">
                                     <Download size={16} /> CSV
                                 </button>
                                 <ReportGenerator orders={orders} />
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-96">
-                                <h3 className="font-bold text-lg mb-4 text-forest flex items-center gap-2">
-                                    <span className="w-1 h-6 bg-gold rounded-full"></span> Tren Penjualan
+                        {/* Charts Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+                            <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 h-72 md:h-96">
+                                <h3 className="font-bold text-base md:text-lg mb-4 text-forest flex items-center gap-2">
+                                    <span className="w-1 h-5 bg-gold rounded-full"></span> Tren Penjualan
                                 </h3>
                                 <Line data={salesData} options={{ responsive: true, maintainAspectRatio: false }} />
                             </div>
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-96">
-                                <h3 className="font-bold text-lg mb-4 text-forest flex items-center gap-2">
-                                    <span className="w-1 h-6 bg-forest rounded-full"></span> Produk Terpopuler
+                            <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 h-72 md:h-96">
+                                <h3 className="font-bold text-base md:text-lg mb-4 text-forest flex items-center gap-2">
+                                    <span className="w-1 h-5 bg-forest rounded-full"></span> Produk Terpopuler
                                 </h3>
                                 <Bar data={popularityData} options={{ responsive: true, maintainAspectRatio: false }} />
                             </div>
                         </div>
 
-                        {/* Admin Only Actions */}
+                        {/* Danger Zone */}
                         {user.role === 'admin' && (
-                            <div className="bg-red-50 p-6 rounded-xl border border-red-100 flex justify-between items-center">
+                            <div className="bg-red-50 p-4 md:p-6 rounded-xl border border-red-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                                 <div>
                                     <h4 className="font-bold text-red-800 flex items-center gap-2"><ShieldAlert size={18} /> Danger Zone</h4>
-                                    <p className="text-xs text-red-600">Hati-hati, tindakan ini tidak dapat dibatalkan.</p>
+                                    <p className="text-xs text-red-600 mt-1">Hati-hati, tindakan ini tidak dapat dibatalkan.</p>
                                 </div>
-                                <button onClick={handleReset} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold text-sm">
+                                <button onClick={handleReset} className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold text-sm">
                                     Reset Semua Data
                                 </button>
                             </div>
@@ -334,211 +409,257 @@ export default function AdminPage() {
                     </div>
                 )}
 
+                {/* === ORDERS TAB === */}
                 {activeTab === 'orders' && (
-                    <div className="animate-fade-in bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                            <div>
-                                <h2 className="text-xl font-bold font-serif">Daftar Pesanan Masuk</h2>
-                                <p className="text-sm text-gray-400">Pantau dan kelola pesanan pelanggan.</p>
+                    <div className="animate-fade-in">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                            {/* Header */}
+                            <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50">
+                                <h2 className="text-lg md:text-xl font-bold font-serif">Daftar Pesanan Masuk</h2>
+                                <p className="text-sm text-gray-400 mt-0.5">Pantau dan kelola pesanan pelanggan.</p>
                             </div>
-                        </div>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
-                                    <tr>
-                                        <th className="p-4">Order ID</th>
-                                        <th className="p-4">Waktu</th>
-                                        <th className="p-4">Pelanggan</th>
-                                        <th className="p-4">Menu</th>
-                                        <th className="p-4">Total</th>
-                                        <th className="p-4">Status</th>
-                                        <th className="p-4 text-right">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {orders.slice().reverse().map(order => ( // Show newest first
-                                        <tr key={order.id} className="hover:bg-blue-50/50 transition bg-white">
-                                            <td className="p-4 font-mono text-xs text-gray-500">#{order.id.slice(0, 6)}</td>
-                                            <td className="p-4 text-sm">
-                                                {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                                            </td>
-                                            <td className="p-4 font-bold text-gray-800">{order.customerName || "Guest"}</td>
-                                            <td className="p-4 text-sm text-gray-600 max-w-xs">
-                                                {order.items.map((i, idx) => (
-                                                    <div key={idx} className="mb-1 border-b border-gray-50 last:border-0 pb-1">
-                                                        <span className="font-bold text-gray-700">{i.quantity}x {i.name}</span>
-                                                        {i.note && (
-                                                            <div className="text-xs text-blue-600 italic flex items-center gap-1">
-                                                                📝 {i.note}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </td>
-                                            <td className="p-4 font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</td>
-                                            <td className="p-4">
-                                                <span className={`px-2 py-1 text-xs rounded-full font-bold uppercase tracking-wide flex w-fit items-center gap-1
-                                                    ${order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                        order.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                                                            order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                                                                'bg-yellow-100 text-yellow-700'}`}>
-                                                    {order.status === 'completed' && <CheckCircle size={12} />}
-                                                    {order.status === 'processing' && <Loader size={12} className="animate-spin" />}
-                                                    {order.status === 'cancelled' && <XCircle size={12} />}
-                                                    {order.status === 'pending' && <Clock size={12} />}
-                                                    {order.status || 'pending'}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    {(!order.status || order.status === 'pending') && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => {
-                                                                    updateOrderStatus(order.id, 'processing');
-                                                                    addLog("PROCESS_ORDER", `Processing order #${order.id.slice(0, 6)}`, user?.name || "Admin");
-                                                                }}
-                                                                className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 transition"
-                                                            >
-                                                                Proses
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    if (confirm("Batalkan pesanan ini?")) {
-                                                                        updateOrderStatus(order.id, 'cancelled');
-                                                                        addLog("CANCEL_ORDER", `Cancelled order #${order.id.slice(0, 6)}`, user?.name || "Admin");
-                                                                    }
-                                                                }}
-                                                                className="px-3 py-1 bg-gray-200 text-gray-600 rounded text-xs font-bold hover:bg-gray-300 transition"
-                                                            >
-                                                                Batal
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    {order.status === 'processing' && (
-                                                        <button
-                                                            onClick={() => {
-                                                                updateOrderStatus(order.id, 'completed');
-                                                                addLog("COMPLETE_ORDER", `Completed order #${order.id.slice(0, 6)}`, user?.name || "Admin");
-                                                            }}
-                                                            className="px-3 py-1 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700 transition"
-                                                        >
-                                                            Selesai
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {orders.length === 0 && (
+                            {/* Desktop Table - hidden on mobile */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
                                         <tr>
-                                            <td colSpan={7} className="p-8 text-center text-gray-400 italic">
-                                                Belum ada pesanan masuk hari ini.
-                                            </td>
+                                            <th className="p-4">Order ID</th>
+                                            <th className="p-4">Waktu</th>
+                                            <th className="p-4">Pelanggan</th>
+                                            <th className="p-4">Menu</th>
+                                            <th className="p-4">Total</th>
+                                            <th className="p-4">Status</th>
+                                            <th className="p-4 text-right">Aksi</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {orders.slice().reverse().map(order => (
+                                            <tr key={order.id} className="hover:bg-blue-50/50 transition bg-white">
+                                                <td className="p-4 font-mono text-xs text-gray-500">#{order.id.slice(0, 6)}</td>
+                                                <td className="p-4 text-sm">
+                                                    {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                <td className="p-4 font-bold text-gray-800">{order.customerName || "Guest"}</td>
+                                                <td className="p-4 text-sm text-gray-600 max-w-xs">
+                                                    {order.items.map((i, idx) => (
+                                                        <div key={idx} className="mb-1 border-b border-gray-50 last:border-0 pb-1">
+                                                            <span className="font-bold text-gray-700">{i.quantity}x {i.name}</span>
+                                                            {i.note && (
+                                                                <div className="text-xs text-blue-600 italic flex items-center gap-1">
+                                                                    📝 {i.note}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </td>
+                                                <td className="p-4 font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</td>
+                                                <td className="p-4">
+                                                    <OrderStatusBadge status={order.status} />
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <OrderActions
+                                                        order={order}
+                                                        updateOrderStatus={updateOrderStatus}
+                                                        addLog={addLog}
+                                                        userName={user?.name || "Admin"}
+                                                    />
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {orders.length === 0 && (
+                                            <tr>
+                                                <td colSpan={7} className="p-8 text-center text-gray-400 italic">
+                                                    Belum ada pesanan masuk hari ini.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Cards - visible on small screens */}
+                            <div className="md:hidden divide-y divide-gray-100">
+                                {orders.length === 0 && (
+                                    <p className="p-8 text-center text-gray-400 italic text-sm">Belum ada pesanan masuk hari ini.</p>
+                                )}
+                                {orders.slice().reverse().map(order => (
+                                    <div key={order.id} className="p-4 space-y-3">
+                                        {/* Card header */}
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold text-gray-800">{order.customerName || "Guest"}</p>
+                                                <p className="text-xs text-gray-400 font-mono mt-0.5">
+                                                    #{order.id.slice(0, 6)} · {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                                </p>
+                                            </div>
+                                            <OrderStatusBadge status={order.status} />
+                                        </div>
+                                        {/* Items */}
+                                        <div className="bg-gray-50 rounded-lg p-3 space-y-1">
+                                            {order.items.map((i, idx) => (
+                                                <div key={idx}>
+                                                    <span className="text-sm font-medium text-gray-700">{i.quantity}x {i.name}</span>
+                                                    {i.note && <div className="text-xs text-blue-600 italic">📝 {i.note}</div>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {/* Footer: total + actions */}
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</span>
+                                            <OrderActions
+                                                order={order}
+                                                updateOrderStatus={updateOrderStatus}
+                                                addLog={addLog}
+                                                userName={user?.name || "Admin"}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}
 
+                {/* === PRODUCTS TAB === */}
                 {activeTab === 'products' && (
-                    <div className="animate-fade-in bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                            <div>
-                                <h2 className="text-xl font-bold font-serif">Manajemen Inventaris</h2>
-                                <p className="text-sm text-gray-400">Kelola menu, harga, dan stok barang.</p>
+                    <div className="animate-fade-in">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                <div>
+                                    <h2 className="text-lg md:text-xl font-bold font-serif">Manajemen Inventaris</h2>
+                                    <p className="text-sm text-gray-400 mt-0.5">Kelola menu, harga, dan stok barang.</p>
+                                </div>
+                                {user.role === 'admin' && (
+                                    <button onClick={openAddModal} className="px-3 md:px-4 py-2 bg-forest text-gold rounded-lg font-bold flex items-center gap-2 hover:bg-forest-light shadow transition hover:-translate-y-1 text-sm">
+                                        <Plus size={16} /> <span className="hidden sm:inline">Tambah</span> Menu
+                                    </button>
+                                )}
                             </div>
-                            {user.role === 'admin' && (
-                                <button onClick={openAddModal} className="px-4 py-2 bg-forest text-gold rounded-lg font-bold flex items-center gap-2 hover:bg-forest-light shadow transition hover:-translate-y-1">
-                                    <Plus size={18} /> Tambah Menu
-                                </button>
-                            )}
-                        </div>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
-                                    <tr>
-                                        <th className="p-4 w-20">Gambar</th>
-                                        <th className="p-4">Nama Produk</th>
-                                        <th className="p-4">Kategori</th>
-                                        <th className="p-4">Stok</th>
-                                        <th className="p-4 text-right">Harga</th>
-                                        {user.role === 'admin' && <th className="p-4 text-right">Aksi</th>}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {products.map(item => (
-                                        <tr key={item.id} className="hover:bg-blue-50/50 transition bg-white">
-                                            <td className="p-4">
-                                                <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200">
-                                                    {item.image ? (
-                                                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                                                    ) : <ImageIcon className="m-auto text-gray-300 mt-3" />}
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <p className="font-bold text-gray-800">{item.name}</p>
-                                                <p className="text-xs text-gray-400 line-clamp-1">{item.description}</p>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className="px-2 py-1 text-xs rounded border border-gray-200 bg-gray-50 font-bold text-gray-600 uppercase">
-                                                    {item.category}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`font-mono font-bold text-lg ${item.stock === 0 ? 'text-red-500' :
-                                                        item.stock <= (item.minStockThreshold || 5) ? 'text-yellow-600' : 'text-green-600'
-                                                        }`}>
-                                                        {item.stock}
-                                                    </span>
-                                                    {item.stock <= (item.minStockThreshold || 5) && (
-                                                        <AlertTriangle size={16} className={`text-yellow-500 ${item.stock === 0 && 'hidden'}`} />
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-right font-mono font-bold text-forest">
-                                                Rp {item.price.toLocaleString('id-ID')}
-                                            </td>
-                                            {user.role === 'admin' && (
-                                                <td className="p-4 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <button onClick={() => openEditModal(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded transition"><Edit size={16} /></button>
-                                                        <button onClick={() => handleDelete(item.id, item.name)} className="p-2 text-red-600 hover:bg-red-50 rounded transition"><Trash size={16} /></button>
+                            {/* Desktop Table */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
+                                        <tr>
+                                            <th className="p-4 w-20">Gambar</th>
+                                            <th className="p-4">Nama Produk</th>
+                                            <th className="p-4">Kategori</th>
+                                            <th className="p-4">Stok</th>
+                                            <th className="p-4 text-right">Harga</th>
+                                            {user.role === 'admin' && <th className="p-4 text-right">Aksi</th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {products.map(item => (
+                                            <tr key={item.id} className="hover:bg-blue-50/50 transition bg-white">
+                                                <td className="p-4">
+                                                    <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200">
+                                                        {item.image ? (
+                                                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                        ) : <ImageIcon className="m-auto text-gray-300 mt-3" />}
                                                     </div>
                                                 </td>
-                                            )}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                <td className="p-4">
+                                                    <p className="font-bold text-gray-800">{item.name}</p>
+                                                    <p className="text-xs text-gray-400 line-clamp-1">{item.description}</p>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className="px-2 py-1 text-xs rounded border border-gray-200 bg-gray-50 font-bold text-gray-600 uppercase">
+                                                        {item.category}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`font-mono font-bold text-lg ${item.stock === 0 ? 'text-red-500' :
+                                                            item.stock <= (item.minStockThreshold || 5) ? 'text-yellow-600' : 'text-green-600'
+                                                            }`}>
+                                                            {item.stock}
+                                                        </span>
+                                                        {item.stock <= (item.minStockThreshold || 5) && (
+                                                            <AlertTriangle size={16} className={`text-yellow-500 ${item.stock === 0 && 'hidden'}`} />
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-right font-mono font-bold text-forest">
+                                                    Rp {item.price.toLocaleString('id-ID')}
+                                                </td>
+                                                {user.role === 'admin' && (
+                                                    <td className="p-4 text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <button onClick={() => openEditModal(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded transition"><Edit size={16} /></button>
+                                                            <button onClick={() => handleDelete(item.id, item.name)} className="p-2 text-red-600 hover:bg-red-50 rounded transition"><Trash size={16} /></button>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Cards */}
+                            <div className="md:hidden divide-y divide-gray-100">
+                                {products.map(item => (
+                                    <div key={item.id} className="p-4 flex gap-3 items-start">
+                                        {/* Image */}
+                                        <div className="w-14 h-14 flex-shrink-0 rounded-xl bg-gray-100 overflow-hidden border border-gray-200">
+                                            {item.image ? (
+                                                <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                            ) : <ImageIcon className="m-auto text-gray-300 mt-4" size={20} />}
+                                        </div>
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <p className="font-bold text-gray-800 text-sm leading-tight">{item.name}</p>
+                                                {user.role === 'admin' && (
+                                                    <div className="flex gap-1 flex-shrink-0">
+                                                        <button onClick={() => openEditModal(item)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition"><Edit size={14} /></button>
+                                                        <button onClick={() => handleDelete(item.id, item.name)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition"><Trash size={14} /></button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{item.description}</p>
+                                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                                <span className="px-1.5 py-0.5 text-[10px] rounded border border-gray-200 bg-gray-50 font-bold text-gray-600 uppercase">{item.category}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <span className={`font-mono font-bold text-sm ${item.stock === 0 ? 'text-red-500' : item.stock <= (item.minStockThreshold || 5) ? 'text-yellow-600' : 'text-green-600'}`}>
+                                                        {item.stock} cup
+                                                    </span>
+                                                    {item.stock <= (item.minStockThreshold || 5) && item.stock > 0 && (
+                                                        <AlertTriangle size={12} className="text-yellow-500" />
+                                                    )}
+                                                </div>
+                                                <span className="font-mono font-bold text-sm text-forest ml-auto">Rp {item.price.toLocaleString('id-ID')}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}
 
+                {/* === LOGS TAB === */}
                 {activeTab === 'logs' && user.role === 'admin' && (
-                    <div className="animate-fade-in bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <div className="animate-fade-in bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6">
                         <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><History size={24} /></div>
+                            <div className="p-2 bg-purple-100 text-purple-600 rounded-lg"><History size={22} /></div>
                             <div>
-                                <h2 className="text-xl font-bold font-serif">Log Aktivitas</h2>
+                                <h2 className="text-lg md:text-xl font-bold font-serif">Log Aktivitas</h2>
                                 <p className="text-sm text-gray-500">Rekam jejak tindakan sistem.</p>
                             </div>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                             {logs.length === 0 && <p className="text-center text-gray-400 italic py-8">Belum ada aktivitas tercatat.</p>}
                             {logs.map(log => (
-                                <div key={log.id} className="flex gap-4 p-4 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
-                                    <div className="text-xs font-mono text-gray-400 w-32 pt-1">
+                                <div key={log.id} className="flex flex-col sm:flex-row sm:gap-4 p-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition rounded-lg">
+                                    <div className="text-xs font-mono text-gray-400 sm:w-36 mb-1 sm:mb-0 flex-shrink-0 pt-0.5">
                                         {new Date(log.timestamp).toLocaleString('id-ID')}
                                     </div>
                                     <div className="flex-1">
-                                        <div className="flex gap-2 items-center mb-1">
+                                        <div className="flex gap-2 items-center mb-1 flex-wrap">
                                             <span className={`text-xs font-bold px-2 py-0.5 rounded ${log.action.includes('DELETE') ? 'bg-red-100 text-red-600' :
                                                 log.action.includes('CREATE') ? 'bg-green-100 text-green-600' :
                                                     'bg-blue-100 text-blue-600'
@@ -557,21 +678,22 @@ export default function AdminPage() {
 
             </div>
 
-            {/* Modal Form */}
+            {/* ============ MODAL FORM ============ */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white text-forest rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-in">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
-                            <h3 className="text-xl font-bold font-serif">{editingId ? 'Edit Produk' : 'Tambah Produk Baru'}</h3>
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white text-forest rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl animate-scale-in">
+                        {/* Modal Header */}
+                        <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                            <h3 className="text-lg sm:text-xl font-bold font-serif">{editingId ? 'Edit Produk' : 'Tambah Produk Baru'}</h3>
                             <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
                         </div>
 
-                        <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 sm:p-6 space-y-5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-600">Nama Produk</label>
                                     <input
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm"
                                         value={formData.name}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     />
@@ -580,7 +702,7 @@ export default function AdminPage() {
                                     <label className="text-sm font-bold text-gray-600">Harga (Rp)</label>
                                     <input
                                         type="number"
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm"
                                         value={formData.price}
                                         onChange={e => setFormData({ ...formData, price: Number(e.target.value) })}
                                     />
@@ -590,28 +712,28 @@ export default function AdminPage() {
                             <div className="grid grid-cols-2 gap-4 bg-yellow-50 p-4 rounded-lg border border-yellow-100">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-yellow-800">Stok Saat Ini (Cup)</label>
-                                    <input type="number" className="w-full p-2 border border-yellow-300 rounded" value={formData.stock} onChange={e => setFormData({ ...formData, stock: Number(e.target.value) })} />
+                                    <input type="number" className="w-full p-2 border border-yellow-300 rounded text-sm" value={formData.stock} onChange={e => setFormData({ ...formData, stock: Number(e.target.value) })} />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-yellow-800">Batas Min. Alert</label>
-                                    <input type="number" className="w-full p-2 border border-yellow-300 rounded" value={formData.minStockThreshold} onChange={e => setFormData({ ...formData, minStockThreshold: Number(e.target.value) })} />
+                                    <input type="number" className="w-full p-2 border border-yellow-300 rounded text-sm" value={formData.minStockThreshold} onChange={e => setFormData({ ...formData, minStockThreshold: Number(e.target.value) })} />
                                 </div>
                             </div>
 
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-gray-600">Deskripsi</label>
                                 <textarea
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest h-24"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest h-24 text-sm"
                                     value={formData.description}
                                     onChange={e => setFormData({ ...formData, description: e.target.value })}
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-600">Kategori</label>
                                     <select
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest bg-white"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest bg-white text-sm"
                                         value={formData.category}
                                         onChange={e => setFormData({ ...formData, category: e.target.value as 'signature' | 'classic' | 'milk' | 'fruit' })}
                                     >
@@ -624,7 +746,7 @@ export default function AdminPage() {
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-600">URL Gambar</label>
                                     <input
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm"
                                         value={formData.image}
                                         placeholder="/images/example.png"
                                         onChange={e => setFormData({ ...formData, image: e.target.value })}
@@ -633,15 +755,14 @@ export default function AdminPage() {
                             </div>
 
                             <div className="bg-gray-50 p-4 rounded-xl space-y-4 border border-gray-200">
-                                <h4 className="font-bold flex items-center gap-2">
-                                    <span className="w-2 h-6 bg-gold rounded-full"></span>
+                                <h4 className="font-bold flex items-center gap-2 text-sm">
+                                    <span className="w-2 h-5 bg-gold rounded-full"></span>
                                     Analisis Rasa (Algoritma)
                                 </h4>
                                 <div className="space-y-4">
-                                    {/* Simple sliders */}
                                     {['sweet', 'creamy', 'fruity'].map(attr => (
                                         <div key={attr}>
-                                            <div className="flex justify-between text-sm mb-1 uppercase font-bold text-gray-500">
+                                            <div className="flex justify-between text-xs mb-1 uppercase font-bold text-gray-500">
                                                 <span>{attr}</span>
                                                 <span>{formData.attributes[attr as keyof typeof formData.attributes]}/10</span>
                                             </div>
@@ -657,14 +778,85 @@ export default function AdminPage() {
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
-                            <button onClick={() => setIsModalOpen(false)} className="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50">Batal</button>
-                            <button onClick={handleSave} className="px-6 py-2 rounded-lg bg-gold text-forest font-bold hover:bg-gold-light flex items-center gap-2">
-                                <Save size={18} /> Simpan Produk
+                        {/* Modal Footer */}
+                        <div className="p-4 sm:p-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
+                            <button onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm">Batal</button>
+                            <button onClick={handleSave} className="px-5 py-2.5 rounded-lg bg-gold text-forest font-bold hover:bg-gold-light flex items-center gap-2 text-sm">
+                                <Save size={16} /> Simpan Produk
                             </button>
                         </div>
                     </div>
                 </div>
+            )}
+        </div>
+    );
+}
+
+// ====== Helper Sub-components ======
+
+function OrderStatusBadge({ status }: { status?: string }) {
+    const map: Record<string, { cls: string; icon: React.ReactNode; label: string }> = {
+        completed: { cls: 'bg-green-100 text-green-700', icon: <CheckCircle size={11} />, label: 'completed' },
+        processing: { cls: 'bg-blue-100 text-blue-700', icon: <Loader size={11} className="animate-spin" />, label: 'processing' },
+        cancelled: { cls: 'bg-red-100 text-red-700', icon: <XCircle size={11} />, label: 'cancelled' },
+        pending: { cls: 'bg-yellow-100 text-yellow-700', icon: <Clock size={11} />, label: 'pending' },
+    };
+    const s = status || 'pending';
+    const { cls, icon, label } = map[s] || map.pending;
+    return (
+        <span className={`px-2 py-1 text-xs rounded-full font-bold uppercase tracking-wide inline-flex items-center gap-1 ${cls}`}>
+            {icon} {label}
+        </span>
+    );
+}
+
+function OrderActions({
+    order,
+    updateOrderStatus,
+    addLog,
+    userName,
+}: {
+    order: Order;
+    updateOrderStatus: (id: string, status: Order['status']) => void;
+    addLog: (action: string, detail: string, user: string) => void;
+    userName: string;
+}) {
+    return (
+        <div className="flex gap-1.5 flex-wrap justify-end">
+            {(!order.status || order.status === 'pending') && (
+                <>
+                    <button
+                        onClick={() => {
+                            updateOrderStatus(order.id, 'processing');
+                            addLog("PROCESS_ORDER", `Processing order #${order.id.slice(0, 6)}`, userName);
+                        }}
+                        className="px-2.5 py-1 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 transition"
+                    >
+                        Proses
+                    </button>
+                    <button
+                        onClick={() => {
+                            if (confirm("Batalkan pesanan ini?")) {
+                                updateOrderStatus(order.id, 'cancelled');
+                                addLog("CANCEL_ORDER", `Cancelled order #${order.id.slice(0, 6)}`, userName);
+                            }
+                        }}
+                        className="px-2.5 py-1 bg-gray-200 text-gray-600 rounded text-xs font-bold hover:bg-gray-300 transition"
+                    >
+                        Batal
+                    </button>
+                </>
+            )}
+            {order.status === 'processing' && (
+                <button
+                    onClick={() => {
+                        updateOrderStatus(order.id, 'completed');
+                        addLog("COMPLETE_ORDER", `Completed order #${order.id.slice(0, 6)}`, userName);
+                    }}
+                    className="px-2.5 py-1 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700 transition"
+                >
+                    Selesai
+                </button>
             )}
         </div>
     );
