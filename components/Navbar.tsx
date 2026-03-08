@@ -90,13 +90,7 @@ export default function Navbar() {
                                 >
                                     Cari Teh Favorit
                                 </Link>
-                                <Link
-                                    href="/admin"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className="text-sm py-2 opacity-50 hover:opacity-100"
-                                >
-                                    Login Admin
-                                </Link>
+
                             </div>
                         </motion.div>
                     )}
