@@ -40,7 +40,13 @@ export interface Order {
     total: number;
     customerName?: string;
     cashierName?: string;
-    status: 'pending' | 'processing' | 'completed' | 'cancelled'; // [NEW] Status tracking
+    status: 'pending' | 'processing' | 'completed' | 'cancelled';
+    // POS Fields
+    paymentMethod?: 'cash' | 'qris' | 'transfer';
+    cashReceived?: number;
+    changeAmount?: number;
+    tableNumber?: string;
+    orderType?: 'dine-in' | 'take-away';
 }
 
 // --- Stores ---

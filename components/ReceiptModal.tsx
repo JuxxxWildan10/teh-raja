@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { Order } from "@/lib/store";
-import { X, Download } from "lucide-react";
+import { X, Printer } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface ReceiptModalProps {
@@ -10,19 +10,27 @@ interface ReceiptModalProps {
     onClose: () => void;
 }
 
+const PAYMENT_LABEL: Record<string, string> = {
+    cash: 'Tunai',
+    qris: 'QRIS',
+    transfer: 'Transfer Bank',
+};
+
 export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
     const receiptRef = useRef<HTMLDivElement>(null);
 
-    const handleDownload = () => {
+    const handlePrint = () => {
         window.print();
     };
+
+    const payLabel = order.paymentMethod ? PAYMENT_LABEL[order.paymentMethod] : '-';
 
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm print:bg-white print:p-0">
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="bg-white text-black w-full max-w-sm rounded-lg overflow-hidden shadow-2xl relative print:shadow-none print:w-full print:max-w-none"
+                className="bg-white text-black w-full max-w-[320px] rounded-lg overflow-hidden shadow-2xl relative print:shadow-none print:w-full print:max-w-none"
             >
                 {/* Header Actions (Hidden in Print) */}
                 <div className="absolute top-2 right-2 flex gap-2 print:hidden z-10">
@@ -32,69 +40,130 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
                 </div>
 
                 {/* Receipt Content */}
-                <div ref={receiptRef} className="p-8 bg-white font-mono text-sm relative">
-                    {/* Paper Texture Effect */}
+                <div ref={receiptRef} className="p-6 bg-white font-mono text-[11px] relative">
+                    {/* Paper top edge */}
                     <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-b from-gray-200 to-transparent opacity-20" />
 
-                    <div className="text-center mb-6">
-                        <h2 className="text-2xl font-bold uppercase tracking-widest border-b-2 border-black pb-2 mb-2">TEH RAJA</h2>
-                        <p className="text-xs text-gray-500">Authentic Tea & Blends</p>
-                        <p className="text-xs text-gray-500">{new Date(order.date).toLocaleString('id-ID')}</p>
-                        <p className="text-xs text-gray-500 mt-1">Order ID: #{order.id.slice(0, 8)}</p>
+                    {/* Store Header */}
+                    <div className="text-center mb-4 border-b border-dashed border-gray-400 pb-3">
+                        <h2 className="text-base font-bold uppercase tracking-widest">TEH RAJA</h2>
+                        <p className="text-gray-500 text-[10px]">Authentic Tea & Blends</p>
+                        <p className="text-gray-500 text-[10px] mt-0.5">Jl. Raja Tea No. 1, Indonesia</p>
                     </div>
 
-                    <div className="mb-6 border-b border-dashed border-gray-300 pb-4">
-                        <div className="flex justify-between mb-2 text-gray-600">
-                            <span>Pelanggan</span>
-                            <span className="font-bold">{order.customerName || "Guest"}</span>
+                    {/* Order Info */}
+                    <div className="mb-3 border-b border-dashed border-gray-300 pb-3 space-y-0.5">
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">No. Order</span>
+                            <span className="font-bold">#{order.id.slice(0, 8).toUpperCase()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Tanggal</span>
+                            <span>{new Date(order.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Waktu</span>
+                            <span>{new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Kasir</span>
+                            <span>{order.cashierName || 'Staff'}</span>
                         </div>
                     </div>
 
-                    <div className="space-y-3 mb-6">
+                    {/* Customer Info */}
+                    <div className="mb-3 border-b border-dashed border-gray-300 pb-3 space-y-0.5">
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Pelanggan</span>
+                            <span className="font-bold">{order.customerName || 'Guest'}</span>
+                        </div>
+                        {order.tableNumber && (
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">No. Meja</span>
+                                <span className="font-bold">{order.tableNumber}</span>
+                            </div>
+                        )}
+                        {order.orderType && (
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">Tipe Order</span>
+                                <span className="font-bold uppercase">{order.orderType === 'dine-in' ? 'Makan di Tempat' : 'Bawa Pulang'}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Items */}
+                    <div className="mb-3 border-b border-dashed border-gray-300 pb-3 space-y-2">
+                        <p className="font-bold text-[10px] uppercase tracking-widest text-gray-500 mb-1">Pesanan</p>
                         {order.items.map((item, index) => (
-                            <div key={index} className="flex justify-between items-start">
-                                <div>
-                                    <div>
+                            <div key={index}>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
                                         <span className="font-bold">{item.quantity}x</span> {item.name}
                                     </div>
-                                    {item.note && (
-                                        <div className="text-xs text-gray-500 italic pl-5">
-                                            &quot;{item.note}&quot;
-                                        </div>
-                                    )}
+                                    <span className="ml-2 flex-shrink-0">Rp {(item.price * item.quantity).toLocaleString('id-ID')}</span>
                                 </div>
-                                <span>Rp {(item.price * item.quantity).toLocaleString('id-ID')}</span>
+                                <div className="flex justify-between text-gray-400 text-[9px] pl-4">
+                                    <span>@ Rp {item.price.toLocaleString('id-ID')}</span>
+                                </div>
+                                {item.note && (
+                                    <div className="text-[9px] text-gray-500 italic pl-4">
+                                        * {item.note}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
 
-                    <div className="border-t-2 border-black pt-4 mb-8">
-                        <div className="flex justify-between text-lg font-bold">
+                    {/* Total */}
+                    <div className="mb-3 border-b border-dashed border-gray-400 pb-3 space-y-0.5">
+                        <div className="flex justify-between font-bold text-sm">
                             <span>TOTAL</span>
                             <span>Rp {order.total.toLocaleString('id-ID')}</span>
                         </div>
                     </div>
 
-                    <div className="text-center text-xs text-gray-400 space-y-1">
-                        <p>Terima kasih telah berbelanja!</p>
-                        <p>Simpan struk ini sebagai bukti pembayaran.</p>
-                        <p>Follow us @tehraja.id</p>
+                    {/* Payment Info */}
+                    <div className="mb-4 space-y-0.5">
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Metode Bayar</span>
+                            <span className="font-bold">{payLabel}</span>
+                        </div>
+                        {order.paymentMethod === 'cash' && order.cashReceived != null && (
+                            <>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">Diterima</span>
+                                    <span>Rp {order.cashReceived.toLocaleString('id-ID')}</span>
+                                </div>
+                                <div className="flex justify-between font-bold text-green-700">
+                                    <span>Kembalian</span>
+                                    <span>Rp {(order.changeAmount ?? 0).toLocaleString('id-ID')}</span>
+                                </div>
+                            </>
+                        )}
                     </div>
 
-                    {/* Jagged Bottom Edge */}
-                    <div className="absolute bottom-0 left-0 w-full h-4 bg-white" style={{
-                        backgroundImage: 'linear-gradient(45deg, transparent 75%, white 75%), linear-gradient(-45deg, transparent 75%, white 75%)',
-                        backgroundSize: '20px 20px',
-                        backgroundPosition: '0 10px'
-                    }}></div>
+                    {/* Footer */}
+                    <div className="text-center text-[9px] text-gray-400 space-y-0.5">
+                        <p>- - - - - - - - - - - - - - - - - -</p>
+                        <p className="font-bold">Terima kasih telah berbelanja!</p>
+                        <p>Simpan struk ini sebagai bukti pembayaran.</p>
+                        <p>Follow us @tehraja.id</p>
+                        <p className="mt-1">Dibuat dengan ❤ oleh Teh Raja POS</p>
+                    </div>
                 </div>
 
                 {/* Footer Actions (Hidden in Print) */}
-                <div className="bg-gray-50 p-4 border-t border-gray-100 flex gap-3 print:hidden">
-                    <button onClick={handleDownload} className="flex-1 py-2 bg-black text-white rounded font-bold hover:bg-gray-800 flex items-center justify-center gap-2">
-                        <Download size={16} /> Simpan / Cetak
+                <div className="bg-gray-50 p-3 border-t border-gray-100 flex gap-2 print:hidden">
+                    <button
+                        onClick={handlePrint}
+                        className="flex-1 py-2.5 bg-gray-900 text-white rounded font-bold hover:bg-gray-700 flex items-center justify-center gap-2 text-sm"
+                    >
+                        <Printer size={15} /> Cetak Struk
                     </button>
-                    <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2.5 border border-gray-300 rounded hover:bg-gray-100 text-sm"
+                    >
                         Tutup
                     </button>
                 </div>

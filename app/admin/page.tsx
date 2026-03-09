@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useProductStore, useSalesStore, useAuthStore, ExtendedProduct, Order } from "@/lib/store";
 import { Line, Bar } from "react-chartjs-2";
 import {
@@ -39,6 +40,7 @@ ChartJS.register(
 
 export default function AdminPage() {
     const { user, login, logout } = useAuthStore();
+    const router = useRouter();
     const [loginUsername, setLoginUsername] = useState("");
     const [loginPassword, setLoginPassword] = useState("");
     const [loginError, setLoginError] = useState("");
@@ -70,9 +72,11 @@ export default function AdminPage() {
         if (loginUsername === "admin" && loginPassword === "admin123") {
             login("admin", "admin");
             addLog("LOGIN", "Admin logged in", "Admin");
+            // Admin stays on dashboard
         } else if (loginUsername === "kasir" && loginPassword === "kasir123") {
             login("kasir", "cashier");
             addLog("LOGIN", "Cashier logged in", "Kasir");
+            router.push('/pos');
         } else {
             setLoginError("Username atau Password salah!");
         }
