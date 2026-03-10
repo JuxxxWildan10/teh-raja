@@ -8,6 +8,7 @@ import {
     Order, ExtendedProduct
 } from "@/lib/store";
 import { nanoid } from "nanoid";
+import Image from "next/image";
 import ReceiptModal from "@/components/ReceiptModal";
 import {
     LogOut, Search, Plus, Minus, Trash2, ShoppingCart,
@@ -62,6 +63,8 @@ export default function POSPage() {
     const [mobileCartOpen, setMobileCartOpen] = useState(false);
 
     useEffect(() => {
+        // Hydration fix
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsClient(true);
     }, []);
 
@@ -89,6 +92,11 @@ export default function POSPage() {
 
     // ── Checkout ──────────────────────────────────────────────
     const handleCheckout = () => {
+        if (!isStoreOpen) {
+            alert("Toko harus dibuka sebelum memproses pesanan!");
+            return;
+        }
+
         if (items.length === 0) return;
         if (!customerName.trim()) return alert('Mohon isi nama pelanggan');
         if (paymentMethod === 'cash' && cashIn < orderTotal) return alert('Uang yang diterima kurang dari total!');
@@ -342,9 +350,9 @@ export default function POSPage() {
                                         <div key={item.id} className="px-3 py-2.5">
                                             <div className="flex items-start gap-2">
                                                 {/* Thumbnail */}
-                                                <div className="w-9 h-9 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                                                <div className="w-9 h-9 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 relative">
                                                     {item.image
-                                                        ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                        ? <Image src={item.image} alt={item.name} fill className="object-cover" />
                                                         : <div className="w-full h-full flex items-center justify-center text-gray-300 text-lg font-bold">{item.name[0]}</div>
                                                     }
                                                 </div>
@@ -491,19 +499,17 @@ export default function POSPage() {
                                                 </div>
 
                                                 {/* Image QRIS (akan menutupi fallback jika sukses loading) */}
-                                                <img
+                                                <Image
                                                     src="/images/qris-gopay.jpg"
                                                     alt="QRIS"
-                                                    className="w-full h-full object-contain relative z-10 bg-white"
-                                                    onError={(e) => {
-                                                        // Sembunyikan tag img jika error (file belum ada)
-                                                        e.currentTarget.style.display = 'none';
-                                                    }}
+                                                    fill
+                                                    className="object-contain relative z-10 bg-white"
+                                                    unoptimized
                                                 />
                                             </div>
 
-                                            <div className="text-[10px] text-gray-500 bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1.5 rounded-lg w-full flex flex-col">
-                                                <span className="uppercase tracking-widest text-[9px] font-bold opacity-60">Total Tagihan</span>
+                                            <div className="text-[10px] text-gray-700 bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1.5 rounded-lg w-full flex flex-col">
+                                                <span className="uppercase tracking-widest text-[9px] font-bold text-amber-950/80">Total Tagihan</span>
                                                 <b className="text-base text-[#0D2B20] font-black">{formatRp(orderTotal)}</b>
                                             </div>
                                             <p className="text-[9px] text-[#0D2B20] leading-tight bg-gray-100 p-1.5 rounded text-left">
@@ -526,7 +532,7 @@ export default function POSPage() {
                                         className="overflow-hidden space-y-1"
                                     >
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-mono">Rp</span>
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-600 font-mono font-bold">Rp</span>
                                             <input
                                                 type="number"
                                                 placeholder="Uang Diterima"
@@ -684,7 +690,7 @@ function ProductCard({
             {/* Image */}
             <div className="aspect-square relative overflow-hidden bg-gray-100">
                 {product.image
-                    ? <img src={product.image} alt={product.name} className={`w-full h-full object-cover transition duration-500 group-hover:scale-110 ${isOutOfStock ? 'grayscale' : ''}`} />
+                    ? <Image src={product.image} alt={product.name} fill className={`object-cover transition duration-500 group-hover:scale-110 ${isOutOfStock ? 'grayscale' : ''}`} />
                     : <div className="w-full h-full flex items-center justify-center text-gray-300 text-3xl font-bold">{product.name[0]}</div>
                 }
 

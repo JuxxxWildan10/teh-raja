@@ -54,19 +54,19 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
                     {/* Order Info */}
                     <div className="mb-3 border-b border-dashed border-gray-300 pb-3 space-y-0.5">
                         <div className="flex justify-between">
-                            <span className="text-gray-500">No. Order</span>
+                            <span className="text-gray-600">No. Order</span>
                             <span className="font-bold">#{order.id.slice(0, 8).toUpperCase()}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-gray-500">Tanggal</span>
+                            <span className="text-gray-600">Tanggal</span>
                             <span>{new Date(order.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-gray-500">Waktu</span>
+                            <span className="text-gray-600">Waktu</span>
                             <span>{new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-gray-500">Kasir</span>
+                            <span className="text-gray-600">Kasir</span>
                             <span>{order.cashierName || 'Staff'}</span>
                         </div>
                     </div>
@@ -74,18 +74,18 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
                     {/* Customer Info */}
                     <div className="mb-3 border-b border-dashed border-gray-300 pb-3 space-y-0.5">
                         <div className="flex justify-between">
-                            <span className="text-gray-500">Pelanggan</span>
+                            <span className="text-gray-600">Pelanggan</span>
                             <span className="font-bold">{order.customerName || 'Guest'}</span>
                         </div>
                         {order.tableNumber && (
                             <div className="flex justify-between">
-                                <span className="text-gray-500">No. Meja</span>
+                                <span className="text-gray-600">No. Meja</span>
                                 <span className="font-bold">{order.tableNumber}</span>
                             </div>
                         )}
                         {order.orderType && (
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Tipe Order</span>
+                                <span className="text-gray-600">Tipe Order</span>
                                 <span className="font-bold uppercase">{order.orderType === 'dine-in' ? 'Makan di Tempat' : 'Bawa Pulang'}</span>
                             </div>
                         )}
@@ -102,7 +102,7 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
                                     </div>
                                     <span className="ml-2 flex-shrink-0">Rp {(item.price * item.quantity).toLocaleString('id-ID')}</span>
                                 </div>
-                                <div className="flex justify-between text-gray-400 text-[9px] pl-4">
+                                <div className="flex justify-between text-gray-500 text-[9px] pl-4 font-bold">
                                     <span>@ Rp {item.price.toLocaleString('id-ID')}</span>
                                 </div>
                                 {item.note && (
@@ -131,8 +131,8 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
                         {order.paymentMethod === 'cash' && order.cashReceived != null && (
                             <>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-500">Diterima</span>
-                                    <span>Rp {order.cashReceived.toLocaleString('id-ID')}</span>
+                                    <span className="text-gray-600">Diterima</span>
+                                    <span className="font-bold">Rp {order.cashReceived.toLocaleString('id-ID')}</span>
                                 </div>
                                 <div className="flex justify-between font-bold text-green-700">
                                     <span>Kembalian</span>

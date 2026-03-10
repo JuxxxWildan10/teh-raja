@@ -26,8 +26,8 @@ export default function RecommendationQuiz() {
     // state 'isClient' untuk memastikan render komponen hanya terjadi di sisi klien (mencegah error hidrasi Next.js)
     const [isClient, setIsClient] = useState(false);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/exhaustive-deps
         setIsClient(true);
     }, []);
 

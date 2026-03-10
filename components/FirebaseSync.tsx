@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, set as firebaseSet } from "firebase/database";
-import { useSalesStore, useCartStore, useProductStore, Order, ActivityLog, ExtendedProduct } from "@/lib/store";
+import { useSalesStore, useCartStore, useProductStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
 
 // Audio Assets (Base64 placeholder - replace with actual short sounds if needed, 
 // but for now I'll use simple generated beeps or just console logs if assets aren't provided.
@@ -73,6 +73,22 @@ export default function FirebaseSync() {
             }
         });
 
+        // [NEW] Sync Store Status & Sessions
+        const sessionsRef = ref(rtdb, 'sessions');
+        const unsubSessions = onValue(sessionsRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedSessions: StoreSession[] = Object.values(data);
+                // Find if any session is currently open
+                const activeSession = loadedSessions.find(s => s.status === 'open');
+                useSalesStore.setState({
+                    sessions: loadedSessions,
+                    isStoreOpen: !!activeSession,
+                    currentSessionId: activeSession ? activeSession.id : null
+                });
+            }
+        });
+
         // Optional: Check explicit connection state
         const connectedRef = ref(rtdb, ".info/connected");
         const unsubscribeStatus = onValue(connectedRef, (snap) => {
@@ -89,6 +105,7 @@ export default function FirebaseSync() {
             unsubscribe();
             unsubProducts();
             unsubLogs();
+            unsubSessions();
             unsubscribeStatus();
         };
     }, []);

@@ -24,6 +24,7 @@ import {
     Menu, // [NEW] hamburger icon
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { nanoid } from "nanoid";
 import ReportGenerator from "@/components/ReportGenerator";
 
@@ -62,7 +63,7 @@ export default function AdminPage() {
         isAvailable: true, stock: 50, minStockThreshold: 10
     });
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { setIsClient(true); }, []);
 
     const handleLogin = (e: React.FormEvent) => {
@@ -614,9 +615,9 @@ export default function AdminPage() {
                                         {products.map(item => (
                                             <tr key={item.id} className="hover:bg-blue-50/50 transition bg-white">
                                                 <td className="p-4">
-                                                    <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200">
+                                                    <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 relative">
                                                         {item.image ? (
-                                                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                            <Image src={item.image} alt={item.name} fill className="object-cover" />
                                                         ) : <ImageIcon className="m-auto text-gray-300 mt-3" />}
                                                     </div>
                                                 </td>
@@ -663,9 +664,9 @@ export default function AdminPage() {
                                 {products.map(item => (
                                     <div key={item.id} className="p-4 flex gap-3 items-start">
                                         {/* Image */}
-                                        <div className="w-14 h-14 flex-shrink-0 rounded-xl bg-gray-100 overflow-hidden border border-gray-200">
+                                        <div className="w-14 h-14 flex-shrink-0 rounded-xl bg-gray-100 overflow-hidden border border-gray-200 relative">
                                             {item.image ? (
-                                                <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                                <Image src={item.image} alt={item.name} fill className="object-cover" />
                                             ) : <ImageIcon className="m-auto text-gray-300 mt-4" size={20} />}
                                         </div>
                                         {/* Info */}

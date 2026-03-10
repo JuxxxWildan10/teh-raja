@@ -196,16 +196,23 @@ export const useProductStore = create<ProductState>()(
             },
             decrementStock: (items) => {
                 set((state) => {
+                    const updates: Record<string, any> = {};
                     const newProducts = state.products.map(p => {
                         const found = items.find(i => i.id === p.id);
                         if (found) {
                             const newStock = Math.max(0, p.stock - found.quantity);
                             const updated = { ...p, stock: newStock, isAvailable: newStock > 0 };
-                            firebaseUpdate(ref(rtdb, `products/${p.id}`), { stock: newStock, isAvailable: newStock > 0 }).catch(err => console.error(err));
+                            updates[`products/${p.id}/stock`] = newStock;
+                            updates[`products/${p.id}/isAvailable`] = newStock > 0;
                             return updated;
                         }
                         return p;
                     });
+
+                    if (Object.keys(updates).length > 0) {
+                        firebaseUpdate(ref(rtdb), updates).catch(err => console.error("Firebase Stock Update Error:", err));
+                    }
+
                     return { products: newProducts };
                 })
             }
@@ -251,7 +258,8 @@ export const useSalesStore = create<SalesState>()(
                 const session = state.sessions[sessionIndex];
 
                 // Calculate total sales that occurred during this session time
-                const sessionOrders = state.orders.filter(o => o.date >= session.startTime);
+                // Filter out cancelled orders
+                const sessionOrders = state.orders.filter(o => o.date >= session.startTime && o.status !== 'cancelled');
                 const totalSales = sessionOrders.reduce((sum, order) => sum + order.total, 0);
                 const totalOrders = sessionOrders.length;
 

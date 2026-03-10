@@ -6,6 +6,7 @@ import { X, Minus, Plus, Trash2, MessageCircle, Edit3 } from "lucide-react";
 import { useState } from "react";
 import ReceiptModal from "./ReceiptModal";
 import { nanoid } from "nanoid";
+import NextImage from "next/image";
 
 interface CartDrawerProps {
     isOpen: boolean;
@@ -154,7 +155,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                     return (
                                         <div key={item.id} className={`bg-white/5 p-4 rounded-xl ${!isAvailable ? 'border border-red-500/50 bg-red-900/10' : ''}`}>
                                             <div className="flex gap-4 items-center mb-3">
-                                                <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover bg-white/10" />
+                                                <div className="w-16 h-16 rounded-lg overflow-hidden relative bg-white/10">
+                                                    <NextImage src={item.image} alt={item.name} fill className="object-cover" />
+                                                </div>
                                                 <div className="flex-1">
                                                     <h4 className="font-serif font-bold text-gold-light">{item.name}</h4>
 
