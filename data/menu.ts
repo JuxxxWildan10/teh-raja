@@ -4,7 +4,7 @@ export type Product = {
     price: number;
     description: string;
     image: string;
-    category: 'signature' | 'milk' | 'fruit' | 'classic';
+    category: 'signature' | 'milk' | 'fruit' | 'classic' | 'snack' | 'food';
     attributes: {
         sweet: number;  // 0-10
         creamy: number; // 0-10
@@ -66,5 +66,23 @@ export const products: Product[] = [
         image: 'https://i.pinimg.com/736x/8d/43/37/8d4337f052681194d09bc7af73d93c44.jpg',
         category: 'classic',
         attributes: { sweet: 1, creamy: 0, fruity: 5 }
+    },
+    {
+        id: '7',
+        name: 'French Fries',
+        price: 15000,
+        description: 'Kentang goreng renyah dengan bumbu rahasia Teh Raja.',
+        image: 'https://i.pinimg.com/736x/89/a3/1b/89a31b268fdfb6ab37c18ccff0344d5d.jpg',
+        category: 'snack',
+        attributes: { sweet: 0, creamy: 2, fruity: 0 }
+    },
+    {
+        id: '8',
+        name: 'Toast Roti Bakar',
+        price: 20000,
+        description: 'Roti bakar gandum tebal dengan selai cokelat keju lezat.',
+        image: 'https://i.pinimg.com/736x/43/66/be/4366be8e4bf92a0bd2a514d7912d5dfd.jpg',
+        category: 'food',
+        attributes: { sweet: 8, creamy: 5, fruity: 0 }
     }
 ];

@@ -13,9 +13,8 @@ import {
     LogOut, Search, Plus, Minus, Trash2, ShoppingCart,
     LayoutGrid, Coffee, Leaf, Citrus, Star,
     Banknote, QrCode, Building2, ChevronRight,
-    RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag
+    RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie
 } from "lucide-react";
-
 // ── Category Tabs ────────────────────────────────────────────
 const CATEGORIES = [
     { id: 'all', label: 'Semua', icon: LayoutGrid },
@@ -23,6 +22,8 @@ const CATEGORIES = [
     { id: 'milk', label: 'Milk Base', icon: Coffee },
     { id: 'classic', label: 'Classic', icon: Leaf },
     { id: 'fruit', label: 'Fruit', icon: Citrus },
+    { id: 'snack', label: 'Snack', icon: Cookie },
+    { id: 'food', label: 'Makanan', icon: UtensilsCrossed },
 ] as const;
 
 type PaymentMethod = 'cash' | 'qris' | 'transfer';
@@ -45,7 +46,7 @@ export default function POSPage() {
     const { user, logout } = useAuthStore();
     const { items, addToCart, removeFromCart, updateQuantity, clearCart, total } = useCartStore();
     const { products, decrementStock } = useProductStore();
-    const { addOrder, addLog } = useSalesStore();
+    const { addOrder, addLog, isStoreOpen, openStore, closeStore } = useSalesStore();
 
     const [isClient, setIsClient] = useState(false);
     const [search, setSearch] = useState('');
@@ -58,6 +59,7 @@ export default function POSPage() {
     const [showReceipt, setShowReceipt] = useState(false);
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
     const [notes, setNotes] = useState<Record<string, string>>({});
+    const [mobileCartOpen, setMobileCartOpen] = useState(false);
 
     useEffect(() => {
         setIsClient(true);
@@ -119,6 +121,7 @@ export default function POSPage() {
         setCustomerName('');
         setTableNumber('');
         setCashReceived('');
+        setMobileCartOpen(false);
     };
 
     const handleNewOrder = () => {
@@ -130,6 +133,16 @@ export default function POSPage() {
         addLog('LOGOUT', `${user?.name} logged out from POS`, user?.name || 'Kasir');
         logout();
         router.push('/admin');
+    };
+
+    const handleTutupToko = () => {
+        if (confirm("Apakah Anda yakin ingin MENUTUP toko sekarang? Sesi penjualan akan direkap.")) {
+            const summary = closeStore();
+            if (summary) {
+                alert(`Toko Ditutup!\nTotal Pesanan: ${summary.totalOrders}\nTotal Pendapatan: Rp ${summary.totalSales.toLocaleString('id-ID')}`);
+                addLog('STORE_CLOSE', `Store closed. Total: Rp ${summary.totalSales.toLocaleString('id-ID')}`, user?.name || 'Kasir');
+            }
+        }
     };
 
     if (!isClient || !user) return null;
@@ -148,11 +161,19 @@ export default function POSPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="hidden sm:flex items-center gap-2 text-xs text-white/60">
-                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${isStoreOpen ? 'bg-green-400' : 'bg-red-400'}`} />
                         <span>{user.name}</span>
                         <span className="opacity-40">•</span>
                         <span className="uppercase text-[10px] tracking-wider opacity-60">{user.role}</span>
                     </div>
+                    {isStoreOpen && (
+                        <button
+                            onClick={handleTutupToko}
+                            className="text-[10px] sm:text-xs font-bold bg-amber-400 text-[#0D2B20] hover:bg-amber-300 transition px-2 py-1 rounded-md"
+                        >
+                            Tutup Toko
+                        </button>
+                    )}
                     <a href="/admin" className="text-xs text-white/50 hover:text-white/80 transition hidden sm:block">Dashboard</a>
                     <button
                         onClick={handleLogout}
@@ -164,7 +185,31 @@ export default function POSPage() {
             </header>
 
             {/* ── MAIN AREA ─────────────────────────────────── */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden relative">
+
+                {/* ── STORE CLOSED OVERLAY ── */}
+                {!isStoreOpen && (
+                    <div className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center flex flex-col items-center">
+                            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4">
+                                <Building2 size={32} />
+                            </div>
+                            <h2 className="text-2xl font-black text-[#0D2B20] mb-2">Toko Masih Tutup</h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Anda harus memulai sesi toko terlebih dahulu untuk dapat menerima pesanan.
+                            </p>
+                            <button
+                                onClick={() => {
+                                    openStore(user.name);
+                                    addLog('STORE_OPEN', 'Store opened for orders', user.name);
+                                }}
+                                className="w-full py-3 bg-[#0D2B20] text-amber-400 font-bold rounded-xl hover:bg-[#1a4433] hover:scale-105 active:scale-95 transition shadow-lg"
+                            >
+                                Buka Toko Sekarang
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* ════════════════════════════════════════════
                     LEFT PANEL — Katalog Produk
@@ -181,7 +226,7 @@ export default function POSPage() {
                                 placeholder="Cari produk..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0D2B20] transition"
+                                className="w-full text-gray-900 pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0D2B20] transition"
                             />
                         </div>
                         {/* Category Tabs */}
@@ -244,12 +289,28 @@ export default function POSPage() {
                 {/* ════════════════════════════════════════════
                     RIGHT PANEL — Keranjang & Pembayaran
                 ════════════════════════════════════════════ */}
-                <div className="w-80 xl:w-96 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col shadow-xl z-10">
+                {/* Mobile Overlay */}
+                <AnimatePresence>
+                    {mobileCartOpen && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setMobileCartOpen(false)}
+                            className="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+                        />
+                    )}
+                </AnimatePresence>
+
+                <div className={`fixed lg:relative right-0 top-0 lg:top-auto h-full lg:h-auto w-80 sm:w-96 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col shadow-2xl lg:shadow-xl z-40 transition-transform duration-300 lg:translate-x-0 ${mobileCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
 
                     {/* Cart Header */}
                     <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-shrink-0">
                         <div className="flex items-center gap-2">
-                            <ShoppingCart size={16} className="text-[#0D2B20]" />
+                            <button onClick={() => setMobileCartOpen(false)} className="lg:hidden p-1 bg-gray-200 rounded-full hover:bg-gray-300 text-gray-700">
+                                <X size={14} />
+                            </button>
+                            <ShoppingCart size={16} className="text-[#0D2B20] hidden lg:block" />
                             <span className="font-bold text-gray-800 text-sm">Pesanan</span>
                             {items.length > 0 && (
                                 <span className="bg-[#0D2B20] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{items.length}</span>
@@ -296,7 +357,7 @@ export default function POSPage() {
                                                         placeholder="Catatan (opsional)"
                                                         value={notes[item.id] || ''}
                                                         onChange={e => setNotes({ ...notes, [item.id]: e.target.value })}
-                                                        className="w-full text-[10px] bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 mt-1 focus:outline-none focus:border-gray-400"
+                                                        className="w-full text-gray-900 text-[10px] bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 mt-1 focus:outline-none focus:border-gray-400"
                                                     />
                                                 </div>
                                                 {/* Qty Controls */}
@@ -353,7 +414,7 @@ export default function POSPage() {
                                         placeholder="Nama Pelanggan *"
                                         value={customerName}
                                         onChange={e => setCustomerName(e.target.value)}
-                                        className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition"
+                                        className="w-full text-gray-900 pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition"
                                     />
                                 </div>
                                 <div className="relative w-20">
@@ -362,7 +423,7 @@ export default function POSPage() {
                                         placeholder="Meja"
                                         value={tableNumber}
                                         onChange={e => setTableNumber(e.target.value)}
-                                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition text-center"
+                                        className="w-full text-gray-900 px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition text-center"
                                     />
                                 </div>
                             </div>
@@ -409,6 +470,52 @@ export default function POSPage() {
                                 })}
                             </div>
 
+                            {/* QRIS Input */}
+                            <AnimatePresence>
+                                {paymentMethod === 'qris' && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="overflow-hidden space-y-3 pt-2 pb-1"
+                                    >
+                                        <div className="bg-white p-3 rounded-xl border border-gray-200 flex flex-col items-center text-center gap-2">
+                                            <p className="text-[11px] font-bold text-gray-800">Scan QRIS GoPay Merchant</p>
+
+                                            {/* PREVIEW GAMBAR QR CODE */}
+                                            <div className="w-40 h-40 bg-gray-50 rounded-lg p-2 border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden group">
+                                                {/* Fallback component jika gambar tidak ada */}
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-0 p-2">
+                                                    <QrCode size={24} className="text-gray-300 mb-1" />
+                                                    <span className="text-[9px] text-gray-400 leading-tight">Pastikan upload file QR<br />dengan nama<br /><b className="text-gray-500">qris-gopay.jpg</b><br />atau <b className="text-gray-500">qris-gopay.png</b><br />ke folder <b className="text-amber-600">public/images/</b></span>
+                                                </div>
+
+                                                {/* Image QRIS (akan menutupi fallback jika sukses loading) */}
+                                                <img
+                                                    src="/images/qris-gopay.jpg"
+                                                    alt="QRIS"
+                                                    className="w-full h-full object-contain relative z-10 bg-white"
+                                                    onError={(e) => {
+                                                        // Sembunyikan tag img jika error (file belum ada)
+                                                        e.currentTarget.style.display = 'none';
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div className="text-[10px] text-gray-500 bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1.5 rounded-lg w-full flex flex-col">
+                                                <span className="uppercase tracking-widest text-[9px] font-bold opacity-60">Total Tagihan</span>
+                                                <b className="text-base text-[#0D2B20] font-black">{formatRp(orderTotal)}</b>
+                                            </div>
+                                            <p className="text-[9px] text-[#0D2B20] leading-tight bg-gray-100 p-1.5 rounded text-left">
+                                                💡 Minta pelanggan scan kode QR ini untuk membayar nominal di atas.
+                                                <br /><br />
+                                                ⚠ <b>PERHATIAN:</b> Pastikan saldo sudah masuk di aplikasi GoPay Merchant Anda sebelum klik tombol Proses di bawah!
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
                             {/* Cash Input (only for tunai) */}
                             <AnimatePresence>
                                 {paymentMethod === 'cash' && (
@@ -425,7 +532,7 @@ export default function POSPage() {
                                                 placeholder="Uang Diterima"
                                                 value={cashReceived}
                                                 onChange={e => setCashReceived(e.target.value)}
-                                                className={`w-full pl-9 pr-3 py-1.5 text-xs border rounded-lg bg-white focus:outline-none transition font-mono ${isInsufficientCash
+                                                className={`w-full text-gray-900 pl-9 pr-3 py-1.5 text-xs border rounded-lg bg-white focus:outline-none transition font-mono ${isInsufficientCash
                                                     ? 'border-red-400 bg-red-50 text-red-700 focus:border-red-500'
                                                     : 'border-gray-300 focus:border-[#0D2B20]'
                                                     }`}
@@ -447,11 +554,35 @@ export default function POSPage() {
                                                 <button
                                                     key={n}
                                                     onClick={() => setCashReceived(String(n))}
-                                                    className="text-[10px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 rounded font-mono border border-gray-200 transition"
+                                                    className="text-gray-900 text-[10px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 rounded font-mono border border-gray-200 transition"
                                                 >
                                                     {n >= 1000 ? `${n / 1000}rb` : n}
                                                 </button>
                                             ))}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            {/* Transfer Input */}
+                            <AnimatePresence>
+                                {paymentMethod === 'transfer' && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="overflow-hidden space-y-3 pt-2 pb-1"
+                                    >
+                                        <div className="bg-white p-3 rounded-xl border border-gray-200 flex flex-col items-center text-center gap-2">
+                                            <p className="text-[11px] font-bold text-gray-800">Transfer Bank / VA</p>
+                                            <Building2 size={32} className="text-gray-300 my-2" />
+                                            <div className="text-[10px] text-gray-500 bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1.5 rounded-lg w-full flex flex-col">
+                                                <span className="uppercase tracking-widest text-[9px] font-bold opacity-60">Total Tagihan</span>
+                                                <b className="text-base text-[#0D2B20] font-black">{formatRp(orderTotal)}</b>
+                                            </div>
+                                            <p className="text-[9px] text-[#0D2B20] leading-tight bg-gray-100 p-1.5 rounded text-left">
+                                                💡 Pastikan Bukti Transfer dana sudah masuk ke rekening sebelum klik Proses.
+                                            </p>
                                         </div>
                                     </motion.div>
                                 )}
@@ -472,6 +603,34 @@ export default function POSPage() {
                     </div>
                 </div>
             </div>
+
+            {/* ── MOBILE FAB (TAMBAHAN KERANJANG) ─────────────────────────────── */}
+            <AnimatePresence>
+                {!mobileCartOpen && items.length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 50 }}
+                        className="fixed lg:hidden bottom-6 w-full px-4 z-20"
+                    >
+                        <button
+                            onClick={() => setMobileCartOpen(true)}
+                            className="w-full bg-[#0D2B20] text-amber-400 py-3.5 rounded-2xl shadow-2xl flex items-center justify-between px-6 border border-amber-500/30"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="relative">
+                                    <ShoppingCart size={20} />
+                                    <span className="absolute -top-2 -right-3 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                                        {items.length}
+                                    </span>
+                                </div>
+                                <span className="font-bold text-sm ml-2">Lihat Tray ({items.length} item)</span>
+                            </div>
+                            <span className="font-black text-amber-400 text-sm">{formatRp(orderTotal)}</span>
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ── RECEIPT MODAL ─────────────────────────────── */}
             <AnimatePresence>

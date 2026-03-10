@@ -49,6 +49,16 @@ export interface Order {
     orderType?: 'dine-in' | 'take-away';
 }
 
+export interface StoreSession {
+    id: string;
+    startTime: string; // ISO
+    endTime?: string;  // ISO
+    cashierName: string;
+    totalSales: number;
+    totalOrders: number;
+    status: 'open' | 'closed';
+}
+
 // --- Stores ---
 
 interface CartState {
@@ -74,8 +84,14 @@ interface ProductState {
 interface SalesState {
     orders: Order[];
     logs: ActivityLog[];
+    isStoreOpen: boolean; // [NEW]
+    currentSessionId: string | null; // [NEW]
+    sessions: StoreSession[]; // [NEW] Historical daily recaps
+    openStore: (cashierName: string) => void; // [NEW]
+    closeStore: () => StoreSession | null; // [NEW] Returns the closed session summary
+
     addOrder: (order: Order) => void;
-    updateOrderStatus: (orderId: string, status: Order['status']) => void; // [NEW]
+    updateOrderStatus: (orderId: string, status: Order['status']) => void;
     addLog: (action: string, details: string, user: string) => void;
     getDailySales: () => { date: string; total: number; count: number }[];
     getProductPopularity: () => { name: string; count: number }[];
@@ -203,11 +219,73 @@ export const useSalesStore = create<SalesState>()(
         (set, get) => ({
             orders: [],
             logs: [],
+            isStoreOpen: false,
+            currentSessionId: null,
+            sessions: [],
+
+            openStore: (cashierName) => {
+                const newSession: StoreSession = {
+                    id: nanoid(),
+                    startTime: new Date().toISOString(),
+                    cashierName,
+                    totalSales: 0,
+                    totalOrders: 0,
+                    status: 'open'
+                };
+                set((state) => ({
+                    isStoreOpen: true,
+                    currentSessionId: newSession.id,
+                    sessions: [...state.sessions, newSession]
+                }));
+                const sessionRef = ref(rtdb, `sessions/${newSession.id}`);
+                firebaseSet(sessionRef, newSession).catch(err => console.error(err));
+            },
+
+            closeStore: () => {
+                const state = get();
+                if (!state.isStoreOpen || !state.currentSessionId) return null;
+
+                const sessionIndex = state.sessions.findIndex(s => s.id === state.currentSessionId);
+                if (sessionIndex === -1) return null;
+
+                const session = state.sessions[sessionIndex];
+
+                // Calculate total sales that occurred during this session time
+                const sessionOrders = state.orders.filter(o => o.date >= session.startTime);
+                const totalSales = sessionOrders.reduce((sum, order) => sum + order.total, 0);
+                const totalOrders = sessionOrders.length;
+
+                const closedSession: StoreSession = {
+                    ...session,
+                    endTime: new Date().toISOString(),
+                    status: 'closed',
+                    totalSales,
+                    totalOrders
+                };
+
+                const updatedSessions = [...state.sessions];
+                updatedSessions[sessionIndex] = closedSession;
+
+                set({
+                    isStoreOpen: false,
+                    currentSessionId: null,
+                    sessions: updatedSessions
+                });
+
+                // Sync to Firebase
+                const sessionRef = ref(rtdb, `sessions/${closedSession.id}`);
+                firebaseUpdate(sessionRef, closedSession).catch(err => console.error(err));
+
+                return closedSession;
+            },
+
             addOrder: (order) => {
                 set((state) => ({ orders: [...state.orders, order] }));
-                // [NEW] Sync to Firebase
+                // Sync to Firebase
+                // Sanitize undefined fields which Firebase Realtime Database Rejects
+                const sanitizedOrder = JSON.parse(JSON.stringify(order));
                 const orderRef = ref(rtdb, `orders/${order.id}`);
-                firebaseSet(orderRef, order).catch(err => console.error("Firebase Add Error:", err));
+                firebaseSet(orderRef, sanitizedOrder).catch(err => console.error("Firebase Add Error:", err));
             },
             updateOrderStatus: (orderId, status) => {
                 set((state) => ({
@@ -260,9 +338,10 @@ export const useSalesStore = create<SalesState>()(
                     .slice(0, 5);
             },
             resetData: () => {
-                set({ orders: [], logs: [] });
+                set({ orders: [], logs: [], sessions: [], isStoreOpen: false, currentSessionId: null });
                 firebaseSet(ref(rtdb, 'orders'), null).catch(err => console.error(err));
                 firebaseSet(ref(rtdb, 'logs'), null).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, 'sessions'), null).catch(err => console.error(err));
             }
         }),
         { name: 'teh-raja-sales-v3' }

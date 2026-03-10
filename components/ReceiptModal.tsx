@@ -40,7 +40,7 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
                 </div>
 
                 {/* Receipt Content */}
-                <div ref={receiptRef} className="p-6 bg-white font-mono text-[11px] relative">
+                <div ref={receiptRef} className="p-6 bg-white font-mono text-[11px] relative max-h-[85vh] overflow-y-auto print:overflow-visible print:max-h-none print:shadow-none" style={{ scrollbarWidth: 'thin' }}>
                     {/* Paper top edge */}
                     <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-b from-gray-200 to-transparent opacity-20" />
 

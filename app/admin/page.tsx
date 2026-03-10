@@ -47,7 +47,7 @@ export default function AdminPage() {
 
     // Stores
     const { products, addProduct, updateProduct, deleteProduct } = useProductStore();
-    const { getDailySales, getProductPopularity, orders, logs, addLog, resetData, updateOrderStatus } = useSalesStore();
+    const { getDailySales, getProductPopularity, orders, logs, addLog, resetData, updateOrderStatus, sessions } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
 
     // UI State
@@ -276,8 +276,8 @@ export default function AdminPage() {
                             <p className="text-xs opacity-60 uppercase tracking-wider">{user.role}</p>
                         </div>
                         <div className="h-8 w-[1px] bg-white/10 hidden sm:block"></div>
-                        <Link href="/" target="_blank" className="opacity-70 hover:opacity-100 flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
-                            <span className="hidden sm:inline">Web Live</span>
+                        <Link href="/pos" className="opacity-70 hover:opacity-100 flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap">
+                            <span className="hidden sm:inline text-amber-400 font-bold">Buka POS</span>
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></span>
                         </Link>
                         <button onClick={handleLogout} className="p-2 hover:bg-red-500/20 text-red-300 rounded-full transition" title="Logout">
@@ -395,6 +395,62 @@ export default function AdminPage() {
                                     <span className="w-1 h-5 bg-forest rounded-full"></span> Produk Terpopuler
                                 </h3>
                                 <Bar data={popularityData} options={{ responsive: true, maintainAspectRatio: false }} />
+                            </div>
+                        </div>
+
+                        {/* Riwayat Sesi (Toko) */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-8">
+                            <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50">
+                                <h3 className="font-bold text-lg text-forest flex items-center gap-2">
+                                    <Clock size={20} className="text-amber-500" /> Riwayat Laporan Harian (Sesi)
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1">Laporan pendapatan setiap kali toko dibuka dan ditutup.</p>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
+                                        <tr>
+                                            <th className="p-4">Staff Kasir</th>
+                                            <th className="p-4">Waktu Buka</th>
+                                            <th className="p-4">Waktu Tutup</th>
+                                            <th className="p-4 text-center">Jml Transaksi</th>
+                                            <th className="p-4 text-right">Total Pendapatan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {sessions.slice().reverse().map(session => (
+                                            <tr key={session.id} className="hover:bg-blue-50/50 transition bg-white">
+                                                <td className="p-4 font-bold text-gray-800 flex items-center gap-2">
+                                                    <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs">
+                                                        {session.cashierName.charAt(0)}
+                                                    </div>
+                                                    {session.cashierName}
+                                                </td>
+                                                <td className="p-4 text-sm text-gray-600">
+                                                    {new Date(session.startTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                                                </td>
+                                                <td className="p-4 text-sm text-gray-600">
+                                                    {session.endTime ? new Date(session.endTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : (
+                                                        <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded">SEDANG BUKA</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 text-center font-mono">
+                                                    {session.totalOrders}
+                                                </td>
+                                                <td className="p-4 text-right font-bold text-forest">
+                                                    Rp {session.totalSales.toLocaleString('id-ID')}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {sessions.length === 0 && (
+                                            <tr>
+                                                <td colSpan={5} className="p-8 text-center text-gray-400 italic">
+                                                    Belum ada riwayat sesi toko tersimpan.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -739,12 +795,17 @@ export default function AdminPage() {
                                     <select
                                         className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest bg-white text-sm"
                                         value={formData.category}
-                                        onChange={e => setFormData({ ...formData, category: e.target.value as 'signature' | 'classic' | 'milk' | 'fruit' })}
+                                        onChange={e => setFormData({ ...formData, category: e.target.value as 'signature' | 'classic' | 'milk' | 'fruit' | 'snack' | 'food' })}
                                     >
+                                        <option value="" disabled className="font-bold text-gray-500 bg-gray-100">--- Minuman ---</option>
                                         <option value="signature">Signature (Khas)</option>
                                         <option value="classic">Classic Tea</option>
                                         <option value="milk">Milk Base</option>
                                         <option value="fruit">Fruit Series</option>
+
+                                        <option value="" disabled className="font-bold text-gray-500 bg-gray-100 mt-2">--- Makanan/Snack ---</option>
+                                        <option value="snack">Camilan/Snack</option>
+                                        <option value="food">Makanan Utama</option>
                                     </select>
                                 </div>
                                 <div className="space-y-2">
