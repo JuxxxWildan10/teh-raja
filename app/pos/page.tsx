@@ -14,7 +14,8 @@ import {
     LogOut, Search, Plus, Minus, Trash2, ShoppingCart,
     LayoutGrid, Coffee, Leaf, Citrus, Star,
     Banknote, QrCode, Building2, ChevronRight,
-    RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie
+    RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie,
+    Wand2, Sparkles, ChevronDown
 } from "lucide-react";
 // ── Category Tabs ────────────────────────────────────────────
 const CATEGORIES = [
@@ -61,6 +62,28 @@ export default function POSPage() {
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
     const [notes, setNotes] = useState<Record<string, string>>({});
     const [mobileCartOpen, setMobileCartOpen] = useState(false);
+
+    // ── Flavor Finder (Euclidean Distance) ────────────────────
+    const [showFlavorFinder, setShowFlavorFinder] = useState(false);
+    const [flavorPref, setFlavorPref] = useState({ sweet: 5, creamy: 5, fruity: 5 });
+
+    const flavorRecommendations = useMemo(() => {
+        if (!showFlavorFinder) return new Set<string>();
+        const scored = products
+            .filter(p => p.stock > 0)
+            .map(p => {
+                const attr = p.attributes || { sweet: 0, creamy: 0, fruity: 0 };
+                const dist = Math.sqrt(
+                    Math.pow(attr.sweet - flavorPref.sweet, 2) +
+                    Math.pow(attr.creamy - flavorPref.creamy, 2) +
+                    Math.pow(attr.fruity - flavorPref.fruity, 2)
+                );
+                return { id: p.id, dist };
+            })
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, 3);
+        return new Set(scored.map(s => s.id));
+    }, [showFlavorFinder, products, flavorPref]);
 
     useEffect(() => {
         // Hydration fix
@@ -226,17 +249,83 @@ export default function POSPage() {
 
                     {/* Search + Category Bar */}
                     <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex flex-col gap-2 flex-shrink-0 shadow-sm">
-                        {/* Search */}
-                        <div className="relative">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Cari produk..."
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                className="w-full text-gray-900 pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0D2B20] transition"
-                            />
+                        {/* Search + Flavor Finder toggle */}
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Cari produk..."
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                    className="w-full text-gray-900 pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0D2B20] transition"
+                                />
+                            </div>
+                            <button
+                                onClick={() => setShowFlavorFinder(v => !v)}
+                                title="Pilih Berdasarkan Rasa"
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex-shrink-0 ${
+                                    showFlavorFinder
+                                        ? 'bg-[#0D2B20] text-amber-400 border-[#0D2B20] shadow-md'
+                                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#0D2B20] hover:text-[#0D2B20]'
+                                }`}
+                            >
+                                <Wand2 size={13} />
+                                <span className="hidden sm:inline">Pilih Rasa</span>
+                                <ChevronDown size={11} className={`transition-transform ${showFlavorFinder ? 'rotate-180' : ''}`} />
+                            </button>
                         </div>
+
+                        {/* Flavor Finder Panel */}
+                        <AnimatePresence>
+                            {showFlavorFinder && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="bg-gradient-to-br from-amber-50 to-green-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                            <Sparkles size={12} className="text-amber-600" />
+                                            <span className="text-[11px] font-bold text-[#0D2B20]">Rekomendasi Berdasarkan Selera Rasa</span>
+                                            <span className="ml-auto text-[9px] text-gray-400 italic">Euclidean Distance</span>
+                                        </div>
+                                        {([
+                                            { key: 'sweet', label: '🍯 Kemanisan', color: 'amber' },
+                                            { key: 'creamy', label: '🥛 Creamy', color: 'blue' },
+                                            { key: 'fruity', label: '🍊 Buah-buahan', color: 'orange' },
+                                        ] as const).map(({ key, label, color }) => (
+                                            <div key={key} className="flex items-center gap-2">
+                                                <span className="text-[10px] w-28 flex-shrink-0 text-gray-700 font-medium">{label}</span>
+                                                <input
+                                                    type="range"
+                                                    min={0} max={10} step={1}
+                                                    value={flavorPref[key]}
+                                                    onChange={e => setFlavorPref(prev => ({ ...prev, [key]: Number(e.target.value) }))}
+                                                    className="flex-1 h-1.5 accent-amber-500 cursor-pointer"
+                                                />
+                                                <span className={`text-[11px] font-black w-5 text-center ${
+                                                    color === 'amber' ? 'text-amber-600' :
+                                                    color === 'blue' ? 'text-blue-600' : 'text-orange-600'
+                                                }`}>{flavorPref[key]}</span>
+                                            </div>
+                                        ))}
+                                        <div className="pt-1 flex items-center gap-1.5">
+                                            <Sparkles size={10} className="text-amber-500" />
+                                            <span className="text-[10px] text-amber-700 font-semibold">
+                                                {flavorRecommendations.size > 0
+                                                    ? `${flavorRecommendations.size} produk terbaik untukmu ditandai ✨`
+                                                    : 'Geser slider untuk menemukan minuman yang cocok!'
+                                                }
+                                            </span>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         {/* Category Tabs */}
                         <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
                             {CATEGORIES.map(cat => {
@@ -273,6 +362,7 @@ export default function POSPage() {
                                         key={product.id}
                                         product={product}
                                         cartQty={items.find(i => i.id === product.id)?.quantity || 0}
+                                        isRecommended={flavorRecommendations.has(product.id)}
                                         onAdd={() => addToCart(product)}
                                         onRemove={() => {
                                             const existing = items.find(i => i.id === product.id);
@@ -664,11 +754,13 @@ export default function POSPage() {
 function ProductCard({
     product,
     cartQty,
+    isRecommended,
     onAdd,
     onRemove,
 }: {
     product: ExtendedProduct;
     cartQty: number;
+    isRecommended?: boolean;
     onAdd: () => void;
     onRemove: () => void;
 }) {
@@ -682,9 +774,11 @@ function ProductCard({
             animate={{ opacity: 1, scale: 1 }}
             className={`bg-white rounded-xl overflow-hidden shadow-sm border transition-all group relative ${isOutOfStock
                 ? 'border-gray-200 opacity-60'
-                : cartQty > 0
-                    ? 'border-amber-400 shadow-md shadow-amber-100'
-                    : 'border-gray-200 hover:border-[#0D2B20]/30 hover:shadow-md'
+                : isRecommended
+                    ? 'border-amber-400 shadow-lg shadow-amber-200 ring-2 ring-amber-300/50'
+                    : cartQty > 0
+                        ? 'border-amber-400 shadow-md shadow-amber-100'
+                        : 'border-gray-200 hover:border-[#0D2B20]/30 hover:shadow-md'
                 }`}
         >
             {/* Image */}
@@ -696,13 +790,16 @@ function ProductCard({
 
                 {/* Badges */}
                 <div className="absolute top-1.5 left-1.5 flex flex-col gap-1">
+                    {isRecommended && !isOutOfStock && (
+                        <span className="bg-gradient-to-r from-amber-400 to-yellow-300 text-[#0D2B20] text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm">✨ Cocok!</span>
+                    )}
                     {isOutOfStock && (
                         <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">HABIS</span>
                     )}
                     {isLimited && (
                         <span className="bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">Sisa {product.stock}</span>
                     )}
-                    {product.category === 'signature' && !isOutOfStock && (
+                    {product.category === 'signature' && !isOutOfStock && !isRecommended && (
                         <span className="bg-amber-400 text-[#0D2B20] text-[9px] font-bold px-1.5 py-0.5 rounded-full">★</span>
                     )}
                 </div>
