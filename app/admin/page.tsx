@@ -43,7 +43,7 @@ ChartJS.register(
 );
 
 export default function AdminPage() {
-    const { user, login, logout } = useAuthStore();
+    const { user, loginWithPassword, logout, users, addUser, removeUser, updateUser } = useAuthStore();
     const router = useRouter();
     const toast = useToast();
     const [loginUsername, setLoginUsername] = useState("");
@@ -56,7 +56,7 @@ export default function AdminPage() {
     const [isClient, setIsClient] = useState(false);
 
     // UI State
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan'>('dashboard');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -85,13 +85,12 @@ export default function AdminPage() {
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
         setLoginError("");
-        if (loginUsername === "admin" && loginPassword === "admin123") {
-            login("admin", "admin");
-            addLog("LOGIN", "Admin logged in", "Admin");
-        } else if (loginUsername === "kasir" && loginPassword === "kasir123") {
-            login("kasir", "cashier");
-            addLog("LOGIN", "Cashier logged in", "Kasir");
-            router.push('/pos');
+        const loggedInUser = loginWithPassword(loginUsername, loginPassword);
+        if (loggedInUser) {
+            addLog("LOGIN", `${loggedInUser.role === 'admin' ? 'Admin' : 'Cashier'} logged in`, loggedInUser.name);
+            if (loggedInUser.role === 'cashier') {
+                router.push('/pos');
+            }
         } else {
             setLoginError("Username atau Password salah!");
         }
@@ -182,7 +181,7 @@ export default function AdminPage() {
         toast.success("Data penjualan berhasil di-export ke CSV!");
     };
 
-    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders') => {
+    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan') => {
         setActiveTab(tab);
         setIsMobileMenuOpen(false);
     };
@@ -280,6 +279,7 @@ export default function AdminPage() {
         { id: 'dashboard' as const, label: 'Dashboard' },
         { id: 'products' as const, label: 'Menu & Stok' },
         { id: 'orders' as const, label: 'Pesanan', badge: pendingCount },
+        ...(user.role === 'admin' ? [{ id: 'karyawan' as const, label: 'Karyawan' }] : []),
         ...(user.role === 'admin' ? [{ id: 'logs' as const, label: 'Log Aktivitas' }] : []),
     ];
 
@@ -822,6 +822,74 @@ export default function AdminPage() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                )}
+                
+                {/* ============ TAB: KARYAWAN ============ */}
+                {activeTab === 'karyawan' && user.role === 'admin' && (
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-fade-in space-y-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
+                            <div>
+                                <h2 className="text-lg md:text-xl font-bold font-serif">Manajemen Karyawan</h2>
+                                <p className="text-sm text-gray-500">Kelola akun kasir dan hak akses login.</p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    const uName = prompt("Masukkan Username Karyawan:");
+                                    if (!uName) return;
+                                    const pwd = prompt("Masukkan Password Sementara:");
+                                    if (!pwd) return;
+                                    const nama = prompt("Nama Lengkap Karyawan:", uName);
+                                    if (!nama) return;
+                                    addUser({ id: nanoid(), username: uName, password: pwd, role: 'cashier', name: nama });
+                                    toast.success("Karyawan kasir berhasil ditambahkan.");
+                                }}
+                                className="bg-forest text-gold px-4 py-2 rounded-lg font-bold text-sm hover:bg-forest-light transition flex items-center gap-2"
+                            >
+                                <Plus size={16} /> Tambah Kasir
+                            </button>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
+                                    <tr>
+                                        <th className="p-4 rounded-tl-lg">Nama</th>
+                                        <th className="p-4">Username</th>
+                                        <th className="p-4">Role</th>
+                                        <th className="p-4 text-right rounded-tr-lg">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {users.map(u => (
+                                        <tr key={u.id} className="hover:bg-gray-50 transition">
+                                            <td className="p-4 font-bold text-gray-800">{u.name}</td>
+                                            <td className="p-4 text-sm text-gray-600 font-mono">{u.username}</td>
+                                            <td className="p-4 font-bold text-xs uppercase">
+                                                <span className={`px-2 py-1 rounded ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {u.role === 'admin' ? 'Admin' : 'Kasir'}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                {u.role !== 'admin' && (
+                                                    <button
+                                                        onClick={() => {
+                                                            if (confirm(`User "${u.name}" akan dihapus permanen. Lanjutkan?`)) {
+                                                                removeUser(u.id);
+                                                                addLog("DELETE_USER", `Deleted user: ${u.username}`, user.name);
+                                                                toast.success(`User ${u.username} dihapus.`);
+                                                            }
+                                                        }}
+                                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                                                    >
+                                                        <Trash size={16} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}

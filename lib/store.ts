@@ -34,7 +34,9 @@ export function formatVariantLabel(v?: ProductVariants): string {
 export { VARIANT_SIZE_UPCHARGE };
 
 export interface User {
+    id: string;
     username: string;
+    password?: string;
     role: Role;
     name: string;
 }
@@ -117,8 +119,10 @@ interface ProductState {
 
 interface SalesState {
     orders: Order[];
+    offlineOrders: Order[]; // [NEW] Robust Offline Queue
     heldOrders: Order[]; // Hold order feature
     logs: ActivityLog[];
+    offlineLogs: ActivityLog[]; // [NEW] Robust Offline Queue
     isStoreOpen: boolean;
     currentSessionId: string | null;
     sessions: StoreSession[];
@@ -126,11 +130,13 @@ interface SalesState {
     closeStore: () => StoreSession | null;
 
     addOrder: (order: Order) => void;
+    removeOfflineOrder: (id: string) => void; // [NEW]
     updateOrderStatus: (orderId: string, status: Order['status']) => void;
     holdOrder: (order: Order) => void; // Save current order to hold
     resumeOrder: (heldOrderId: string) => Order | null; // Get held order back
     deleteHeldOrder: (heldOrderId: string) => void;
     addLog: (action: string, details: string, user: string) => void;
+    removeOfflineLog: (id: string) => void; // [NEW]
     getDailySales: () => { date: string; total: number; count: number }[];
     getProductPopularity: () => { name: string; count: number }[];
     resetData: () => void;
@@ -138,18 +144,44 @@ interface SalesState {
 
 interface AuthState {
     user: User | null;
-    login: (username: string, role: Role) => void;
+    users: User[]; // [NEW] Staff accounts
+    login: (username: string, role: Role) => User | null; // Mengembalikan user
+    loginWithPassword: (username: string, password: string) => User | null;
     logout: () => void;
+    addUser: (user: User) => void;
+    removeUser: (id: string) => void;
+    updateUser: (id: string, updated: Partial<User>) => void;
 }
 
 // --- Implementations ---
 
 export const useAuthStore = create<AuthState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             user: null,
-            login: (username, role) => set({ user: { username, role, name: username === 'admin' ? 'Administrator' : 'Staff Kasir' } }),
+            users: [
+                { id: '1', username: 'admin', password: '123', role: 'admin', name: 'Administrator' },
+                { id: '2', username: 'kasir', password: '123', role: 'cashier', name: 'Kasir Default' },
+            ],
+            // Kompatibilitas mundur. Idealnya panggil loginWithPassword
+            login: (username, role) => {
+                const found = get().users.find(u => u.username === username);
+                const u = found || { id: nanoid(), username, role, name: username === 'admin' ? 'Administrator' : 'Staff Kasir' };
+                set({ user: u });
+                return u;
+            },
+            loginWithPassword: (username, password) => {
+                const found = get().users.find(u => u.username === username && u.password === password);
+                if (found) {
+                    set({ user: found });
+                    return found;
+                }
+                return null;
+            },
             logout: () => set({ user: null }),
+            addUser: (u) => set((s) => ({ users: [...s.users, u] })),
+            removeUser: (id) => set((s) => ({ users: s.users.filter(u => u.id !== id) })),
+            updateUser: (id, updated) => set((s) => ({ users: s.users.map(u => u.id === id ? { ...u, ...updated } : u) })),
         }),
         { name: 'teh-raja-auth' }
     )
@@ -312,8 +344,10 @@ export const useSalesStore = create<SalesState>()(
     persist(
         (set, get) => ({
             orders: [],
+            offlineOrders: [], // [NEW]
             heldOrders: [],
             logs: [],
+            offlineLogs: [], // [NEW]
             isStoreOpen: false,
             currentSessionId: null,
             sessions: [],
@@ -376,12 +410,20 @@ export const useSalesStore = create<SalesState>()(
             },
 
             addOrder: (order) => {
-                set((state) => ({ orders: [...state.orders, order] }));
+                set((state) => ({ 
+                    orders: [...state.orders, order],
+                    offlineOrders: [...state.offlineOrders, order]
+                }));
                 // Sync to Firebase
                 // Sanitize undefined fields which Firebase Realtime Database Rejects
                 const sanitizedOrder = JSON.parse(JSON.stringify(order));
                 const orderRef = ref(rtdb, `orders/${order.id}`);
-                firebaseSet(orderRef, sanitizedOrder).catch(err => console.error("Firebase Add Error:", err));
+                firebaseSet(orderRef, sanitizedOrder)
+                    .then(() => get().removeOfflineOrder(order.id))
+                    .catch(err => console.error("Firebase Add Error:", err));
+            },
+            removeOfflineOrder: (id) => {
+                set((state) => ({ offlineOrders: state.offlineOrders.filter(o => o.id !== id) }));
             },
             updateOrderStatus: (orderId, status) => {
                 // Restore stock when cancelling
@@ -424,9 +466,15 @@ export const useSalesStore = create<SalesState>()(
                     user
                 };
                 set((state) => ({
-                    logs: [newLog, ...state.logs].slice(0, 100)
+                    logs: [newLog, ...state.logs].slice(0, 100),
+                    offlineLogs: [newLog, ...state.offlineLogs]
                 }));
-                firebaseSet(ref(rtdb, `logs/${newLog.id}`), newLog).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, `logs/${newLog.id}`), newLog)
+                    .then(() => get().removeOfflineLog(newLog.id))
+                    .catch(err => console.error(err));
+            },
+            removeOfflineLog: (id) => {
+                set((state) => ({ offlineLogs: state.offlineLogs.filter(l => l.id !== id) }));
             },
             getDailySales: () => {
                 const orders = get().orders;

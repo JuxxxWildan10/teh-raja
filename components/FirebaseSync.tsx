@@ -71,9 +71,12 @@ export default function FirebaseSync() {
             const data = snapshot.val();
             if (data) {
                 const loadedOrders: Order[] = Object.values(data);
-                useSalesStore.setState((state) => ({ ...state, orders: loadedOrders }));
+                useSalesStore.setState((state) => {
+                    const offlineOnly = state.offlineOrders.filter(oo => !loadedOrders.find(lo => lo.id === oo.id));
+                    return { ...state, orders: [...loadedOrders, ...offlineOnly] };
+                });
             } else {
-                useSalesStore.setState((state) => ({ ...state, orders: [] }));
+                useSalesStore.setState((state) => ({ ...state, orders: [...state.offlineOrders] }));
             }
         }, (error) => {
             console.error("Firebase Sync Error:", error);
@@ -103,9 +106,14 @@ export default function FirebaseSync() {
             if (data) {
                 const loadedLogs: ActivityLog[] = Object.values(data);
                 loadedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-                useSalesStore.setState((state) => ({ ...state, logs: loadedLogs }));
+                useSalesStore.setState((state) => {
+                    const offlineOnly = state.offlineLogs.filter(ol => !loadedLogs.find(ll => ll.id === ol.id));
+                    const combined = [...offlineOnly, ...loadedLogs];
+                    combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                    return { ...state, logs: combined };
+                });
             } else {
-                useSalesStore.setState((state) => ({ ...state, logs: [] }));
+                useSalesStore.setState((state) => ({ ...state, logs: [...state.offlineLogs] }));
             }
         });
 
@@ -125,7 +133,29 @@ export default function FirebaseSync() {
 
         const connectedRef = ref(rtdb, ".info/connected");
         const unsubscribeStatus = onValue(connectedRef, (snap) => {
-            setIsConnected(snap.val() === true);
+            const connected = snap.val() === true;
+            setIsConnected(connected);
+            
+            if (connected) {
+                // Flush offline robust queue
+                const state = useSalesStore.getState();
+                if (state.offlineOrders && state.offlineOrders.length > 0) {
+                    state.offlineOrders.forEach(order => {
+                        const sanitizedOrder = JSON.parse(JSON.stringify(order));
+                        firebaseSet(ref(rtdb, `orders/${order.id}`), sanitizedOrder)
+                            .then(() => useSalesStore.getState().removeOfflineOrder(order.id))
+                            .catch(err => console.error("Flush Order Error:", err));
+                    });
+                }
+                if (state.offlineLogs && state.offlineLogs.length > 0) {
+                    state.offlineLogs.forEach(log => {
+                        const sanitizedLog = JSON.parse(JSON.stringify(log));
+                        firebaseSet(ref(rtdb, `logs/${log.id}`), sanitizedLog)
+                            .then(() => useSalesStore.getState().removeOfflineLog(log.id))
+                            .catch(err => console.error("Flush Log Error:", err));
+                    });
+                }
+            }
         });
 
         return () => {

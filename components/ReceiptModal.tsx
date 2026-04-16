@@ -2,8 +2,9 @@
 
 import { useRef } from "react";
 import { Order, formatVariantLabel } from "@/lib/store";
-import { X, Printer, Share2 } from "lucide-react";
+import { X, Printer, Share2, Bluetooth } from "lucide-react";
 import { motion } from "framer-motion";
+import { buildReceiptPayload, printViaBluetooth } from "@/lib/printer";
 
 interface ReceiptModalProps {
     order: Order;
@@ -22,6 +23,15 @@ function formatRp(n: number) {
 
 export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
     const receiptRef = useRef<HTMLDivElement>(null);
+
+    const handleBluetoothPrint = async () => {
+        try {
+            const payload = buildReceiptPayload(order);
+            await printViaBluetooth(payload);
+        } catch (err: any) {
+            alert(err.message || 'Gagal menyambung ke Printer Bluetooth');
+        }
+    };
 
     const handlePrint = () => {
         window.print();
@@ -195,16 +205,22 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
             </div>
 
             {/* Footer Actions (Hidden in Print) */}
-            <div className="bg-gray-50 p-3 border-t border-gray-100 flex gap-2 print:hidden">
+            <div className="bg-gray-50 p-3 border-t border-gray-100 flex flex-wrap gap-2 print:hidden">
                 <button
                     onClick={handlePrint}
-                    className="flex-1 py-2.5 bg-[#0D2B20] text-amber-400 rounded-lg font-bold hover:bg-[#1a4433] flex items-center justify-center gap-2 text-sm transition"
+                    className="flex-1 min-w-[120px] py-2.5 bg-forest text-gold rounded-lg font-bold hover:bg-forest-light flex items-center justify-center gap-1.5 text-xs transition"
                 >
-                    <Printer size={15} /> Cetak Struk
+                    <Printer size={14} /> Cetak (Browser)
+                </button>
+                <button
+                    onClick={handleBluetoothPrint}
+                    className="flex-1 min-w-[120px] py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center justify-center gap-1.5 text-xs transition shadow-lg shadow-blue-500/20"
+                >
+                    <Bluetooth size={14} /> Cetak (Thermal)
                 </button>
                 <button
                     onClick={onClose}
-                    className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-sm transition font-medium"
+                    className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-xs transition font-medium"
                 >
                     Tutup
                 </button>
