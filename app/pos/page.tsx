@@ -16,7 +16,7 @@ import VariantModal from "@/components/VariantModal";
 import { useToast } from "@/components/Toast";
 import {
     LogOut, Search, Plus, Minus, Trash2, ShoppingCart,
-    LayoutGrid, Coffee, Leaf, Citrus, Star,
+    LayoutGrid, LayoutDashboard, Coffee, Leaf, Citrus, Star,
     Banknote, QrCode, Building2, ChevronRight,
     RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie,
     Wand2, Sparkles, ChevronDown, Pause, Play, Trash, Tag, Percent,
@@ -315,7 +315,10 @@ export default function POSPage() {
                             Tutup Toko
                         </button>
                     )}
-                    <a href="/admin" className="text-xs text-white/50 hover:text-white/80 transition hidden sm:block">Dashboard</a>
+                    <a href="/admin" className="flex items-center gap-1.5 text-[10px] sm:text-xs text-white/70 hover:text-white transition px-2 py-1 rounded hover:bg-white/10">
+                        <LayoutDashboard size={13} />
+                        <span className="hidden sm:inline">Dashboard</span>
+                    </a>
                     <button onClick={() => setConfirmLogout(true)}
                         className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition px-2 py-1 rounded hover:bg-red-500/10">
                         <LogOut size={13} /> Keluar
