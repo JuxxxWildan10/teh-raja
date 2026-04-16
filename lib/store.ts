@@ -8,6 +8,31 @@ import { nanoid } from 'nanoid';
 // --- Types ---
 export type Role = 'admin' | 'cashier';
 
+// Product Variants — pilihan kustomisasi minuman
+export interface ProductVariants {
+    size: 'M' | 'L';           // M = harga normal, L = +Rp 2.000
+    temperature?: 'panas' | 'es'; // Untuk minuman saja
+    sugar?: '0%' | '25%' | '50%' | '75%' | '100%'; // Level gula
+    ice?: 'no-ice' | 'less' | 'normal' | 'extra'; // Level es (jika es)
+}
+
+const VARIANT_SIZE_UPCHARGE: Record<string, number> = { M: 0, L: 2000 };
+
+export function formatVariantLabel(v?: ProductVariants): string {
+    if (!v) return '';
+    const parts = [];
+    parts.push(v.size || 'M');
+    if (v.temperature) parts.push(v.temperature === 'panas' ? '☕ Panas' : '🧊 Es');
+    if (v.sugar) parts.push(`🍯 Gula ${v.sugar}`);
+    if (v.ice && v.temperature === 'es') {
+        const iceMap: Record<string, string> = { 'no-ice': 'No Ice', 'less': 'Less Ice', 'normal': 'Normal Ice', 'extra': 'Extra Ice' };
+        parts.push(iceMap[v.ice] || v.ice);
+    }
+    return parts.join(' · ');
+}
+
+export { VARIANT_SIZE_UPCHARGE };
+
 export interface User {
     username: string;
     role: Role;
@@ -15,8 +40,11 @@ export interface User {
 }
 
 export type CartItem = Product & {
+    cartItemId?: string;    // Unique per variant combo — optional for backward compat
     quantity: number;
     note?: string;
+    variants?: ProductVariants;
+    finalPrice?: number;    // Base price + size upcharge; defaults to product.price
 };
 
 export interface ExtendedProduct extends Product {
@@ -67,12 +95,13 @@ export interface StoreSession {
 
 interface CartState {
     items: CartItem[];
-    activeOrderId: string | null; // [NEW] Track active order
-    addToCart: (product: ExtendedProduct) => void;
-    removeFromCart: (productId: string) => void;
-    updateQuantity: (productId: string, quantity: number) => void;
+    activeOrderId: string | null;
+    addToCart: (product: ExtendedProduct, variants?: ProductVariants, finalPrice?: number) => void;
+    removeFromCart: (cartItemId: string) => void;
+    updateQuantity: (cartItemId: string, quantity: number) => void;
+    updateNote: (cartItemId: string, note: string) => void;
     clearCart: () => void;
-    setActiveOrder: (id: string | null) => void; // [NEW]
+    setActiveOrder: (id: string | null) => void;
     total: () => number;
 }
 
@@ -130,37 +159,67 @@ export const useCartStore = create<CartState>()(
     persist(
         (set, get) => ({
             items: [],
-            activeOrderId: null, // [NEW]
-            setActiveOrder: (id) => set({ activeOrderId: id }), // [NEW]
-            addToCart: (product) => {
+            activeOrderId: null,
+            setActiveOrder: (id) => set({ activeOrderId: id }),
+
+            addToCart: (product, variants, finalPrice) => {
                 set((state) => {
                     if (product.stock <= 0) return state;
-                    const existing = state.items.find((i) => i.id === product.id);
+                    // Build a cartItemId that is unique per product+variant combo
+                    const variantSig = variants ? JSON.stringify(variants) : 'default';
+                    const cartItemId = `${product.id}__${variantSig}`;
+                    const vFinalPrice = finalPrice ?? product.price;
+
+                    const existing = state.items.find(i => i.cartItemId === cartItemId);
+                    // Count total qty of this product across all variants to check stock
+                    const totalProductQty = state.items
+                        .filter(i => i.id === product.id)
+                        .reduce((sum, i) => sum + i.quantity, 0);
+
                     if (existing) {
-                        if (existing.quantity >= product.stock) return state;
+                        if (totalProductQty >= product.stock) return state;
                         return {
-                            items: state.items.map((i) =>
-                                i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+                            items: state.items.map(i =>
+                                i.cartItemId === cartItemId ? { ...i, quantity: i.quantity + 1 } : i
                             ),
                         };
                     }
-                    return { items: [...state.items, { ...product, quantity: 1 }] };
+                    if (totalProductQty >= product.stock) return state;
+                    return {
+                        items: [
+                            ...state.items,
+                            { ...product, cartItemId, quantity: 1, finalPrice: vFinalPrice, variants },
+                        ],
+                    };
                 });
             },
-            removeFromCart: (productId) => {
-                set((state) => ({ items: state.items.filter((i) => i.id !== productId) }));
-            },
-            updateQuantity: (productId, quantity) => {
+
+            removeFromCart: (cartItemId) => {
                 set((state) => ({
-                    items: quantity > 0
-                        ? state.items.map((i) => (i.id === productId ? { ...i, quantity } : i))
-                        : state.items.filter((i) => i.id !== productId),
+                    items: state.items.filter(i => (i.cartItemId ?? i.id) !== cartItemId)
                 }));
             },
+
+            updateQuantity: (cartItemId, quantity) => {
+                set((state) => ({
+                    items: quantity > 0
+                        ? state.items.map(i => (i.cartItemId ?? i.id) === cartItemId ? { ...i, quantity } : i)
+                        : state.items.filter(i => (i.cartItemId ?? i.id) !== cartItemId),
+                }));
+            },
+
+            updateNote: (cartItemId, note) => {
+                set((state) => ({
+                    items: state.items.map(i =>
+                        (i.cartItemId ?? i.id) === cartItemId ? { ...i, note } : i
+                    )
+                }));
+            },
+
             clearCart: () => set({ items: [] }),
-            total: () => get().items.reduce((acc, item) => acc + item.price * item.quantity, 0),
+            total: () => get().items.reduce((acc, item) => acc + (item.finalPrice ?? item.price) * item.quantity, 0),
         }),
-        { name: 'teh-raja-cart' }
+        { name: 'teh-raja-cart-v2' }  // Bumped version to clear old incompatible cache
     )
 );
 

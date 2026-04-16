@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Order } from "@/lib/store";
+import { Order, formatVariantLabel } from "@/lib/store";
 import { X, Printer, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -28,7 +28,11 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
     };
 
     const handleWhatsApp = () => {
-        const items = order.items.map(i => `• ${i.quantity}x ${i.name} = ${formatRp(i.price * i.quantity)}`).join('\n');
+        const items = order.items.map(i => {
+            const vLabel = formatVariantLabel(i.variants);
+            const labelStr = vLabel ? `(${vLabel}) ` : '';
+            return `• ${i.quantity}x ${labelStr}${i.name} = ${formatRp((i.finalPrice ?? i.price) * i.quantity)}`;
+        }).join('\n');
         const discount = order.discount && order.discount > 0
             ? `\n💰 Diskon: -${formatRp(order.discount)}`
             : '';
@@ -111,24 +115,31 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
                 {/* Items */}
                 <div className="mb-3 border-b border-dashed border-gray-300 pb-3 space-y-2">
                     <p className="font-bold text-[10px] uppercase tracking-widest text-gray-500 mb-1">Pesanan</p>
-                    {order.items.map((item, index) => (
-                        <div key={index}>
-                            <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                    <span className="font-bold">{item.quantity}x</span> {item.name}
+                    {order.items.map((item, index) => {
+                        const variantLabel = formatVariantLabel(item.variants);
+                        const finalPrice = item.finalPrice ?? item.price;
+                        return (
+                            <div key={index}>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                        <span className="font-bold">{item.quantity}x</span> {item.name}
+                                    </div>
+                                    <span className="ml-2 flex-shrink-0">{formatRp(finalPrice * item.quantity)}</span>
                                 </div>
-                                <span className="ml-2 flex-shrink-0">{formatRp(item.price * item.quantity)}</span>
-                            </div>
-                            <div className="flex justify-between text-gray-500 text-[9px] pl-4 font-bold">
-                                <span>@ {formatRp(item.price)}</span>
-                            </div>
-                            {item.note && (
-                                <div className="text-[9px] text-gray-500 italic pl-4">
-                                    * {item.note}
+                                <div className="flex justify-between text-gray-500 text-[9px] pl-4 font-bold">
+                                    <span>
+                                        @ {formatRp(finalPrice)} 
+                                        {variantLabel && <span className="text-amber-600 font-normal ml-1">· {variantLabel}</span>}
+                                    </span>
                                 </div>
-                            )}
-                        </div>
-                    ))}
+                                {item.note && (
+                                    <div className="text-[9px] text-gray-500 italic pl-4">
+                                        * {item.note}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 {/* Subtotal + Discount + Total */}
