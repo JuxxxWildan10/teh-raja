@@ -57,3 +57,53 @@ h1, h2, h3, h4, h5, h6 {
     background-position: 200% center;
   }
 }
+
+/* Scrollbar Hide Utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fade-in Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+/* Scale-in for modals */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out forwards;
+}
+
+/* ===== PRINT STYLES — Only show receipt ===== */
+@media print {
+  /* Hide everything */
+  body > * {
+    display: none !important;
+  }
+  /* Show only #print-receipt */
+  #print-receipt,
+  #print-receipt * {
+    display: revert !important;
+    visibility: visible !important;
+  }
+  #print-receipt {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
+    background: white !important;
+    padding: 16px !important;
+    max-width: 320px !important;
+    margin: 0 auto !important;
+  }
+}

@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useProductStore, useSalesStore, useAuthStore, ExtendedProduct, Order } from "@/lib/store";
+import { useToast } from "@/components/Toast";
+import ConfirmModal from "@/components/ConfirmModal";
+import ShiftSummaryModal from "@/components/ShiftSummaryModal";
 import { Line, Bar } from "react-chartjs-2";
 import {
     Chart as ChartJS,
@@ -21,7 +24,7 @@ import {
     ShieldAlert,
     History, AlertTriangle,
     CheckCircle, XCircle, Clock, Loader,
-    Menu, // [NEW] hamburger icon
+    Menu, Search, Filter,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -42,20 +45,34 @@ ChartJS.register(
 export default function AdminPage() {
     const { user, login, logout } = useAuthStore();
     const router = useRouter();
+    const toast = useToast();
     const [loginUsername, setLoginUsername] = useState("");
     const [loginPassword, setLoginPassword] = useState("");
     const [loginError, setLoginError] = useState("");
 
     // Stores
     const { products, addProduct, updateProduct, deleteProduct } = useProductStore();
-    const { getDailySales, getProductPopularity, orders, logs, addLog, resetData, updateOrderStatus, sessions } = useSalesStore();
+    const { getDailySales, getProductPopularity, orders, logs, addLog, resetData, updateOrderStatus, sessions, closeStore } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
 
     // UI State
     const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders'>('dashboard');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // [NEW]
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // Confirm modals
+    const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+    const [confirmReset, setConfirmReset] = useState(false);
+    const [confirmCancelOrder, setConfirmCancelOrder] = useState<string | null>(null);
+
+    // Orders filter
+    const [orderSearch, setOrderSearch] = useState('');
+    const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
+
+    // Shift summary
+    const [shiftSummary, setShiftSummary] = useState<import("@/lib/store").StoreSession | null>(null);
+
     const [formData, setFormData] = useState<ExtendedProduct>({
         id: '', name: '', price: 0, description: '',
         image: '/images/royal-milk-tea.png', category: 'signature',
@@ -63,17 +80,14 @@ export default function AdminPage() {
         isAvailable: true, stock: 50, minStockThreshold: 10
     });
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { setIsClient(true); }, []);
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
         setLoginError("");
-
         if (loginUsername === "admin" && loginPassword === "admin123") {
             login("admin", "admin");
             addLog("LOGIN", "Admin logged in", "Admin");
-            // Admin stays on dashboard
         } else if (loginUsername === "kasir" && loginPassword === "kasir123") {
             login("kasir", "cashier");
             addLog("LOGIN", "Cashier logged in", "Kasir");
@@ -106,47 +120,57 @@ export default function AdminPage() {
     };
 
     const handleSave = () => {
-        if (!formData.name) return alert("Nama produk wajib diisi");
-
+        if (!formData.name) {
+            toast.error("Nama produk wajib diisi!");
+            return;
+        }
         if (editingId) {
             updateProduct(editingId, formData);
             addLog("UPDATE_PRODUCT", `Updated product: ${formData.name}`, user?.name || "Unknown");
+            toast.success(`Produk "${formData.name}" berhasil diperbarui.`);
         } else {
             addProduct(formData);
             addLog("CREATE_PRODUCT", `Created product: ${formData.name}`, user?.name || "Unknown");
+            toast.success(`Produk "${formData.name}" berhasil ditambahkan!`);
         }
         setIsModalOpen(false);
     };
 
     const handleDelete = (id: string, name: string) => {
-        if (confirm(`Yakin ingin menghapus ${name}?`)) {
-            deleteProduct(id);
-            addLog("DELETE_PRODUCT", `Deleted product: ${name}`, user?.name || "Unknown");
-        }
-    }
+        setConfirmDelete({ id, name });
+    };
 
-    const handleReset = () => {
-        if (confirm("PERINGATAN: Semua data penjualan dan pesanan akan dihapus permanen. Lanjutkan?")) {
-            resetData();
-            addLog("RESET_DATA", "All sales and order data reset", user?.name || "Unknown");
-            alert("Data berhasil direset.");
-            window.location.reload();
-        }
-    }
+    const doDelete = () => {
+        if (!confirmDelete) return;
+        deleteProduct(confirmDelete.id);
+        addLog("DELETE_PRODUCT", `Deleted product: ${confirmDelete.name}`, user?.name || "Unknown");
+        toast.success(`Produk "${confirmDelete.name}" dihapus.`);
+        setConfirmDelete(null);
+    };
+
+    const handleReset = () => setConfirmReset(true);
+
+    const doReset = () => {
+        resetData();
+        addLog("RESET_DATA", "All sales and order data reset", user?.name || "Unknown");
+        toast.success("Data berhasil direset.");
+        setConfirmReset(false);
+        window.location.reload();
+    };
 
     const handleExportCSV = () => {
-        const headers = ["Order ID", "Date", "Customer", "Items", "Total"];
+        const headers = ["Order ID", "Date", "Customer", "Items", "Total", "Payment", "Status"];
         const rows = orders.map(order => [
             order.id,
-            new Date(order.date).toLocaleString(),
+            new Date(order.date).toLocaleString('id-ID'),
             order.customerName || "Guest",
             order.items.map(i => `${i.name} (x${i.quantity})`).join("; "),
-            order.total
+            order.total,
+            order.paymentMethod || '-',
+            order.status,
         ]);
-
         const csvContent = "data:text/csv;charset=utf-8,"
             + [headers.join(","), ...rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
-
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -154,15 +178,27 @@ export default function AdminPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
         addLog("EXPORT_CSV", "Exported sales data to CSV", user?.name || "Unknown");
-    }
+        toast.success("Data penjualan berhasil di-export ke CSV!");
+    };
 
-    // Handle tab change + close mobile menu
     const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders') => {
         setActiveTab(tab);
         setIsMobileMenuOpen(false);
     };
+
+    // Filtered orders
+    const filteredOrders = useMemo(() => {
+        return orders.slice().reverse().filter(order => {
+            const matchStatus = orderStatusFilter === 'all' || order.status === orderStatusFilter;
+            const q = orderSearch.toLowerCase();
+            const matchSearch = !q
+                || (order.customerName || '').toLowerCase().includes(q)
+                || order.id.toLowerCase().includes(q)
+                || order.items.some(i => i.name.toLowerCase().includes(q));
+            return matchStatus && matchSearch;
+        });
+    }, [orders, orderStatusFilter, orderSearch]);
 
     // Charts Data
     const dailySales = getDailySales();
@@ -210,12 +246,11 @@ export default function AdminPage() {
                         <h1 className="text-3xl sm:text-4xl font-serif text-gold font-bold">TEH RAJA</h1>
                         <p className="text-cream opacity-60 text-sm tracking-widest mt-2 uppercase">Official Admin Panel</p>
                     </div>
-
                     <form onSubmit={handleLogin} className="space-y-4">
                         <input
                             type="text"
                             className="w-full p-4 bg-white/10 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-gold transition"
-                            placeholder="Username (admin / kasir)"
+                            placeholder="Username"
                             value={loginUsername}
                             onChange={(e) => setLoginUsername(e.target.value)}
                         />
@@ -227,15 +262,13 @@ export default function AdminPage() {
                             onChange={(e) => setLoginPassword(e.target.value)}
                         />
                         {loginError && <p className="text-red-400 text-sm bg-red-400/10 p-2 rounded">{loginError}</p>}
-
                         <button type="submit" className="w-full py-4 bg-gold text-forest font-bold rounded-lg hover:bg-gold-light transition hover:scale-[1.02] shadow-lg shadow-gold/20">
                             Masuk Dashboard
                         </button>
                     </form>
-
                     <div className="mt-8 pt-6 border-t border-white/10 text-xs text-white/30 flex justify-between">
                         <span>© 2024 Teh Raja</span>
-                        <span>v2.1.0 (Notes Fixed)</span>
+                        <span>v3.0.0</span>
                     </div>
                 </div>
             </div>
@@ -243,7 +276,6 @@ export default function AdminPage() {
     }
 
     const pendingCount = orders.filter(o => o.status === 'pending').length;
-
     const tabs = [
         { id: 'dashboard' as const, label: 'Dashboard' },
         { id: 'products' as const, label: 'Menu & Stok' },
@@ -255,10 +287,8 @@ export default function AdminPage() {
         <div className="min-h-screen bg-gray-50 text-forest relative flex flex-col">
             {/* ============ ADMIN NAVBAR ============ */}
             <nav className="bg-forest text-cream shadow-lg sticky top-0 z-30">
-                {/* Top Row: Logo + User Info + Actions */}
                 <div className="px-4 sm:px-6 py-3 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        {/* Hamburger button - visible on small screens */}
                         <button
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                             className="md:hidden p-2 hover:bg-white/10 rounded-lg transition"
@@ -270,7 +300,6 @@ export default function AdminPage() {
                         <span className="opacity-30 hidden sm:block">|</span>
                         <span className="text-xs opacity-50 hidden sm:block uppercase tracking-wider">Admin Panel</span>
                     </div>
-
                     <div className="flex gap-3 sm:gap-4 items-center">
                         <div className="text-right leading-tight hidden sm:block">
                             <p className="font-bold text-sm text-gold">{user.name}</p>
@@ -287,7 +316,7 @@ export default function AdminPage() {
                     </div>
                 </div>
 
-                {/* Desktop Nav Tabs - hidden on mobile */}
+                {/* Desktop Nav Tabs */}
                 <div className="hidden md:flex px-6 pb-0 gap-1 text-sm bg-black/20">
                     {tabs.map(tab => (
                         <button
@@ -311,10 +340,9 @@ export default function AdminPage() {
                     ))}
                 </div>
 
-                {/* Mobile Menu Dropdown */}
+                {/* Mobile Dropdown */}
                 {isMobileMenuOpen && (
                     <div className="md:hidden border-t border-white/10 bg-forest-light">
-                        {/* User info in mobile menu */}
                         <div className="px-4 py-3 border-b border-white/10 flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center">
                                 <span className="text-gold font-bold text-sm">{user.name.charAt(0)}</span>
@@ -344,7 +372,7 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* Mobile Scrollable Tab Bar - visible on small screens (alternative compact nav) */}
+                {/* Mobile Scrollable Tab Bar */}
                 <div className="md:hidden flex gap-1 px-3 py-2 overflow-x-auto scrollbar-hide bg-black/20">
                     {tabs.map(tab => (
                         <button
@@ -372,18 +400,34 @@ export default function AdminPage() {
                 {/* === DASHBOARD TAB === */}
                 {activeTab === 'dashboard' && (
                     <div className="animate-fade-in space-y-6 md:space-y-8">
-                        {/* Header */}
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                             <h2 className="text-xl md:text-2xl font-bold">Laporan Kinerja</h2>
                             <div className="flex gap-2 flex-wrap">
-                                <button onClick={handleExportCSV} className="flex items-center gap-2 text-forest bg-white border border-gray-200 px-3 py-2 rounded text-sm hover:bg-gray-50 shadow-sm">
+                                <button onClick={handleExportCSV} className="flex items-center gap-2 text-forest bg-white border border-gray-200 px-3 py-2 rounded text-sm hover:bg-gray-50 shadow-sm transition">
                                     <Download size={16} /> CSV
                                 </button>
                                 <ReportGenerator orders={orders} />
                             </div>
                         </div>
 
-                        {/* Charts Grid */}
+                        {/* KPI Cards */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            {[
+                                { label: 'Total Order', value: orders.length, color: 'blue', suffix: '' },
+                                { label: 'Selesai', value: orders.filter(o => o.status === 'completed').length, color: 'green', suffix: '' },
+                                { label: 'Pending', value: pendingCount, color: 'yellow', suffix: '' },
+                                { label: 'Omset Hari Ini', value: orders.filter(o => new Date(o.date).toDateString() === new Date().toDateString()).reduce((s, o) => s + o.total, 0), color: 'amber', isRp: true, suffix: '' },
+                            ].map(({ label, value, color, isRp }) => (
+                                <div key={label} className={`bg-white rounded-xl p-4 border border-gray-100 shadow-sm`}>
+                                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">{label}</p>
+                                    <p className={`text-2xl font-black mt-1 ${color === 'green' ? 'text-green-600' : color === 'yellow' ? 'text-yellow-600' : color === 'amber' ? 'text-amber-600' : 'text-blue-600'}`}>
+                                        {isRp ? `Rp ${(value as number).toLocaleString('id-ID')}` : value}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Charts */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
                             <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 h-72 md:h-96">
                                 <h3 className="font-bold text-base md:text-lg mb-4 text-forest flex items-center gap-2">
@@ -399,8 +443,8 @@ export default function AdminPage() {
                             </div>
                         </div>
 
-                        {/* Riwayat Sesi (Toko) */}
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-8">
+                        {/* Riwayat Sesi */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                             <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50">
                                 <h3 className="font-bold text-lg text-forest flex items-center gap-2">
                                     <Clock size={20} className="text-amber-500" /> Riwayat Laporan Harian (Sesi)
@@ -416,6 +460,7 @@ export default function AdminPage() {
                                             <th className="p-4">Waktu Tutup</th>
                                             <th className="p-4 text-center">Jml Transaksi</th>
                                             <th className="p-4 text-right">Total Pendapatan</th>
+                                            <th className="p-4 text-right">Detail</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -431,21 +476,28 @@ export default function AdminPage() {
                                                     {new Date(session.startTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
                                                 </td>
                                                 <td className="p-4 text-sm text-gray-600">
-                                                    {session.endTime ? new Date(session.endTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : (
-                                                        <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded">SEDANG BUKA</span>
-                                                    )}
+                                                    {session.endTime
+                                                        ? new Date(session.endTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
+                                                        : <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded">SEDANG BUKA</span>
+                                                    }
                                                 </td>
-                                                <td className="p-4 text-center font-mono">
-                                                    {session.totalOrders}
-                                                </td>
+                                                <td className="p-4 text-center font-mono">{session.totalOrders}</td>
                                                 <td className="p-4 text-right font-bold text-forest">
                                                     Rp {session.totalSales.toLocaleString('id-ID')}
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <button
+                                                        onClick={() => setShiftSummary(session)}
+                                                        className="text-xs text-blue-600 hover:text-blue-800 font-bold transition"
+                                                    >
+                                                        Lihat
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
                                         {sessions.length === 0 && (
                                             <tr>
-                                                <td colSpan={5} className="p-8 text-center text-gray-400 italic">
+                                                <td colSpan={6} className="p-8 text-center text-gray-400 italic">
                                                     Belum ada riwayat sesi toko tersimpan.
                                                 </td>
                                             </tr>
@@ -462,7 +514,7 @@ export default function AdminPage() {
                                     <h4 className="font-bold text-red-800 flex items-center gap-2"><ShieldAlert size={18} /> Danger Zone</h4>
                                     <p className="text-xs text-red-600 mt-1">Hati-hati, tindakan ini tidak dapat dibatalkan.</p>
                                 </div>
-                                <button onClick={handleReset} className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold text-sm">
+                                <button onClick={handleReset} className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold text-sm transition">
                                     Reset Semua Data
                                 </button>
                             </div>
@@ -474,13 +526,42 @@ export default function AdminPage() {
                 {activeTab === 'orders' && (
                     <div className="animate-fade-in">
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                            {/* Header */}
                             <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50">
                                 <h2 className="text-lg md:text-xl font-bold font-serif">Daftar Pesanan Masuk</h2>
                                 <p className="text-sm text-gray-400 mt-0.5">Pantau dan kelola pesanan pelanggan.</p>
                             </div>
 
-                            {/* Desktop Table - hidden on mobile */}
+                            {/* Filter Bar */}
+                            <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3">
+                                <div className="relative flex-1">
+                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Cari nama pelanggan, ID order, atau menu..."
+                                        value={orderSearch}
+                                        onChange={e => setOrderSearch(e.target.value)}
+                                        className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:border-forest transition bg-gray-50"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Filter size={14} className="text-gray-400 flex-shrink-0" />
+                                    <select
+                                        value={orderStatusFilter}
+                                        onChange={e => setOrderStatusFilter(e.target.value as typeof orderStatusFilter)}
+                                        className="border border-gray-200 rounded-lg text-sm text-gray-700 px-3 py-2 focus:outline-none focus:border-forest bg-gray-50 transition"
+                                    >
+                                        <option value="all">Semua Status</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="processing">Processing</option>
+                                        <option value="completed">Selesai</option>
+                                        <option value="cancelled">Dibatalkan</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <p className="px-4 py-2 text-xs text-gray-400">{filteredOrders.length} order ditemukan</p>
+
+                            {/* Desktop Table */}
                             <div className="hidden md:block overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
@@ -495,7 +576,7 @@ export default function AdminPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {orders.slice().reverse().map(order => (
+                                        {filteredOrders.map(order => (
                                             <tr key={order.id} className="hover:bg-blue-50/50 transition bg-white">
                                                 <td className="p-4 font-mono text-xs text-gray-500">#{order.id.slice(0, 6)}</td>
                                                 <td className="p-4 text-sm">
@@ -514,7 +595,12 @@ export default function AdminPage() {
                                                         </div>
                                                     ))}
                                                 </td>
-                                                <td className="p-4 font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</td>
+                                                <td className="p-4 font-bold text-forest">
+                                                    Rp {order.total.toLocaleString('id-ID')}
+                                                    {order.discount && order.discount > 0 && (
+                                                        <div className="text-xs text-red-500 font-normal">-Rp {order.discount.toLocaleString('id-ID')}</div>
+                                                    )}
+                                                </td>
                                                 <td className="p-4">
                                                     <OrderStatusBadge status={order.status} />
                                                 </td>
@@ -524,14 +610,15 @@ export default function AdminPage() {
                                                         updateOrderStatus={updateOrderStatus}
                                                         addLog={addLog}
                                                         userName={user?.name || "Admin"}
+                                                        onCancel={() => setConfirmCancelOrder(order.id)}
                                                     />
                                                 </td>
                                             </tr>
                                         ))}
-                                        {orders.length === 0 && (
+                                        {filteredOrders.length === 0 && (
                                             <tr>
                                                 <td colSpan={7} className="p-8 text-center text-gray-400 italic">
-                                                    Belum ada pesanan masuk hari ini.
+                                                    {orderSearch || orderStatusFilter !== 'all' ? 'Tidak ada order yang sesuai filter.' : 'Belum ada pesanan masuk.'}
                                                 </td>
                                             </tr>
                                         )}
@@ -539,14 +626,15 @@ export default function AdminPage() {
                                 </table>
                             </div>
 
-                            {/* Mobile Cards - visible on small screens */}
+                            {/* Mobile Cards */}
                             <div className="md:hidden divide-y divide-gray-100">
-                                {orders.length === 0 && (
-                                    <p className="p-8 text-center text-gray-400 italic text-sm">Belum ada pesanan masuk hari ini.</p>
+                                {filteredOrders.length === 0 && (
+                                    <p className="p-8 text-center text-gray-400 italic text-sm">
+                                        {orderSearch || orderStatusFilter !== 'all' ? 'Tidak ada order yang sesuai filter.' : 'Belum ada pesanan masuk.'}
+                                    </p>
                                 )}
-                                {orders.slice().reverse().map(order => (
+                                {filteredOrders.map(order => (
                                     <div key={order.id} className="p-4 space-y-3">
-                                        {/* Card header */}
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 <p className="font-bold text-gray-800">{order.customerName || "Guest"}</p>
@@ -556,7 +644,6 @@ export default function AdminPage() {
                                             </div>
                                             <OrderStatusBadge status={order.status} />
                                         </div>
-                                        {/* Items */}
                                         <div className="bg-gray-50 rounded-lg p-3 space-y-1">
                                             {order.items.map((i, idx) => (
                                                 <div key={idx}>
@@ -565,14 +652,19 @@ export default function AdminPage() {
                                                 </div>
                                             ))}
                                         </div>
-                                        {/* Footer: total + actions */}
                                         <div className="flex justify-between items-center">
-                                            <span className="font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</span>
+                                            <div>
+                                                <span className="font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</span>
+                                                {order.discount && order.discount > 0 && (
+                                                    <span className="text-xs text-red-500 ml-1">(-Rp {order.discount.toLocaleString('id-ID')})</span>
+                                                )}
+                                            </div>
                                             <OrderActions
                                                 order={order}
                                                 updateOrderStatus={updateOrderStatus}
                                                 addLog={addLog}
                                                 userName={user?.name || "Admin"}
+                                                onCancel={() => setConfirmCancelOrder(order.id)}
                                             />
                                         </div>
                                     </div>
@@ -663,13 +755,11 @@ export default function AdminPage() {
                             <div className="md:hidden divide-y divide-gray-100">
                                 {products.map(item => (
                                     <div key={item.id} className="p-4 flex gap-3 items-start">
-                                        {/* Image */}
                                         <div className="w-14 h-14 flex-shrink-0 rounded-xl bg-gray-100 overflow-hidden border border-gray-200 relative">
                                             {item.image ? (
                                                 <Image src={item.image} alt={item.name} fill className="object-cover" />
                                             ) : <ImageIcon className="m-auto text-gray-300 mt-4" size={20} />}
                                         </div>
-                                        {/* Info */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-start gap-2">
                                                 <p className="font-bold text-gray-800 text-sm leading-tight">{item.name}</p>
@@ -711,7 +801,6 @@ export default function AdminPage() {
                                 <p className="text-sm text-gray-500">Rekam jejak tindakan sistem.</p>
                             </div>
                         </div>
-
                         <div className="space-y-2">
                             {logs.length === 0 && <p className="text-center text-gray-400 italic py-8">Belum ada aktivitas tercatat.</p>}
                             {logs.map(log => (
@@ -721,8 +810,8 @@ export default function AdminPage() {
                                     </div>
                                     <div className="flex-1">
                                         <div className="flex gap-2 items-center mb-1 flex-wrap">
-                                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${log.action.includes('DELETE') ? 'bg-red-100 text-red-600' :
-                                                log.action.includes('CREATE') ? 'bg-green-100 text-green-600' :
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${log.action.includes('DELETE') || log.action.includes('CANCEL') ? 'bg-red-100 text-red-600' :
+                                                log.action.includes('CREATE') || log.action.includes('COMPLETE') ? 'bg-green-100 text-green-600' :
                                                     'bg-blue-100 text-blue-600'
                                                 }`}>
                                                 {log.action}
@@ -736,25 +825,22 @@ export default function AdminPage() {
                         </div>
                     </div>
                 )}
-
             </div>
 
             {/* ============ MODAL FORM ============ */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-white text-forest rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl animate-scale-in">
-                        {/* Modal Header */}
                         <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
                             <h3 className="text-lg sm:text-xl font-bold font-serif">{editingId ? 'Edit Produk' : 'Tambah Produk Baru'}</h3>
                             <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
                         </div>
-
                         <div className="p-4 sm:p-6 space-y-5">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-gray-600">Nama Produk</label>
+                                    <label className="text-sm font-bold text-gray-600">Nama Produk *</label>
                                     <input
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm text-gray-900"
                                         value={formData.name}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     />
@@ -763,48 +849,42 @@ export default function AdminPage() {
                                     <label className="text-sm font-bold text-gray-600">Harga (Rp)</label>
                                     <input
                                         type="number"
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm text-gray-900"
                                         value={formData.price}
                                         onChange={e => setFormData({ ...formData, price: Number(e.target.value) })}
                                     />
                                 </div>
                             </div>
-
                             <div className="grid grid-cols-2 gap-4 bg-yellow-50 p-4 rounded-lg border border-yellow-100">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-yellow-800">Stok Saat Ini (Cup)</label>
-                                    <input type="number" className="w-full p-2 border border-yellow-300 rounded text-sm" value={formData.stock} onChange={e => setFormData({ ...formData, stock: Number(e.target.value) })} />
+                                    <input type="number" className="w-full p-2 border border-yellow-300 rounded text-sm text-gray-900" value={formData.stock} onChange={e => setFormData({ ...formData, stock: Number(e.target.value) })} />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-yellow-800">Batas Min. Alert</label>
-                                    <input type="number" className="w-full p-2 border border-yellow-300 rounded text-sm" value={formData.minStockThreshold} onChange={e => setFormData({ ...formData, minStockThreshold: Number(e.target.value) })} />
+                                    <input type="number" className="w-full p-2 border border-yellow-300 rounded text-sm text-gray-900" value={formData.minStockThreshold} onChange={e => setFormData({ ...formData, minStockThreshold: Number(e.target.value) })} />
                                 </div>
                             </div>
-
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-gray-600">Deskripsi</label>
                                 <textarea
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest h-24 text-sm"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest h-24 text-sm text-gray-900"
                                     value={formData.description}
                                     onChange={e => setFormData({ ...formData, description: e.target.value })}
                                 />
                             </div>
-
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-600">Kategori</label>
                                     <select
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest bg-white text-sm"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest bg-white text-sm text-gray-900"
                                         value={formData.category}
                                         onChange={e => setFormData({ ...formData, category: e.target.value as 'signature' | 'classic' | 'milk' | 'fruit' | 'snack' | 'food' })}
                                     >
-                                        <option value="" disabled className="font-bold text-gray-500 bg-gray-100">--- Minuman ---</option>
                                         <option value="signature">Signature (Khas)</option>
                                         <option value="classic">Classic Tea</option>
                                         <option value="milk">Milk Base</option>
                                         <option value="fruit">Fruit Series</option>
-
-                                        <option value="" disabled className="font-bold text-gray-500 bg-gray-100 mt-2">--- Makanan/Snack ---</option>
                                         <option value="snack">Camilan/Snack</option>
                                         <option value="food">Makanan Utama</option>
                                     </select>
@@ -812,24 +892,23 @@ export default function AdminPage() {
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-600">URL Gambar</label>
                                     <input
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm"
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm text-gray-900"
                                         value={formData.image}
                                         placeholder="/images/example.png"
                                         onChange={e => setFormData({ ...formData, image: e.target.value })}
                                     />
                                 </div>
                             </div>
-
                             <div className="bg-gray-50 p-4 rounded-xl space-y-4 border border-gray-200">
                                 <h4 className="font-bold flex items-center gap-2 text-sm">
                                     <span className="w-2 h-5 bg-gold rounded-full"></span>
-                                    Analisis Rasa (Algoritma)
+                                    Profil Rasa (untuk Smart Recommendation)
                                 </h4>
                                 <div className="space-y-4">
                                     {['sweet', 'creamy', 'fruity'].map(attr => (
                                         <div key={attr}>
                                             <div className="flex justify-between text-xs mb-1 uppercase font-bold text-gray-500">
-                                                <span>{attr}</span>
+                                                <span>{attr === 'sweet' ? '🍯 Kemanisan' : attr === 'creamy' ? '🥛 Creamy' : '🍊 Buah-buahan'}</span>
                                                 <span>{formData.attributes[attr as keyof typeof formData.attributes]}/10</span>
                                             </div>
                                             <input
@@ -843,16 +922,60 @@ export default function AdminPage() {
                                 </div>
                             </div>
                         </div>
-
-                        {/* Modal Footer */}
                         <div className="p-4 sm:p-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
-                            <button onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm">Batal</button>
-                            <button onClick={handleSave} className="px-5 py-2.5 rounded-lg bg-gold text-forest font-bold hover:bg-gold-light flex items-center gap-2 text-sm">
+                            <button onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm transition">Batal</button>
+                            <button onClick={handleSave} className="px-5 py-2.5 rounded-lg bg-gold text-forest font-bold hover:bg-gold-light flex items-center gap-2 text-sm transition">
                                 <Save size={16} /> Simpan Produk
                             </button>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ============ CONFIRM MODALS ============ */}
+            <ConfirmModal
+                isOpen={!!confirmDelete}
+                title="Hapus Produk?"
+                message={`Produk "${confirmDelete?.name}" akan dihapus permanen dari sistem dan tidak bisa dikembalikan.`}
+                confirmLabel="Ya, Hapus"
+                danger
+                onConfirm={doDelete}
+                onCancel={() => setConfirmDelete(null)}
+            />
+            <ConfirmModal
+                isOpen={confirmReset}
+                title="Reset Semua Data?"
+                message="PERHATIAN: Semua data penjualan, pesanan, log, dan sesi akan dihapus permanen. Tindakan ini tidak dapat dibatalkan!"
+                confirmLabel="Ya, Reset Sekarang"
+                danger
+                onConfirm={doReset}
+                onCancel={() => setConfirmReset(false)}
+            />
+            <ConfirmModal
+                isOpen={!!confirmCancelOrder}
+                title="Batalkan Pesanan?"
+                message="Pesanan akan dibatalkan dan stok produk akan dikembalikan secara otomatis."
+                confirmLabel="Ya, Batalkan"
+                danger
+                onConfirm={() => {
+                    if (confirmCancelOrder) {
+                        updateOrderStatus(confirmCancelOrder, 'cancelled');
+                        addLog("CANCEL_ORDER", `Cancelled order #${confirmCancelOrder.slice(0, 6)}`, user?.name || "Admin");
+                        toast.success("Pesanan dibatalkan dan stok telah dikembalikan.");
+                        setConfirmCancelOrder(null);
+                    }
+                }}
+                onCancel={() => setConfirmCancelOrder(null)}
+            />
+
+            {/* ============ SHIFT SUMMARY ============ */}
+            {shiftSummary && (
+                <ShiftSummaryModal
+                    isOpen={!!shiftSummary}
+                    session={shiftSummary}
+                    orders={orders}
+                    onClose={() => setShiftSummary(null)}
+                />
             )}
         </div>
     );
@@ -862,9 +985,9 @@ export default function AdminPage() {
 
 function OrderStatusBadge({ status }: { status?: string }) {
     const map: Record<string, { cls: string; icon: React.ReactNode; label: string }> = {
-        completed: { cls: 'bg-green-100 text-green-700', icon: <CheckCircle size={11} />, label: 'completed' },
-        processing: { cls: 'bg-blue-100 text-blue-700', icon: <Loader size={11} className="animate-spin" />, label: 'processing' },
-        cancelled: { cls: 'bg-red-100 text-red-700', icon: <XCircle size={11} />, label: 'cancelled' },
+        completed: { cls: 'bg-green-100 text-green-700', icon: <CheckCircle size={11} />, label: 'selesai' },
+        processing: { cls: 'bg-blue-100 text-blue-700', icon: <Loader size={11} className="animate-spin" />, label: 'diproses' },
+        cancelled: { cls: 'bg-red-100 text-red-700', icon: <XCircle size={11} />, label: 'batal' },
         pending: { cls: 'bg-yellow-100 text-yellow-700', icon: <Clock size={11} />, label: 'pending' },
     };
     const s = status || 'pending';
@@ -881,11 +1004,13 @@ function OrderActions({
     updateOrderStatus,
     addLog,
     userName,
+    onCancel,
 }: {
     order: Order;
     updateOrderStatus: (id: string, status: Order['status']) => void;
     addLog: (action: string, detail: string, user: string) => void;
     userName: string;
+    onCancel: () => void;
 }) {
     return (
         <div className="flex gap-1.5 flex-wrap justify-end">
@@ -901,12 +1026,7 @@ function OrderActions({
                         Proses
                     </button>
                     <button
-                        onClick={() => {
-                            if (confirm("Batalkan pesanan ini?")) {
-                                updateOrderStatus(order.id, 'cancelled');
-                                addLog("CANCEL_ORDER", `Cancelled order #${order.id.slice(0, 6)}`, userName);
-                            }
-                        }}
+                        onClick={onCancel}
                         className="px-2.5 py-1 bg-gray-200 text-gray-600 rounded text-xs font-bold hover:bg-gray-300 transition"
                     >
                         Batal

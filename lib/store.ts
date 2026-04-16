@@ -38,6 +38,10 @@ export interface Order {
     date: string; // ISO String
     items: CartItem[];
     total: number;
+    subtotal?: number; // Before discount
+    discount?: number; // Nominal discount
+    discountType?: 'amount' | 'percent';
+    discountValue?: number; // Original input (e.g. 10 for 10%)
     customerName?: string;
     cashierName?: string;
     status: 'pending' | 'processing' | 'completed' | 'cancelled';
@@ -79,19 +83,24 @@ interface ProductState {
     deleteProduct: (id: string) => void;
     toggleAvailability: (id: string) => void;
     decrementStock: (items: CartItem[]) => void;
+    restoreStock: (items: CartItem[]) => void;
 }
 
 interface SalesState {
     orders: Order[];
+    heldOrders: Order[]; // Hold order feature
     logs: ActivityLog[];
-    isStoreOpen: boolean; // [NEW]
-    currentSessionId: string | null; // [NEW]
-    sessions: StoreSession[]; // [NEW] Historical daily recaps
-    openStore: (cashierName: string) => void; // [NEW]
-    closeStore: () => StoreSession | null; // [NEW] Returns the closed session summary
+    isStoreOpen: boolean;
+    currentSessionId: string | null;
+    sessions: StoreSession[];
+    openStore: (cashierName: string) => void;
+    closeStore: () => StoreSession | null;
 
     addOrder: (order: Order) => void;
     updateOrderStatus: (orderId: string, status: Order['status']) => void;
+    holdOrder: (order: Order) => void; // Save current order to hold
+    resumeOrder: (heldOrderId: string) => Order | null; // Get held order back
+    deleteHeldOrder: (heldOrderId: string) => void;
     addLog: (action: string, details: string, user: string) => void;
     getDailySales: () => { date: string; total: number; count: number }[];
     getProductPopularity: () => { name: string; count: number }[];
@@ -208,11 +217,30 @@ export const useProductStore = create<ProductState>()(
                         }
                         return p;
                     });
-
                     if (Object.keys(updates).length > 0) {
                         firebaseUpdate(ref(rtdb), updates).catch(err => console.error("Firebase Stock Update Error:", err));
                     }
+                    return { products: newProducts };
+                })
+            },
 
+            restoreStock: (items) => {
+                set((state) => {
+                    const updates: Record<string, any> = {};
+                    const newProducts = state.products.map(p => {
+                        const found = items.find(i => i.id === p.id);
+                        if (found) {
+                            const newStock = p.stock + found.quantity;
+                            const updated = { ...p, stock: newStock, isAvailable: newStock > 0 };
+                            updates[`products/${p.id}/stock`] = newStock;
+                            updates[`products/${p.id}/isAvailable`] = true;
+                            return updated;
+                        }
+                        return p;
+                    });
+                    if (Object.keys(updates).length > 0) {
+                        firebaseUpdate(ref(rtdb), updates).catch(err => console.error("Firebase Stock Restore Error:", err));
+                    }
                     return { products: newProducts };
                 })
             }
@@ -225,6 +253,7 @@ export const useSalesStore = create<SalesState>()(
     persist(
         (set, get) => ({
             orders: [],
+            heldOrders: [],
             logs: [],
             isStoreOpen: false,
             currentSessionId: null,
@@ -296,12 +325,36 @@ export const useSalesStore = create<SalesState>()(
                 firebaseSet(orderRef, sanitizedOrder).catch(err => console.error("Firebase Add Error:", err));
             },
             updateOrderStatus: (orderId, status) => {
+                // Restore stock when cancelling
+                if (status === 'cancelled') {
+                    const state = get();
+                    const order = state.orders.find(o => o.id === orderId);
+                    if (order) {
+                        useProductStore.getState().restoreStock(order.items);
+                    }
+                }
                 set((state) => ({
                     orders: state.orders.map(o => o.id === orderId ? { ...o, status } : o)
                 }));
-                // [NEW] Sync to Firebase
                 const orderRef = ref(rtdb, `orders/${orderId}`);
                 firebaseUpdate(orderRef, { status }).catch(err => console.error("Firebase Update Error:", err));
+            },
+
+            holdOrder: (order) => {
+                set(state => ({ heldOrders: [...state.heldOrders, { ...order, status: 'pending' }] }));
+            },
+
+            resumeOrder: (heldOrderId) => {
+                const state = get();
+                const held = state.heldOrders.find(o => o.id === heldOrderId);
+                if (held) {
+                    set(s => ({ heldOrders: s.heldOrders.filter(o => o.id !== heldOrderId) }));
+                }
+                return held || null;
+            },
+
+            deleteHeldOrder: (heldOrderId) => {
+                set(state => ({ heldOrders: state.heldOrders.filter(o => o.id !== heldOrderId) }));
             },
             addLog: (action, details, user) => {
                 const newLog = {
