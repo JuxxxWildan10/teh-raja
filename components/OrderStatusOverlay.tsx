@@ -1,150 +1,174 @@
 "use client";
 
-import { useSalesStore, useCartStore } from "@/lib/store";
+import { useSalesStore, useCartStore, formatVariantLabel } from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, Clock, Loader, XCircle, Home, Receipt } from "lucide-react"; // [NEW] Receipt icon
+import { CheckCircle, Clock, Loader, XCircle, Home, Receipt } from "lucide-react";
 import { useState } from "react";
-import ReceiptModal from "./ReceiptModal"; // [NEW]
+import ReceiptModal from "./ReceiptModal";
 
-// Komponen Overlay untuk menampilkan status pesanan secara real-time.
-// Muncul menutupi layar setelah pengguna melakukan checkout.
+const STEPS = [
+    { key: 'pending',    label: 'Diterima',  desc: 'Pesanan masuk' },
+    { key: 'processing', label: 'Diracik',   desc: 'Barista meracik' },
+    { key: 'completed',  label: 'Siap',      desc: 'Silakan ambil' },
+];
+
 export default function OrderStatusOverlay() {
-    // Mengambil `activeOrderId` (ID pesanan yang sedang aktif) dan fungsi pembarunya dari keranjang
     const { activeOrderId, setActiveOrder } = useCartStore();
-    // Mengambil daftar seluruh pesanan dari store penjualan
     const { orders } = useSalesStore();
-
-    // State lokal untuk melacak detail pesanan yang sedang aktif dan kontrol modal struk
     const activeOrder = activeOrderId ? orders.find(o => o.id === activeOrderId) : null;
-    const [showReceipt, setShowReceipt] = useState(false); // [NEW]
+    const [showReceipt, setShowReceipt] = useState(false);
 
-    // Jika tidak ada ID pesanan aktif atau data tidak ditemukan, sembunyikan overlay (return null)
     if (!activeOrderId || !activeOrder) return null;
 
-    // Konfigurasi tampilan berdasarkan status pesanan
-    // Menentukan judul, deskripsi, ikon, dan warna yang akan ditampilkan
+    const currentStatus = activeOrder.status || 'pending';
+    const isCancelled = currentStatus === 'cancelled';
+
+    const stepIndex = STEPS.findIndex(s => s.key === currentStatus);
+
     const statusConfig = {
         pending: {
-            title: "Pesanan Diterima",
-            desc: "Mohon tunggu sebentar, pesanan Anda sedang kami siapkan.",
-            icon: <Clock size={64} className="text-yellow-500 animate-pulse" />,
-            color: "bg-yellow-500",
-            bg: "bg-yellow-50"
+            title: "Pesanan Diterima! 🍵",
+            desc: "Mohon tunggu, pesanan Anda dalam antrean.",
+            icon: <Clock size={56} className="text-yellow-500 animate-pulse" />,
+            headerColor: "bg-yellow-500",
         },
         processing: {
-            title: "Sedang Racik",
-            desc: "Barista kami sedang meracik minuman spesial untuk Anda.",
-            icon: <Loader size={64} className="text-blue-500 animate-spin" />,
-            color: "bg-blue-500",
-            bg: "bg-blue-50"
+            title: "Sedang Diracik ✨",
+            desc: "Barista kami sedang menyiapkan minuman spesial Anda.",
+            icon: <Loader size={56} className="text-blue-500 animate-spin" />,
+            headerColor: "bg-blue-500",
         },
         completed: {
-            title: "Terima Kasih!",
-            desc: "Pesanan Anda sudah siap. Silakan ambil di kasir.",
-            icon: <CheckCircle size={64} className="text-green-500" />,
-            color: "bg-green-500",
-            bg: "bg-green-50"
+            title: "Pesanan Siap! 🎉",
+            desc: "Minuman Anda sudah siap. Silakan ambil di kasir.",
+            icon: <CheckCircle size={56} className="text-green-500" />,
+            headerColor: "bg-green-500",
         },
         cancelled: {
             title: "Pesanan Dibatalkan",
-            desc: "Maaf, pesanan Anda dibatalkan. Silakan hubungi kasir.",
-            icon: <XCircle size={64} className="text-red-500" />,
-            color: "bg-red-500",
-            bg: "bg-red-50"
-        }
+            desc: "Maaf, pesanan dibatalkan. Silakan hubungi kasir.",
+            icon: <XCircle size={56} className="text-red-500" />,
+            headerColor: "bg-red-500",
+        },
     };
 
-    // Tentukan status saat ini, default ke 'pending'
-    const currentStatus = activeOrder.status || 'pending';
-    const config = statusConfig[currentStatus as keyof typeof statusConfig];
-
-    // Fungsi untuk menutup overlay (kembali ke menu) saat pesanan selesai/batal
-    const handleClose = () => {
-        setActiveOrder(null);
-    };
+    const config = statusConfig[currentStatus as keyof typeof statusConfig] ?? statusConfig.pending;
 
     return (
         <AnimatePresence>
-            {/* Tampilkan modal struk jika tombol receipt diklik */}
             {showReceipt && activeOrder && (
-                <div key="receipt-modal">
-                    <ReceiptModal
-                        order={activeOrder}
-                        onClose={() => setShowReceipt(false)}
-                    />
+                <div key="receipt-modal" className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                    <ReceiptModal order={activeOrder} onClose={() => setShowReceipt(false)} />
                 </div>
             )}
 
-            {/* Container utama overlay dengan animasi dari framer-motion */}
             <motion.div
                 key="status-overlay"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[100] bg-forest/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
+                className="fixed inset-0 z-[100] bg-forest/95 backdrop-blur-md flex flex-col items-center justify-center p-4"
             >
-                {/* Kotak detail status modal */}
                 <motion.div
-                    initial={{ scale: 0.8, y: 20 }}
+                    initial={{ scale: 0.85, y: 30 }}
                     animate={{ scale: 1, y: 0 }}
-                    className={`bg-white text-forest w-full max-w-md rounded-3xl p-8 shadow-2xl relative overflow-hidden`}
+                    className="bg-white text-forest w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden"
                 >
-                    {/* Status Indicator Line (Garis berwarna di bagian atas kartu) */}
-                    <div className={`absolute top-0 left-0 w-full h-2 ${config.color}`} />
+                    {/* Color header bar */}
+                    <div className={`h-2 w-full ${config.headerColor}`} />
 
-                    {/* Tombol panggil tanda terima struk */}
-                    <div className="absolute top-4 right-4">
-                        <button
-                            onClick={() => setShowReceipt(true)}
-                            className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-600 transition"
-                            title="Lihat Struk"
-                        >
-                            <Receipt size={20} />
-                        </button>
-                    </div>
+                    <div className="p-6">
+                        {/* Receipt button */}
+                        <div className="flex justify-end mb-2">
+                            <button
+                                onClick={() => setShowReceipt(true)}
+                                className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-500 transition"
+                                title="Lihat Struk"
+                            >
+                                <Receipt size={18} />
+                            </button>
+                        </div>
 
-                    {/* Ikon besar menandakan state pesanan */}
-                    <div className="mb-8 flex justify-center">
-                        <div className={`p-6 rounded-full ${config.bg} border-4 border-white shadow-inner`}>
+                        {/* Icon */}
+                        <div className="flex justify-center mb-5">
                             {config.icon}
                         </div>
-                    </div>
 
-                    {/* Judul dan subjudul status yang responsif terhadap state */}
-                    <h2 className="text-3xl font-serif font-bold mb-4">{config.title}</h2>
-                    <p className="text-gray-500 mb-8 leading-relaxed">{config.desc}</p>
+                        {/* Title */}
+                        <h2 className="text-2xl font-serif font-bold text-center mb-1">{config.title}</h2>
+                        <p className="text-gray-500 text-sm text-center mb-5 leading-relaxed">{config.desc}</p>
 
-                    {/* Detail pesanan (ID dan item yang dipesan) */}
-                    <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left border border-gray-100">
-                        <div className="flex justify-between text-sm text-gray-500 mb-2 border-b border-gray-200 pb-2">
-                            <span>Order ID</span>
-                            <span className="font-mono font-bold">#{activeOrder.id.slice(0, 6)}</span>
-                        </div>
-                        <div className="space-y-1">
-                            {activeOrder.items.map((item: { quantity: number; name: string }, idx: number) => (
-                                <div key={idx} className="flex justify-between text-sm font-bold">
-                                    <span>{item.quantity}x {item.name}</span>
+                        {/* Progress Steps (non-cancelled) */}
+                        {!isCancelled && (
+                            <div className="flex items-center justify-between mb-5 px-2">
+                                {STEPS.map((step, i) => {
+                                    const isCompleted = currentStatus === 'completed';
+                                    const done = i < stepIndex || isCompleted;
+                                    const active = i === stepIndex && !isCompleted;
+                                    return (
+                                        <div key={step.key} className="flex-1 flex flex-col items-center">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border-2 transition-all ${
+                                                done
+                                                    ? 'bg-green-500 border-green-500 text-white'
+                                                    : active
+                                                        ? 'bg-blue-500 border-blue-500 text-white animate-pulse'
+                                                        : 'bg-gray-100 border-gray-200 text-gray-400'
+                                            }`}>
+                                                {done ? '✓' : i + 1}
+                                            </div>
+                                            <p className={`text-[10px] mt-1 font-bold text-center ${
+                                                active ? 'text-blue-600' : done ? 'text-green-600' : 'text-gray-400'
+                                            }`}>{step.label}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Order detail */}
+                        <div className="bg-gray-50 rounded-xl p-3 mb-5 border border-gray-100 text-sm">
+                            <div className="flex justify-between text-gray-500 text-xs mb-2 pb-2 border-b border-gray-200">
+                                <span>Order ID</span>
+                                <span className="font-mono font-bold">#{activeOrder.id.slice(0, 8).toUpperCase()}</span>
+                            </div>
+                            <div className="space-y-1.5">
+                                {activeOrder.items.map((item, idx) => {
+                                    const vLabel = formatVariantLabel(item.variants);
+                                    return (
+                                        <div key={idx}>
+                                            <div className="flex justify-between font-bold text-gray-800">
+                                                <span>{item.quantity}× {item.name}</span>
+                                                <span>Rp {((item.finalPrice ?? item.price) * item.quantity).toLocaleString('id-ID')}</span>
+                                            </div>
+                                            {vLabel && (
+                                                <p className="text-[10px] text-amber-600 pl-3">{vLabel}</p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                <div className="flex justify-between font-black text-forest border-t border-gray-200 pt-2 mt-2">
+                                    <span>Total</span>
+                                    <span>Rp {activeOrder.total.toLocaleString('id-ID')}</span>
                                 </div>
-                            ))}
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Tombol kembali ke menu, hanya muncul jika status pesanan adalah 'completed' (selesai) atau 'cancelled' (batal) */}
-                    {currentStatus === 'completed' || currentStatus === 'cancelled' ? (
-                        <button
-                            onClick={handleClose}
-                            className="w-full py-4 bg-forest text-gold font-bold rounded-xl hover:bg-forest-light transition flex items-center justify-center gap-2 transform hover:scale-[1.02]"
-                        >
-                            <Home size={20} />
-                            Kembali ke Menu
-                        </button>
-                    ) : (
-                        // Indikator loading menunggu upate dari sisi kasir
-                        <div className="flex items-center justify-center gap-2 text-xs text-gray-400 uppercase tracking-widest animate-pulse">
-                            <span className="w-2 h-2 rounded-full bg-gray-400"></span>
-                            Menunggu update...
-                        </div>
-                    )}
+                        {/* Action button */}
+                        {currentStatus === 'completed' || currentStatus === 'cancelled' ? (
+                            <button
+                                onClick={() => setActiveOrder(null)}
+                                className="w-full py-3.5 bg-forest text-gold font-bold rounded-xl hover:bg-forest-light transition flex items-center justify-center gap-2"
+                            >
+                                <Home size={18} />
+                                Kembali ke Menu
+                            </button>
+                        ) : (
+                            <div className="flex items-center justify-center gap-2 text-xs text-gray-400 uppercase tracking-widest animate-pulse py-2">
+                                <span className="w-2 h-2 rounded-full bg-gray-400 inline-block"></span>
+                                Menunggu update kasir...
+                            </div>
+                        )}
+                    </div>
                 </motion.div>
             </motion.div>
         </AnimatePresence>

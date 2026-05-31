@@ -5,6 +5,7 @@ import { Order, formatVariantLabel } from "@/lib/store";
 import { X, Printer, Share2, Bluetooth } from "lucide-react";
 import { motion } from "framer-motion";
 import { buildReceiptPayload, printViaBluetooth } from "@/lib/printer";
+import html2canvas from "html2canvas";
 
 interface ReceiptModalProps {
     order: Order;
@@ -37,17 +38,36 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
         window.print();
     };
 
-    const handleWhatsApp = () => {
-        const items = order.items.map(i => {
-            const vLabel = formatVariantLabel(i.variants);
-            const labelStr = vLabel ? `(${vLabel}) ` : '';
-            return `• ${i.quantity}x ${labelStr}${i.name} = ${formatRp((i.finalPrice ?? i.price) * i.quantity)}`;
-        }).join('\n');
-        const discount = order.discount && order.discount > 0
-            ? `\n💰 Diskon: -${formatRp(order.discount)}`
-            : '';
-        const text = `*Struk Teh Raja*\n━━━━━━━━━━━━━━━\nOrder #${order.id.slice(0, 8).toUpperCase()}\nKasir: ${order.cashierName || 'Staff'}\nPelanggan: ${order.customerName || 'Guest'}\n${order.tableNumber ? `Meja: ${order.tableNumber}\n` : ''}━━━━━━━━━━━━━━━\n${items}${discount}\n━━━━━━━━━━━━━━━\n*TOTAL: ${formatRp(order.total)}*\nMetode: ${PAYMENT_LABEL[order.paymentMethod || 'cash']}\n\nTerima kasih! 🍵`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    const handleWhatsApp = async () => {
+        if (!receiptRef.current) return;
+        try {
+            const canvas = await html2canvas(receiptRef.current, { scale: 2 });
+            canvas.toBlob(async (blob) => {
+                if (!blob) return;
+                const file = new File([blob], `Struk_${order.id.slice(0, 8)}.png`, { type: 'image/png' });
+                
+                const text = `*Struk Teh Raja*\nOrder #${order.id.slice(0, 8).toUpperCase()}\nTotal: ${formatRp(order.total)}`;
+
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Struk Teh Raja',
+                        text: text,
+                        files: [file]
+                    });
+                } else {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = file.name;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    window.open(`https://wa.me/?text=${encodeURIComponent(text + '\n\nSilakan lampirkan gambar struk yang baru saja diunduh.')}`, '_blank');
+                }
+            }, 'image/png');
+        } catch (err) {
+            console.error('Error generating receipt image:', err);
+            alert('Gagal membuat gambar struk');
+        }
     };
 
     const payLabel = order.paymentMethod ? PAYMENT_LABEL[order.paymentMethod] : '-';
@@ -59,11 +79,8 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
             exit={{ scale: 0.9, opacity: 0 }}
             className="bg-white text-black w-full max-w-[320px] rounded-lg overflow-hidden shadow-2xl relative"
         >
-            {/* Header Actions (Hidden in Print) */}
-            <div className="absolute top-2 right-2 flex gap-2 print:hidden z-10">
-                <button onClick={handleWhatsApp} title="Kirim via WhatsApp" className="p-1.5 bg-green-100 rounded-full hover:bg-green-200 text-green-700 transition">
-                    <Share2 size={14} />
-                </button>
+            {/* Close button (top-right) */}
+            <div className="absolute top-2 right-2 print:hidden z-10">
                 <button onClick={onClose} className="p-1.5 bg-gray-100 rounded-full hover:bg-gray-200 transition">
                     <X size={14} />
                 </button>
@@ -205,25 +222,35 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
             </div>
 
             {/* Footer Actions (Hidden in Print) */}
-            <div className="bg-gray-50 p-3 border-t border-gray-100 flex flex-wrap gap-2 print:hidden">
+            <div className="bg-gray-50 p-3 border-t border-gray-100 space-y-2 print:hidden">
+                {/* WhatsApp — prominent full-width */}
                 <button
-                    onClick={handlePrint}
-                    className="flex-1 min-w-[120px] py-2.5 bg-forest text-gold rounded-lg font-bold hover:bg-forest-light flex items-center justify-center gap-1.5 text-xs transition"
+                    onClick={handleWhatsApp}
+                    className="w-full py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 flex items-center justify-center gap-2 text-sm transition shadow-lg shadow-green-500/20"
                 >
-                    <Printer size={14} /> Cetak (Browser)
+                    <Share2 size={16} /> Kirim via WhatsApp
                 </button>
-                <button
-                    onClick={handleBluetoothPrint}
-                    className="flex-1 min-w-[120px] py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center justify-center gap-1.5 text-xs transition shadow-lg shadow-blue-500/20"
-                >
-                    <Bluetooth size={14} /> Cetak (Thermal)
-                </button>
-                <button
-                    onClick={onClose}
-                    className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-xs transition font-medium"
-                >
-                    Tutup
-                </button>
+                {/* Print row */}
+                <div className="flex gap-2">
+                    <button
+                        onClick={handlePrint}
+                        className="flex-1 py-2.5 bg-forest text-gold rounded-lg font-bold hover:bg-forest-light flex items-center justify-center gap-1.5 text-xs transition"
+                    >
+                        <Printer size={14} /> Cetak (Browser)
+                    </button>
+                    <button
+                        onClick={handleBluetoothPrint}
+                        className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center justify-center gap-1.5 text-xs transition shadow-lg shadow-blue-500/20"
+                    >
+                        <Bluetooth size={14} /> Thermal
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-xs transition font-medium"
+                    >
+                        Tutup
+                    </button>
+                </div>
             </div>
         </motion.div>
     );

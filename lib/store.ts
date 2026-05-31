@@ -98,6 +98,8 @@ export interface StoreSession {
 interface CartState {
     items: CartItem[];
     activeOrderId: string | null;
+    isCartDrawerOpen: boolean;
+    setCartDrawerOpen: (open: boolean) => void;
     addToCart: (product: ExtendedProduct, variants?: ProductVariants, finalPrice?: number) => void;
     removeFromCart: (cartItemId: string) => void;
     updateQuantity: (cartItemId: string, quantity: number) => void;
@@ -192,6 +194,8 @@ export const useCartStore = create<CartState>()(
         (set, get) => ({
             items: [],
             activeOrderId: null,
+            isCartDrawerOpen: false,
+            setCartDrawerOpen: (open) => set({ isCartDrawerOpen: open }),
             setActiveOrder: (id) => set({ activeOrderId: id }),
 
             addToCart: (product, variants, finalPrice) => {

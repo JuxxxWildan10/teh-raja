@@ -3,9 +3,10 @@
 import Navbar from "@/components/Navbar";
 import RecommendationQuiz from "@/components/RecommendationQuiz";
 import OrderStatusOverlay from "@/components/OrderStatusOverlay"; // [NEW] 
-import { useCartStore, useProductStore } from "@/lib/store"; // Use dynamic store
-import { motion } from "framer-motion";
-import { Star, ArrowDown, AlertTriangle, Download } from "lucide-react";
+import VariantModal from "@/components/VariantModal";
+import { useCartStore, useProductStore, ExtendedProduct, ProductVariants } from "@/lib/store"; // Use dynamic store
+import { motion, AnimatePresence } from "framer-motion";
+import { Star, ArrowDown, AlertTriangle, Download, Search, ShoppingBag } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -15,9 +16,24 @@ interface BeforeInstallPromptEvent extends Event {
 
 export default function Home() {
   const addToCart = useCartStore((state) => state.addToCart);
+  const cartItems = useCartStore((state) => state.items);
+  const cartTotal = useCartStore((state) => state.total);
+  const setCartOpen = useCartStore((state) => state.setCartDrawerOpen);
+  const isCartOpen = useCartStore((state) => state.isCartDrawerOpen);
   const products = useProductStore((state) => state.products); // Dynamic products
   const [isClient, setIsClient] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [variantProduct, setVariantProduct] = useState<ExtendedProduct | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const handleVariantConfirm = (variants: ProductVariants, finalPrice: number, qty: number) => {
+    if (!variantProduct) return;
+    for (let i = 0; i < qty; i++) {
+      addToCart(variantProduct, variants, finalPrice);
+    }
+    setVariantProduct(null);
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,7 +141,39 @@ export default function Home() {
       {/* MENU GRID */}
       <section id="menu" className="py-20">
         <div className="container mx-auto px-6">
-          <h2 className="text-4xl font-serif text-center mb-16"><span className="border-b-2 border-gold pb-2">Koleksi Raja</span></h2>
+          <h2 className="text-4xl font-serif text-center mb-8"><span className="border-b-2 border-gold pb-2">Koleksi Raja</span></h2>
+
+          <div className="flex gap-2 overflow-x-auto pb-4 mb-6 scrollbar-hide justify-center flex-wrap">
+            {/* Search bar */}
+            <div className="w-full flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 mb-2">
+              <Search size={16} className="text-white/40 flex-shrink-0" />
+              <input
+                type="text"
+                placeholder="Cari minuman favoritmu..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="bg-transparent text-sm w-full focus:outline-none text-white placeholder:text-white/30"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="text-white/40 hover:text-white transition text-xs">✕</button>
+              )}
+            </div>
+
+            {/* Category buttons */}
+            {['all', 'signature', 'milk', 'fruit', 'classic', 'snack'].map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-4 py-2 rounded-full font-bold text-sm transition flex-shrink-0 ${
+                  activeCategory === cat 
+                  ? 'bg-gold text-forest shadow-lg' 
+                  : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
+                }`}
+              >
+                {cat === 'all' ? 'Semua Menu' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </button>
+            ))}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {products.length === 0 ? (
@@ -133,7 +181,10 @@ export default function Home() {
                 <p className="text-xl">Belum ada menu yang tersedia.</p>
               </div>
             ) : (
-              products.map((product, idx) => (
+              products
+                .filter(p => activeCategory === 'all' || p.category === activeCategory)
+                .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.description || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((product, idx) => (
                 <motion.div
                   itemProp="product"
                   initial={{ opacity: 0, y: 20 }}
@@ -171,7 +222,7 @@ export default function Home() {
                     {/* OVERLAY ACTION */}
                     <div className={`absolute inset-0 bg-black/60 opacity-0 transition duration-300 flex items-center justify-center ${product.stock > 0 ? 'group-hover:opacity-100' : ''}`}>
                       <button
-                        onClick={() => addToCart(product)}
+                        onClick={() => setVariantProduct(product)}
                         disabled={product.stock <= 0}
                         className="bg-gold text-forest px-6 py-2 rounded-full font-bold transform translate-y-4 group-hover:translate-y-0 transition duration-300 hover:scale-105"
                       >
@@ -197,6 +248,14 @@ export default function Home() {
                         ))}
                       </div>
                     </div>
+                    {/* Mobile-visible add button */}
+                    <button
+                      onClick={() => setVariantProduct(product)}
+                      disabled={product.stock <= 0}
+                      className="w-full mt-3 py-2 bg-gold text-forest rounded-lg font-bold text-sm hover:bg-gold-light transition disabled:opacity-40 disabled:cursor-not-allowed md:hidden"
+                    >
+                      {product.stock <= 0 ? 'Habis' : '+ Tambah ke Tray'}
+                    </button>
                   </div>
                 </motion.div>
               ))
@@ -210,8 +269,44 @@ export default function Home() {
         <p>TEH RAJA &copy; 2026. M. YARZUQ WILDANI [0402231058]. Dibuat untuk Praktik Kerja Lapangan.</p>
       </footer>
 
+      {/* Mobile sticky cart bar */}
+      <AnimatePresence>
+        {cartItems.length > 0 && !isCartOpen && (
+          <motion.div
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            exit={{ y: 100 }}
+            className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-forest/95 backdrop-blur-md border-t border-gold/20"
+          >
+            <button
+              onClick={() => setCartOpen(true)}
+              className="w-full bg-gold text-forest py-3.5 rounded-2xl font-bold flex items-center justify-between px-5 shadow-xl"
+            >
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <ShoppingBag size={20} />
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">{cartItems.length}</span>
+                </div>
+                <span>{cartItems.length} item di Tray</span>
+              </div>
+              <span className="font-black">Rp {cartTotal().toLocaleString('id-ID')} →</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* OVERLAYS */}
       <OrderStatusOverlay />
+
+      <AnimatePresence>
+        {variantProduct && (
+          <VariantModal
+            product={variantProduct}
+            onConfirm={handleVariantConfirm}
+            onClose={() => setVariantProduct(null)}
+          />
+        )}
+      </AnimatePresence>
     </main>
   );
 }

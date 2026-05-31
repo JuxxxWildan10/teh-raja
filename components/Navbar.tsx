@@ -9,9 +9,10 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
     const [isScrolled, setIsScrolled] = useState(false);
-    const [isCartOpen, setIsCartOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const cartCount = useCartStore((state) => state.items.length);
+    const isCartOpen = useCartStore((state) => state.isCartDrawerOpen);
+    const setCartOpen = useCartStore((state) => state.setCartDrawerOpen);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -35,13 +36,13 @@ export default function Navbar() {
                     <div className="flex items-center gap-6">
                         {/* Desktop Menu */}
                         <div className="hidden md:flex items-center gap-6">
-                            <Link href="#menu" className="hover:text-gold transition">Menu Kami</Link>
-                            <Link href="#recommendation" className="hover:text-gold transition">Cari Teh</Link>
+                            <a href="#menu" className="hover:text-gold transition">Menu Kami</a>
+                            <a href="#recommendation" className="hover:text-gold transition">Cari Teh</a>
                         </div>
 
                         {/* Cart Button */}
                         <button
-                            onClick={() => setIsCartOpen(true)}
+                            onClick={() => setCartOpen(true)}
                             className="relative p-2 hover:bg-white/10 rounded-full transition"
                         >
                             <ShoppingBag className="text-gold" />
@@ -76,27 +77,26 @@ export default function Navbar() {
                             className="md:hidden bg-forest/95 backdrop-blur-xl border-t border-white/10 overflow-hidden"
                         >
                             <div className="flex flex-col p-6 space-y-4 text-center">
-                                <Link
+                                <a
                                     href="#menu"
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="text-lg py-2 border-b border-white/5 hover:text-gold"
                                 >
                                     Menu Kami
-                                </Link>
-                                <Link
+                                </a>
+                                <a
                                     href="#recommendation"
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="text-lg py-2 border-b border-white/5 hover:text-gold"
                                 >
                                     Cari Teh Favorit
-                                </Link>
-
+                                </a>
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
             </nav>
-            <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+            <CartDrawer isOpen={isCartOpen} onClose={() => setCartOpen(false)} />
         </>
     );
 }

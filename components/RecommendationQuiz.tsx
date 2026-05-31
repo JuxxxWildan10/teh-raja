@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRecommendations } from "@/lib/recommendation";
-import { useCartStore, useProductStore, ExtendedProduct } from "@/lib/store"; // Import product store
+import { useCartStore, useProductStore, ExtendedProduct, ProductVariants } from "@/lib/store";
 import { ShoppingBag, RefreshCcw } from "lucide-react";
+import VariantModal from "./VariantModal";
 
 // Komponen Quiz Interaktif untuk memberikan rekomendasi teh 
 // berdasarkan selera dan preferensi pelanggan.
@@ -19,9 +20,15 @@ export default function RecommendationQuiz() {
     // state 'results' menampung produk hasil rekomendasi dari kalkulasi algoritma Euclidean
     const [results, setResults] = useState<ExtendedProduct[]>([]);
 
-    // Mengambil state management fungsi keranjang dan pengelola daftar produk dari Zustand store
     const addToCart = useCartStore((state) => state.addToCart);
-    const products = useProductStore((state) => state.products); // Use dynamic products
+    const products = useProductStore((state) => state.products);
+    const [variantProduct, setVariantProduct] = useState<ExtendedProduct | null>(null);
+
+    const handleVariantConfirm = (variants: ProductVariants, finalPrice: number, qty: number) => {
+        if (!variantProduct) return;
+        for (let i = 0; i < qty; i++) addToCart(variantProduct, variants, finalPrice);
+        setVariantProduct(null);
+    };
 
     // state 'isClient' untuk memastikan render komponen hanya terjadi di sisi klien (mencegah error hidrasi Next.js)
     const [isClient, setIsClient] = useState(false);
@@ -154,10 +161,10 @@ export default function RecommendationQuiz() {
                                                 <p className="text-xs opacity-60">Rp {p.price.toLocaleString('id-ID')}</p>
                                             </div>
                                         </div>
-                                        {/* Tombol yang langsung menambahkan produk hasil rekomendasi ke dalam keranjang */}
                                         <button
-                                            onClick={() => addToCart(p)}
+                                            onClick={() => setVariantProduct(p)}
                                             className="p-2 bg-gold text-forest rounded-full hover:scale-105 transition"
+                                            title="Pilih varian & tambah ke tray"
                                         >
                                             <ShoppingBag size={18} />
                                         </button>
@@ -174,6 +181,16 @@ export default function RecommendationQuiz() {
                     )}
                 </AnimatePresence>
             </div>
+
+            <AnimatePresence>
+                {variantProduct && (
+                    <VariantModal
+                        product={variantProduct}
+                        onConfirm={handleVariantConfirm}
+                        onClose={() => setVariantProduct(null)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }
