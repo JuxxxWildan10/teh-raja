@@ -13,7 +13,7 @@
   --foreground: var(--color-cream);
 }
 
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-gold: var(--color-gold);
@@ -46,6 +46,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .text-gradient-gold {
   background: linear-gradient(to right, #D4AF37, #F4C430, #D4AF37);
+  background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
   background-size: 200% auto;

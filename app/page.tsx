@@ -75,6 +75,12 @@ export default function LandingPage() {
                         </span>
                     )}
                     <button
+                        onClick={() => router.push('/menu')}
+                        className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-white/10"
+                    >
+                        <Coffee size={13} /> Menu Pembeli
+                    </button>
+                    <button
                         onClick={() => router.push('/admin')}
                         className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-white/10"
                     >
@@ -122,12 +128,21 @@ export default function LandingPage() {
                         <motion.button
                             whileHover={{ scale: 1.04 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={() => router.push('/pos')}
+                            onClick={() => router.push('/menu')}
                             className="flex items-center justify-center gap-2 bg-amber-400 text-[#07221B] font-black text-base px-8 py-4 rounded-2xl shadow-2xl shadow-amber-400/30 hover:bg-amber-300 transition"
                         >
-                            <ShoppingCart size={20} />
-                            Buka POS Kasir
+                            <Coffee size={20} />
+                            Pesan Sekarang
                             <ChevronRight size={18} />
+                        </motion.button>
+                        <motion.button
+                            whileHover={{ scale: 1.04 }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => router.push('/pos')}
+                            className="flex items-center justify-center gap-2 bg-white/10 border border-white/20 text-white font-bold text-base px-8 py-4 rounded-2xl hover:bg-white/15 transition"
+                        >
+                            <ShoppingCart size={18} />
+                            Buka POS Kasir
                         </motion.button>
                         <motion.button
                             whileHover={{ scale: 1.04 }}
@@ -239,11 +254,17 @@ export default function LandingPage() {
                         <Leaf size={28} className="text-[#07221B]" />
                     </div>
                     <h2 className="text-2xl font-serif font-bold text-white mb-3">Mulai Jualan Sekarang</h2>
-                    <p className="text-white/50 text-sm mb-8">Login sebagai kasir atau admin untuk mengakses sistem POS lengkap.</p>
+                    <p className="text-white/50 text-sm mb-8">Login sebagai kasir atau admin untuk mengakses sistem POS, atau pesan langsung sebagai pembeli.</p>
                     <div className="flex flex-col gap-3">
                         <button
-                            onClick={() => router.push('/pos')}
+                            onClick={() => router.push('/menu')}
                             className="w-full py-4 bg-amber-400 text-[#07221B] font-black rounded-xl hover:bg-amber-300 transition hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+                        >
+                            Mulai Pesan (Pembeli) → /menu
+                        </button>
+                        <button
+                            onClick={() => router.push('/pos')}
+                            className="w-full py-4 bg-white/10 border border-white/20 text-white font-bold rounded-xl hover:bg-white/15 transition"
                         >
                             Masuk sebagai Kasir → /pos
                         </button>
