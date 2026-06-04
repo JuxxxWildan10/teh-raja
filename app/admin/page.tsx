@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useProductStore, useSalesStore, useAuthStore, ExtendedProduct, Order } from "@/lib/store";
+import { useProductStore, useSalesStore, useAuthStore, usePromoStore, useCustomerStore, useInventoryStore, ExtendedProduct, Order } from "@/lib/store";
 import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import ShiftSummaryModal from "@/components/ShiftSummaryModal";
@@ -24,7 +24,7 @@ import {
     ShieldAlert,
     History, AlertTriangle,
     CheckCircle, XCircle, Clock, Loader,
-    Menu, Search, Filter,
+    Menu, Search, Filter, Sparkles, BrainCircuit, RefreshCw, Ticket, Users as UsersIcon, Box
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -55,8 +55,12 @@ export default function AdminPage() {
     const { getDailySales, getProductPopularity, orders, logs, addLog, resetData, updateOrderStatus, sessions, closeStore } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
 
+    const { promos, addPromo, updatePromo, deletePromo, togglePromo } = usePromoStore();
+    const { customers } = useCustomerStore();
+    const { ingredients } = useInventoryStore(); // [NEW]
+
     // UI State
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory'>('dashboard');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -181,9 +185,37 @@ export default function AdminPage() {
         toast.success("Data penjualan berhasil di-export ke CSV!");
     };
 
-    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan') => {
+    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory') => {
         setActiveTab(tab);
         setIsMobileMenuOpen(false);
+    };
+
+    // AI Forecast State
+    const [aiForecastText, setAiForecastText] = useState("");
+    const [isForecasting, setIsForecasting] = useState(false);
+
+    const handleAIForecast = async () => {
+        setIsForecasting(true);
+        setAiForecastText("");
+        try {
+            const res = await fetch('/api/ai/forecast', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orders: orders.slice(-100), // pass last 100 orders
+                    products: products.map(p => ({ id: p.id, name: p.name, stock: p.stock, category: p.category }))
+                })
+            });
+            if (!res.ok) throw new Error("Gagal mengambil data AI");
+            const data = await res.json();
+            setAiForecastText(data.forecast);
+            toast.success("AI berhasil menganalisis penjualan!");
+        } catch (err) {
+            console.error(err);
+            toast.error("Gagal melakukan prediksi AI.");
+        } finally {
+            setIsForecasting(false);
+        }
     };
 
     // Filtered orders
@@ -278,9 +310,13 @@ export default function AdminPage() {
     const tabs = [
         { id: 'dashboard' as const, label: 'Dashboard' },
         { id: 'products' as const, label: 'Menu & Stok' },
+        ...(user.role === 'admin' ? [{ id: 'inventory' as const, label: 'Inventaris & BOM', icon: <Box size={18} /> }] : []),
         { id: 'orders' as const, label: 'Pesanan', badge: pendingCount },
+        ...(user.role === 'admin' ? [{ id: 'promos' as const, label: 'Promo Engine', icon: <Ticket size={18} /> }] : []),
+        ...(user.role === 'admin' ? [{ id: 'loyalty' as const, label: 'Loyalty Pelanggan', icon: <UsersIcon size={18} /> }] : []),
         ...(user.role === 'admin' ? [{ id: 'karyawan' as const, label: 'Karyawan' }] : []),
         ...(user.role === 'admin' ? [{ id: 'logs' as const, label: 'Log Aktivitas' }] : []),
+        ...(user.role === 'admin' ? [{ id: 'ai-forecast' as const, label: 'AI Forecast ✨' }] : []),
     ];
 
     return (
@@ -826,6 +862,99 @@ export default function AdminPage() {
                     </div>
                 )}
                 
+                {/* ============ TAB: AI FORECAST ============ */}
+                {activeTab === 'ai-forecast' && user.role === 'admin' && (
+                    <div className="animate-fade-in space-y-6">
+                        {/* Header */}
+                        <div className="bg-gradient-to-br from-[#0D2B20] to-[#1a4433] rounded-2xl p-6 text-white shadow-xl">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-amber-400 rounded-xl">
+                                        <BrainCircuit size={28} className="text-[#0D2B20]" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-black text-amber-400">AI Sales Forecast</h2>
+                                        <p className="text-white/60 text-sm mt-0.5">Ditenagai oleh Gemini AI · Analisis berbasis data historis</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleAIForecast}
+                                    disabled={isForecasting || orders.length === 0}
+                                    className="flex items-center gap-2 bg-amber-400 text-[#0D2B20] px-6 py-3 rounded-xl font-black hover:bg-amber-300 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:scale-105 active:scale-95"
+                                >
+                                    {isForecasting
+                                        ? <><RefreshCw size={18} className="animate-spin" /> Menganalisis...</>
+                                        : <><Sparkles size={18} /> Generate Laporan AI</>
+                                    }
+                                </button>
+                            </div>
+
+                            {/* Quick Stats */}
+                            <div className="grid grid-cols-3 gap-3 mt-5">
+                                {[
+                                    { label: 'Total Order Dianalisis', value: orders.length },
+                                    { label: 'Produk dalam Menu', value: products.length },
+                                    { label: 'Order Hari Ini', value: orders.filter(o => new Date(o.date).toDateString() === new Date().toDateString()).length },
+                                ].map(({ label, value }) => (
+                                    <div key={label} className="bg-white/10 border border-white/10 rounded-xl p-3 text-center">
+                                        <p className="text-2xl font-black text-amber-400">{value}</p>
+                                        <p className="text-white/50 text-[11px] mt-0.5">{label}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* AI Result Output */}
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="p-5 border-b border-gray-100 flex items-center gap-3">
+                                <Sparkles size={20} className="text-amber-500" />
+                                <h3 className="font-bold text-gray-800">Hasil Analisis & Rekomendasi AI</h3>
+                            </div>
+                            <div className="p-6 min-h-64">
+                                {!aiForecastText && !isForecasting && (
+                                    <div className="flex flex-col items-center justify-center h-48 text-center text-gray-400">
+                                        <BrainCircuit size={48} className="mb-3 opacity-20" />
+                                        <p className="font-medium">Belum ada laporan</p>
+                                        <p className="text-sm mt-1">Klik tombol "Generate Laporan AI" untuk memulai analisis.</p>
+                                        {orders.length === 0 && (
+                                            <p className="text-xs mt-3 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                                                ⚠️ Belum ada data order. Lakukan beberapa transaksi dulu di POS.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                                {isForecasting && (
+                                    <div className="flex flex-col items-center justify-center h-48 text-center">
+                                        <div className="relative">
+                                            <div className="w-16 h-16 rounded-full border-4 border-amber-200 border-t-amber-500 animate-spin"></div>
+                                            <BrainCircuit size={20} className="absolute inset-0 m-auto text-amber-500" />
+                                        </div>
+                                        <p className="font-bold text-gray-700 mt-4">AI sedang menganalisis data...</p>
+                                        <p className="text-sm text-gray-400 mt-1">Proses ini membutuhkan beberapa detik</p>
+                                    </div>
+                                )}
+                                {aiForecastText && !isForecasting && (
+                                    <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                        {aiForecastText}
+                                    </div>
+                                )}
+                            </div>
+                            {aiForecastText && (
+                                <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+                                    <p className="text-xs text-gray-400 italic">* Analisis dilakukan oleh Gemini AI. Gunakan sebagai referensi, bukan keputusan tunggal.</p>
+                                    <button
+                                        onClick={handleAIForecast}
+                                        disabled={isForecasting}
+                                        className="flex items-center gap-1.5 text-xs font-bold text-[#0D2B20] hover:underline"
+                                    >
+                                        <RefreshCw size={12} /> Refresh
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* ============ TAB: KARYAWAN ============ */}
                 {activeTab === 'karyawan' && user.role === 'admin' && (
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-fade-in space-y-6">
@@ -886,6 +1015,147 @@ export default function AdminPage() {
                                                     </button>
                                                 )}
                                             </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* ============ TAB: INVENTORY & BOM ============ */}
+                {activeTab === 'inventory' && user.role === 'admin' && (
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-fade-in space-y-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
+                            <div>
+                                <h2 className="text-lg md:text-xl font-bold font-serif">Inventaris & Bill of Materials</h2>
+                                <p className="text-sm text-gray-500">Pantau stok bahan baku dan peringatan stok menipis.</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {ingredients.map(ing => {
+                                const isLowStock = ing.stock <= ing.minStockThreshold;
+                                return (
+                                    <div key={ing.id} className={`p-4 border rounded-xl relative ${isLowStock ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <h3 className="font-bold text-gray-800">{ing.name}</h3>
+                                                <p className="text-xs text-gray-500 font-mono mt-1">Batas Minimum: {ing.minStockThreshold} {ing.unit}</p>
+                                            </div>
+                                            {isLowStock && <AlertTriangle size={16} className="text-red-500 animate-pulse" />}
+                                        </div>
+                                        <div className="mt-3 flex items-end justify-between">
+                                            <span className={`text-2xl font-black ${isLowStock ? 'text-red-600' : 'text-[#0D2B20]'}`}>
+                                                {ing.stock.toLocaleString('id-ID')} <span className="text-sm font-normal">{ing.unit}</span>
+                                            </span>
+                                        </div>
+                                        {isLowStock && (
+                                            <p className="text-[10px] text-red-600 font-bold mt-2 bg-red-100 px-2 py-1 rounded w-fit">
+                                                Stok Menipis! Segera Restock.
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* ============ TAB: PROMO ENGINE ============ */}
+                {activeTab === 'promos' && user.role === 'admin' && (
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-fade-in space-y-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
+                            <div>
+                                <h2 className="text-lg md:text-xl font-bold font-serif">Promo Engine</h2>
+                                <p className="text-sm text-gray-500">Kelola diskon otomatis dan happy hour.</p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    addPromo({
+                                        id: nanoid(), name: 'Promo Baru', type: 'percent', value: 10, isActive: false
+                                    });
+                                    toast.success("Promo draft berhasil ditambahkan. Silakan edit.");
+                                }}
+                                className="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-amber-200 transition flex items-center gap-2"
+                            >
+                                <Plus size={16} /> Buat Promo
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {promos.map(promo => (
+                                <div key={promo.id} className={`p-4 border rounded-xl relative ${promo.isActive ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-gray-50 opacity-70'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h3 className="font-bold text-gray-800">{promo.name}</h3>
+                                            <p className="text-xs text-gray-500 uppercase font-mono mt-1">
+                                                {promo.type === 'percent' ? 'Diskon Persen' : promo.type === 'amount' ? 'Diskon Nominal' : 'Happy Hour'}
+                                            </p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => togglePromo(promo.id)} className={`text-xs font-bold px-2 py-1 rounded ${promo.isActive ? 'bg-amber-400 text-amber-900' : 'bg-gray-200 text-gray-600'}`}>
+                                                {promo.isActive ? 'Aktif' : 'Nonaktif'}
+                                            </button>
+                                            <button onClick={() => {
+                                                if (confirm("Hapus promo ini?")) deletePromo(promo.id);
+                                            }} className="text-red-500 hover:text-red-700"><Trash size={16} /></button>
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-gray-700 space-y-1 mt-3">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500">Nilai Diskon:</span>
+                                            <span className="font-bold text-amber-600">{promo.type === 'percent' ? `${promo.value}%` : `Rp ${promo.value.toLocaleString('id-ID')}`}</span>
+                                        </div>
+                                        {promo.type === 'happy_hour' && (
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-500">Waktu:</span>
+                                                <span className="font-mono">{promo.startHour}:00 - {promo.endHour}:00</span>
+                                            </div>
+                                        )}
+                                        {promo.minSubtotal && (
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-500">Min. Beli:</span>
+                                                <span>Rp {promo.minSubtotal.toLocaleString('id-ID')}</span>
+                                            </div>
+                                        )}
+                                        {promo.description && <p className="text-xs italic text-gray-500 mt-2">{promo.description}</p>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ============ TAB: LOYALTY ============ */}
+                {activeTab === 'loyalty' && user.role === 'admin' && (
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-fade-in space-y-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
+                            <div>
+                                <h2 className="text-lg md:text-xl font-bold font-serif">Loyalty Pelanggan</h2>
+                                <p className="text-sm text-gray-500">Daftar member dan akumulasi poin (1 poin = Rp100).</p>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
+                                    <tr>
+                                        <th className="p-4 rounded-tl-lg">Nama</th>
+                                        <th className="p-4">No. HP</th>
+                                        <th className="p-4 text-right">Poin</th>
+                                        <th className="p-4 text-right rounded-tr-lg">Total Belanja</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {customers.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} className="p-8 text-center text-gray-400">Belum ada pelanggan terdaftar.</td>
+                                        </tr>
+                                    )}
+                                    {customers.sort((a, b) => b.points - a.points).map(c => (
+                                        <tr key={c.id} className="hover:bg-gray-50 transition">
+                                            <td className="p-4 font-bold text-gray-800">{c.name}</td>
+                                            <td className="p-4 text-sm text-gray-600 font-mono">{c.phone}</td>
+                                            <td className="p-4 text-right font-bold text-amber-600">{c.points}</td>
+                                            <td className="p-4 text-right text-sm font-mono text-green-700">Rp {c.totalSpent.toLocaleString('id-ID')}</td>
                                         </tr>
                                     ))}
                                 </tbody>

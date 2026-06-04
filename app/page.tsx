@@ -46,6 +46,7 @@ export default function LandingPage() {
     const { user } = useAuthStore();
     const [currentTea, setCurrentTea] = useState(0);
     const [mounted, setMounted] = useState(false);
+    const [adminClickCount, setAdminClickCount] = useState(0);
 
     useEffect(() => {
         setMounted(true);
@@ -62,11 +63,20 @@ export default function LandingPage() {
 
             {/* ── NAVBAR ─────────────────────────────────── */}
             <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 glass">
-                <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center">
+                <div 
+                    className="flex items-center gap-2.5 cursor-pointer"
+                    onClick={() => {
+                        const newCount = adminClickCount + 1;
+                        setAdminClickCount(newCount);
+                        if (newCount >= 5) {
+                            router.push('/admin');
+                        }
+                    }}
+                >
+                    <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center transition-transform active:scale-90">
                         <Leaf size={16} className="text-[#07221B]" />
                     </div>
-                    <span className="font-bold text-amber-400 tracking-widest text-sm uppercase font-sans">Teh Raja</span>
+                    <span className="font-bold text-amber-400 tracking-widest text-sm uppercase font-sans select-none">Teh Raja</span>
                 </div>
                 <div className="flex items-center gap-3">
                     {user && (
@@ -76,21 +86,9 @@ export default function LandingPage() {
                     )}
                     <button
                         onClick={() => router.push('/menu')}
-                        className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-white/10"
-                    >
-                        <Coffee size={13} /> Menu Pembeli
-                    </button>
-                    <button
-                        onClick={() => router.push('/admin')}
-                        className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-white/10"
-                    >
-                        <LayoutDashboard size={13} /> Admin
-                    </button>
-                    <button
-                        onClick={() => router.push('/pos')}
                         className="flex items-center gap-1.5 text-xs font-bold bg-amber-400 text-[#07221B] px-4 py-2 rounded-full hover:bg-amber-300 transition hover:scale-105 active:scale-95 shadow-lg shadow-amber-400/20"
                     >
-                        <ShoppingCart size={13} /> Buka POS
+                        <Coffee size={13} /> Lihat Menu
                     </button>
                 </div>
             </nav>
@@ -134,24 +132,6 @@ export default function LandingPage() {
                             <Coffee size={20} />
                             Pesan Sekarang
                             <ChevronRight size={18} />
-                        </motion.button>
-                        <motion.button
-                            whileHover={{ scale: 1.04 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => router.push('/pos')}
-                            className="flex items-center justify-center gap-2 bg-white/10 border border-white/20 text-white font-bold text-base px-8 py-4 rounded-2xl hover:bg-white/15 transition"
-                        >
-                            <ShoppingCart size={18} />
-                            Buka POS Kasir
-                        </motion.button>
-                        <motion.button
-                            whileHover={{ scale: 1.04 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => router.push('/admin')}
-                            className="flex items-center justify-center gap-2 bg-white/10 border border-white/20 text-white font-bold text-base px-8 py-4 rounded-2xl hover:bg-white/15 transition"
-                        >
-                            <LayoutDashboard size={18} />
-                            Dashboard Admin
                         </motion.button>
                     </div>
                 </motion.div>
@@ -254,25 +234,13 @@ export default function LandingPage() {
                         <Leaf size={28} className="text-[#07221B]" />
                     </div>
                     <h2 className="text-2xl font-serif font-bold text-white mb-3">Mulai Jualan Sekarang</h2>
-                    <p className="text-white/50 text-sm mb-8">Login sebagai kasir atau admin untuk mengakses sistem POS, atau pesan langsung sebagai pembeli.</p>
+                    <p className="text-white/50 text-sm mb-8">Pesan minuman teh otentik dengan resep signature kami. Rasakan kesegarannya sekarang juga.</p>
                     <div className="flex flex-col gap-3">
                         <button
                             onClick={() => router.push('/menu')}
                             className="w-full py-4 bg-amber-400 text-[#07221B] font-black rounded-xl hover:bg-amber-300 transition hover:scale-[1.02] active:scale-[0.98] shadow-lg"
                         >
-                            Mulai Pesan (Pembeli) → /menu
-                        </button>
-                        <button
-                            onClick={() => router.push('/pos')}
-                            className="w-full py-4 bg-white/10 border border-white/20 text-white font-bold rounded-xl hover:bg-white/15 transition"
-                        >
-                            Masuk sebagai Kasir → /pos
-                        </button>
-                        <button
-                            onClick={() => router.push('/admin')}
-                            className="w-full py-4 bg-white/10 border border-white/20 text-white font-bold rounded-xl hover:bg-white/15 transition"
-                        >
-                            Masuk sebagai Admin → /admin
+                            Lihat Katalog Menu & Promo
                         </button>
                     </div>
                 </motion.div>

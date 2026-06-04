@@ -39,6 +39,9 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
         ? Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000)
         : 0;
 
+    const diffCash = (session.actualCash || 0) - (session.expectedCash || 0);
+    const diffColor = diffCash === 0 ? 'text-green-600' : diffCash > 0 ? 'text-blue-600' : 'text-red-600';
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -112,6 +115,37 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
                                         </span>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Pencocokan Kas (Cash Matching) */}
+                            <div className="bg-amber-50 rounded-xl p-4 space-y-3 border border-amber-200">
+                                <p className="text-xs font-bold text-amber-800 uppercase tracking-wider text-center">Rekap Laci Kasir (Cash)</p>
+                                
+                                <div className="space-y-1.5 text-sm">
+                                    <div className="flex justify-between items-center text-gray-600">
+                                        <span>Modal Awal</span>
+                                        <span className="font-bold">{formatRp(session.startingCash || 0)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-gray-600">
+                                        <span>Pemasukan Tunai</span>
+                                        <span className="font-bold text-green-600">+{formatRp(paymentSummary.cash)}</span>
+                                    </div>
+                                    <div className="border-t border-amber-200/50 my-1 pt-1 flex justify-between items-center">
+                                        <span className="font-bold text-gray-800">Kas Seharusnya (Expected)</span>
+                                        <span className="font-black text-gray-800">{formatRp(session.expectedCash || 0)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-bold text-gray-800">Uang Fisik Aktual</span>
+                                        <span className="font-black text-gray-800">{formatRp(session.actualCash || 0)}</span>
+                                    </div>
+                                </div>
+
+                                <div className={`mt-2 p-2 rounded-lg text-center font-bold text-sm border ${diffCash === 0 ? 'bg-green-100 border-green-200 text-green-700' : diffCash > 0 ? 'bg-blue-100 border-blue-200 text-blue-700' : 'bg-red-100 border-red-200 text-red-700'}`}>
+                                    {diffCash === 0 ? '✓ Uang Kas Sesuai (Balance)' : `Selisih: ${diffCash > 0 ? '+' : ''}${formatRp(diffCash)}`}
+                                </div>
+                                {session.notes && (
+                                    <p className="text-[10px] text-gray-500 italic text-center mt-1">Catatan: {session.notes}</p>
+                                )}
                             </div>
 
                             {/* Breakdown Metode Bayar */}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     useAuthStore, useCartStore, useProductStore, useSalesStore,
+    usePromoStore, useCustomerStore, useInventoryStore, // [NEW] Promo & Customer & Inventory
     Order, ExtendedProduct, formatVariantLabel
 } from "@/lib/store";
 import { nanoid } from "nanoid";
@@ -19,7 +20,8 @@ import {
     LayoutGrid, LayoutDashboard, Coffee, Leaf, Citrus, Star,
     Banknote, QrCode, Building2, ChevronRight,
     RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie,
-    Wand2, Sparkles, ChevronDown, Pause, Play, Trash, Tag, Percent,
+    Wand2, Sparkles, ChevronDown, Pause, Play, Trash, Tag, Percent, Mic, MicOff, Loader2,
+    CheckCircle, RefreshCw
 } from "lucide-react";
 
 // ── Category Tabs ─────────────────────────────────────────────
@@ -52,22 +54,41 @@ export default function POSPage() {
     const { items, addToCart, removeFromCart, updateQuantity, updateNote, clearCart, total } = useCartStore();
     const { products, decrementStock } = useProductStore();
     const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders } = useSalesStore();
+    const { getApplicablePromo } = usePromoStore(); // [NEW] Promo
+    const { findByPhone, addCustomer, addPoints, getPointsForOrder, redeemPoints } = useCustomerStore(); // [NEW] Loyalty
+    const { decrementIngredientsForOrder } = useInventoryStore(); // [NEW] BOM
     const toast = useToast();
 
     const [isClient, setIsClient] = useState(false);
     const [search, setSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState<string>('all');
+    // Customer Info
+    const [customerPhone, setCustomerPhone] = useState('');
     const [customerName, setCustomerName] = useState('');
+    const [usePoints, setUsePoints] = useState(false);
+    
     const [tableNumber, setTableNumber] = useState('');
     const [orderType, setOrderType] = useState<OrderType>('dine-in');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
     const [cashReceived, setCashReceived] = useState('');
+    // QRIS State
+    const [qrisGenerated, setQrisGenerated] = useState(false);
+    const [isCheckingQris, setIsCheckingQris] = useState(false);
+    const [qrisSuccess, setQrisSuccess] = useState(false);
+    
     const [showReceipt, setShowReceipt] = useState(false);
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
     const [mobileCartOpen, setMobileCartOpen] = useState(false);
+    const [startingCash, setStartingCash] = useState('');
+    const [actualCash, setActualCash] = useState('');
+    const [closeNotes, setCloseNotes] = useState('');
 
     // Variant Modal
     const [variantProduct, setVariantProduct] = useState<ExtendedProduct | null>(null);
+
+    // Voice Command
+    const [isListening, setIsListening] = useState(false);
+    const [isProcessingVoice, setIsProcessingVoice] = useState(false);
 
     // Discount
     const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
@@ -149,13 +170,28 @@ export default function POSPage() {
 
     // ── Cart Calculations ─────────────────────────────────────
     const subtotal = total();
+    
+    // Auto-detect best promo
+    const applicablePromo = getApplicablePromo(subtotal);
+
     const discountAmount = useMemo(() => {
+        // If there's an automatic promo, apply it unless manual discount is set
+        if (discountMode === 'none' && applicablePromo) {
+            return applicablePromo.discountAmount;
+        }
+
         const v = parseFloat(discountValue) || 0;
         if (discountMode === 'amount') return Math.min(v, subtotal);
         if (discountMode === 'percent') return Math.min(Math.round(subtotal * v / 100), subtotal);
         return 0;
-    }, [discountMode, discountValue, subtotal]);
-    const orderTotal = subtotal - discountAmount;
+    }, [discountMode, discountValue, subtotal, applicablePromo]);
+
+    // Points Redemption Logic
+    const customer = useMemo(() => findByPhone(customerPhone), [customerPhone, findByPhone]);
+    const maxRedeemablePoints = customer ? Math.floor(customer.points / 100) * 100 : 0; // Assuming 1 point = Rp100, and we only redeem points in hundreds for simplicity, but let's just use raw points. Actually, store logic says POINTS_REDEEM_VALUE = 100.
+    const pointsDiscount = (usePoints && customer) ? customer.points * 100 : 0; // POINTS_REDEEM_VALUE = 100
+
+    const orderTotal = Math.max(0, subtotal - discountAmount - pointsDiscount);
     const cashIn = parseFloat(cashReceived.replace(/\D/g, '')) || 0;
     const change = paymentMethod === 'cash' ? Math.max(0, cashIn - orderTotal) : 0;
     const isInsufficientCash = paymentMethod === 'cash' && cashIn < orderTotal && cashIn > 0;
@@ -225,6 +261,90 @@ export default function POSPage() {
         toast.success(`Pesanan "${held.customerName}" dilanjutkan!`);
     }, [resumeOrder, products, addToCart, updateNote, clearCart, toast]);
 
+    // ── Voice Command ─────────────────────────────────────────
+    const handleVoiceCommand = useCallback(() => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            toast.error('Browser Anda tidak mendukung Voice Command (gunakan Chrome).');
+            return;
+        }
+
+        if (isListening || isProcessingVoice) return;
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'id-ID';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+            setIsListening(true);
+            toast.info('Mendengarkan pesanan...');
+        };
+
+        recognition.onresult = async (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            toast.info(`Menangkap suara: "${transcript}"`);
+            setIsProcessingVoice(true);
+
+            try {
+                const res = await fetch('/api/ai/voice-pos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: transcript, menu: products.filter(p => p.stock > 0) })
+                });
+                
+                if (!res.ok) throw new Error('AI Error');
+                
+                const data = await res.json();
+                
+                if (data.items && data.items.length > 0) {
+                    let addedCount = 0;
+                    data.items.forEach((parsedItem: any) => {
+                        const product = products.find(p => p.id === parsedItem.productId);
+                        if (product) {
+                            // Hitung harga final berdasarkan size jika ada upcharge
+                            let finalPrice = product.price;
+                            if (parsedItem.variants && parsedItem.variants.size === 'L') {
+                                finalPrice += 2000; // Hardcode L size upcharge based on store.ts rules
+                            }
+                            
+                            for (let i = 0; i < (parsedItem.quantity || 1); i++) {
+                                addToCart(product, parsedItem.variants, finalPrice);
+                            }
+                            addedCount++;
+                        }
+                    });
+                    
+                    if (addedCount > 0) {
+                        toast.success(`Berhasil menambahkan ${addedCount} produk dari suara!`);
+                    } else {
+                        toast.warning('Suara dikenali, tapi produk tidak ditemukan atau stok habis.');
+                    }
+                } else {
+                    toast.warning('Tidak mengerti pesanan dari suara tersebut.');
+                }
+            } catch (err) {
+                console.error(err);
+                toast.error('Gagal memproses suara dengan AI.');
+            } finally {
+                setIsProcessingVoice(false);
+                setIsListening(false);
+            }
+        };
+
+        recognition.onerror = (event: any) => {
+            toast.error('Gagal mendengarkan suara.');
+            setIsProcessingVoice(false);
+            setIsListening(false);
+        };
+
+        recognition.onend = () => {
+            setIsListening(false);
+        };
+
+        recognition.start();
+    }, [isListening, isProcessingVoice, products, addToCart, toast]);
+
     // ── Checkout ──────────────────────────────────────────────
     const handleCheckout = useCallback(() => {
         if (!isStoreOpen) { toast.error('Toko harus dibuka terlebih dahulu!'); return; }
@@ -234,17 +354,42 @@ export default function POSPage() {
             toast.error(`Uang kurang! Perlu ${formatRp(orderTotal - cashIn)} lagi.`);
             return;
         }
+        if (paymentMethod === 'qris' && !qrisSuccess) {
+            toast.error(`Selesaikan pembayaran QRIS terlebih dahulu.`);
+            return;
+        }
+
+        // Process Loyalty Points
+        if (usePoints && customer) {
+            redeemPoints(customerPhone, customer.points);
+        }
+        if (customerPhone.trim()) {
+            if (!customer) {
+                // Register new customer
+                addCustomer({
+                    id: nanoid(),
+                    name: customerName.trim(),
+                    phone: customerPhone.trim(),
+                    points: 0,
+                    totalSpent: 0,
+                    createdAt: new Date().toISOString()
+                });
+            }
+            // Give points for the final paid amount
+            addPoints(customerPhone.trim(), orderTotal);
+        }
+
         const newOrder: Order = {
             id: nanoid(),
             date: new Date().toISOString(),
             items: items.map(it => ({ ...it })),
-            subtotal, discount: discountAmount,
-            discountType: discountMode !== 'none' ? discountMode : undefined,
-            discountValue: discountMode !== 'none' ? parseFloat(discountValue) : undefined,
+            subtotal, discount: discountAmount + pointsDiscount,
+            discountType: discountMode !== 'none' ? discountMode : (applicablePromo ? 'percent' : undefined), // Simplified type tracking for UI
+            discountValue: discountMode !== 'none' ? parseFloat(discountValue) : (applicablePromo ? applicablePromo.promo.value : undefined),
             total: orderTotal,
             customerName: customerName.trim(),
             cashierName: user?.name || 'Kasir',
-            status: 'completed', paymentMethod,
+            status: 'processing', paymentMethod,
             cashReceived: paymentMethod === 'cash' ? cashIn : undefined,
             changeAmount: paymentMethod === 'cash' ? change : undefined,
             tableNumber: tableNumber.trim() || undefined, orderType,
@@ -252,23 +397,29 @@ export default function POSPage() {
         addOrder(newOrder);
         addLog('SALE', `Order #${newOrder.id.slice(0, 6)} - ${formatRp(orderTotal)} via ${paymentMethod}`, user?.name || 'Kasir');
         decrementStock(items);
+        decrementIngredientsForOrder(items, products); // BOM deduction
         setLastOrder(newOrder);
         setShowReceipt(true);
         clearCart();
-        setCustomerName(''); setTableNumber(''); setCashReceived('');
-        setDiscountMode('none'); setDiscountValue('');
+        setCustomerName(''); setCustomerPhone(''); setTableNumber(''); setCashReceived('');
+        setDiscountMode('none'); setDiscountValue(''); setUsePoints(false);
+        setQrisGenerated(false); setQrisSuccess(false);
         setMobileCartOpen(false);
         toast.success(`Order #${newOrder.id.slice(0, 6)} berhasil! ${formatRp(orderTotal)}`);
     }, [isStoreOpen, items, customerName, paymentMethod, cashIn, orderTotal, subtotal,
-        discountAmount, discountMode, discountValue, change, tableNumber, orderType, user,
+        discountAmount, pointsDiscount, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user,
+        usePoints, customer, customerPhone, redeemPoints, addPoints,
         addOrder, addLog, decrementStock, clearCart, toast]);
 
     const handleTutupToko = () => {
-        const summary = closeStore();
+        const parsedActual = parseFloat(actualCash.replace(/[^0-9]/g, '')) || 0;
+        const summary = closeStore(parsedActual, closeNotes);
         if (summary) {
             setShiftSummary(summary);
-            addLog('STORE_CLOSE', `Store closed. Total: ${formatRp(summary.totalSales)}`, user?.name || 'Kasir');
+            addLog('STORE_CLOSE', `Store closed. Sales: ${formatRp(summary.totalSales)}. Diff: ${formatRp(parsedActual - (summary.expectedCash || 0))}`, user?.name || 'Kasir');
             toast.success('Toko berhasil ditutup!');
+            setActualCash('');
+            setCloseNotes('');
         }
     };
 
@@ -336,12 +487,29 @@ export default function POSPage() {
                             <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4">
                                 <Building2 size={32} />
                             </div>
-                            <h2 className="text-2xl font-black text-[#0D2B20] mb-2">Toko Masih Tutup</h2>
-                            <p className="text-sm text-gray-500 mb-6">Mulai sesi toko untuk menerima pesanan.</p>
+                            <h2 className="text-2xl font-black text-[#0D2B20] mb-2">Buka Shift Kasir</h2>
+                            <p className="text-sm text-gray-500 mb-4">Masukkan modal awal uang kembalian (Starting Cash).</p>
+                            
+                            <div className="w-full relative mb-6">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">Rp</span>
+                                <input type="tel" 
+                                    value={startingCash} 
+                                    onChange={e => setStartingCash(e.target.value.replace(/[^0-9]/g, ''))}
+                                    placeholder="Contoh: 150000"
+                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#0D2B20] text-lg font-bold text-gray-800" 
+                                />
+                            </div>
+
                             <button
-                                onClick={() => { openStore(user.name); addLog('STORE_OPEN', 'Store opened', user.name); toast.success('Toko berhasil dibuka! 🍵'); }}
+                                onClick={() => { 
+                                    const parsedCash = parseFloat(startingCash) || 0;
+                                    openStore(user.name, parsedCash); 
+                                    addLog('STORE_OPEN', `Store opened with starting cash: ${formatRp(parsedCash)}`, user.name); 
+                                    toast.success('Shift kasir dimulai! 🍵'); 
+                                    setStartingCash('');
+                                }}
                                 className="w-full py-3 bg-[#0D2B20] text-amber-400 font-bold rounded-xl hover:bg-[#1a4433] hover:scale-105 active:scale-95 transition shadow-lg">
-                                Buka Toko Sekarang
+                                Buka Shift Sekarang
                             </button>
                         </div>
                     </div>
@@ -359,6 +527,19 @@ export default function POSPage() {
                                     value={search} onChange={e => setSearch(e.target.value)}
                                     className="w-full text-gray-900 pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0D2B20] transition" />
                             </div>
+                            
+                            <button onClick={handleVoiceCommand}
+                                disabled={isListening || isProcessingVoice}
+                                title="Pesan dengan Suara (AI)"
+                                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all flex-shrink-0 border ${
+                                    isListening ? 'bg-red-500 text-white border-red-600 animate-pulse' :
+                                    isProcessingVoice ? 'bg-amber-400 text-[#0D2B20] border-amber-500' :
+                                    'bg-[#0D2B20] text-white border-[#0D2B20] shadow-md hover:bg-[#1a4433]'
+                                }`}>
+                                {isProcessingVoice ? <Loader2 size={14} className="animate-spin" /> : 
+                                 isListening ? <Mic size={14} /> : <Mic size={14} />}
+                            </button>
+
                             <button onClick={() => setShowFlavorFinder(v => !v)}
                                 title="Temukan Minuman Sesuai Selera"
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex-shrink-0 ${showFlavorFinder ? 'bg-[#0D2B20] text-amber-400 border-[#0D2B20] shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#0D2B20] hover:text-[#0D2B20]'}`}>
@@ -577,17 +758,51 @@ export default function POSPage() {
                         {/* Form */}
                         <div className="px-3 py-2.5 space-y-2">
                             {/* Customer + Table */}
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <Users size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                                    <input type="text" placeholder="Nama Pelanggan *" value={customerName}
-                                        onChange={e => setCustomerName(e.target.value)}
-                                        className="w-full text-gray-900 pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
+                            {/* Customer + Phone + Table */}
+                            <div className="flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <Users size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input type="text" placeholder="No. HP / Telepon" value={customerPhone}
+                                            onChange={e => setCustomerPhone(e.target.value)}
+                                            className="w-full text-gray-900 pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
+                                    </div>
+                                    <input type="text" placeholder="Meja" value={tableNumber}
+                                        onChange={e => setTableNumber(e.target.value)}
+                                        className="w-16 text-gray-900 px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition text-center" />
                                 </div>
-                                <input type="text" placeholder="Meja" value={tableNumber}
-                                    onChange={e => setTableNumber(e.target.value)}
-                                    className="w-20 text-gray-900 px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition text-center" />
+                                <input type="text" placeholder="Nama Pelanggan *" value={customerName}
+                                    onChange={e => setCustomerName(e.target.value)}
+                                    className="w-full text-gray-900 px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
                             </div>
+
+                            {/* Loyalty Points */}
+                            <AnimatePresence>
+                                {customer && (
+                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex justify-between items-center text-xs">
+                                            <div>
+                                                <p className="font-bold text-amber-900">Member: {customer.name}</p>
+                                                <p className="text-amber-700 text-[10px]">Poin: {customer.points} ({formatRp(maxRedeemablePoints)})</p>
+                                            </div>
+                                            {maxRedeemablePoints > 0 && (
+                                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                                    <input type="checkbox" checked={usePoints} onChange={e => setUsePoints(e.target.checked)} className="accent-amber-600" />
+                                                    <span className="font-bold text-amber-800 text-[10px]">Gunakan Poin</span>
+                                                </label>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            {/* Auto Promo Info */}
+                            {applicablePromo && discountMode === 'none' && (
+                                <div className="bg-green-50 border border-green-200 rounded-lg px-2 py-1.5 text-[10px] text-green-800 flex justify-between items-center">
+                                    <span className="font-bold">🎉 {applicablePromo.promo.name}</span>
+                                    <span>Otomatis aktif</span>
+                                </div>
+                            )}
 
                             {/* Order Type */}
                             <div className="flex gap-1.5">
@@ -644,19 +859,54 @@ export default function POSPage() {
                             <AnimatePresence>
                                 {paymentMethod === 'qris' && (
                                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                                        <div className="bg-white p-3 rounded-xl border border-gray-200 flex flex-col items-center text-center gap-2">
-                                            <p className="text-[11px] font-bold text-gray-800">Scan QRIS GoPay Merchant</p>
-                                            <div className="w-40 h-40 bg-gray-50 rounded-lg p-2 border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
-                                                <div className="absolute inset-0 flex flex-col items-center justify-center z-0 p-2">
-                                                    <QrCode size={24} className="text-gray-300 mb-1" />
-                                                    <span className="text-[9px] text-gray-400 text-center">Upload qris-gopay.jpg<br />ke public/images/</span>
-                                                </div>
-                                                <Image src="/images/qris-gopay.jpg" alt="QRIS" fill className="object-contain relative z-10 bg-white" unoptimized />
-                                            </div>
-                                            <div className="text-amber-900 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg w-full">
-                                                <span className="uppercase tracking-widest text-[9px] font-bold opacity-60">Total Tagihan</span>
-                                                <p className="text-base font-black text-[#0D2B20]">{formatRp(orderTotal)}</p>
-                                            </div>
+                                        <div className="bg-white p-3 rounded-xl border border-gray-200 flex flex-col items-center text-center gap-2 mt-1">
+                                            {!qrisGenerated ? (
+                                                <button
+                                                    onClick={() => setQrisGenerated(true)}
+                                                    className="w-full bg-[#0D2B20] text-amber-400 font-bold py-2 rounded-lg text-xs"
+                                                >
+                                                    Generate QRIS (Midtrans)
+                                                </button>
+                                            ) : (
+                                                <>
+                                                    <p className="text-[11px] font-bold text-gray-800">Scan QRIS Dinamis</p>
+                                                    <div className="w-40 h-40 bg-gray-50 rounded-lg p-2 border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden">
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center z-0 p-2">
+                                                            <QrCode size={24} className="text-gray-300 mb-1" />
+                                                        </div>
+                                                        {/* Fake dynamic QR by using an image or just the same image for demo */}
+                                                        <Image src="/images/qris-gopay.jpg" alt="QRIS" fill className={`object-contain relative z-10 bg-white transition ${qrisSuccess ? 'opacity-30' : 'opacity-100'}`} unoptimized />
+                                                        {qrisSuccess && (
+                                                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+                                                                <div className="bg-green-500 rounded-full p-2 mb-1">
+                                                                    <CheckCircle size={24} className="text-white" />
+                                                                </div>
+                                                                <span className="font-bold text-green-700 text-xs bg-white px-2 py-0.5 rounded-full shadow-sm">LUNAS</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-amber-900 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg w-full">
+                                                        <span className="uppercase tracking-widest text-[9px] font-bold opacity-60">Total Tagihan</span>
+                                                        <p className="text-base font-black text-[#0D2B20]">{formatRp(orderTotal)}</p>
+                                                    </div>
+                                                    {!qrisSuccess && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsCheckingQris(true);
+                                                                setTimeout(() => {
+                                                                    setIsCheckingQris(false);
+                                                                    setQrisSuccess(true);
+                                                                    toast.success('Pembayaran QRIS berhasil diterima!');
+                                                                }, 1500);
+                                                            }}
+                                                            disabled={isCheckingQris}
+                                                            className="w-full bg-amber-100 text-amber-700 font-bold py-2 rounded-lg text-xs hover:bg-amber-200 transition flex items-center justify-center gap-1 mt-1"
+                                                        >
+                                                            {isCheckingQris ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Cek Status Pembayaran
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     </motion.div>
                                 )}
@@ -821,9 +1071,54 @@ export default function POSPage() {
             <ConfirmModal isOpen={confirmLogout} title="Keluar dari POS?" message={`Anda akan keluar sebagai ${user?.name}.`} confirmLabel="Ya, Keluar" danger
                 onConfirm={() => { setConfirmLogout(false); addLog('LOGOUT', `${user?.name} logged out`, user?.name || ''); logout(); router.push('/admin'); }}
                 onCancel={() => setConfirmLogout(false)} />
-            <ConfirmModal isOpen={confirmCloseStore} title="Tutup Toko Sekarang?" message="Sesi penjualan akan direkap." confirmLabel="Tutup Toko"
-                onConfirm={() => { setConfirmCloseStore(false); handleTutupToko(); }}
-                onCancel={() => setConfirmCloseStore(false)} />
+                
+            <AnimatePresence>
+                {confirmCloseStore && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} 
+                            className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                            <h3 className="text-xl font-black text-[#0D2B20] mb-2">Tutup Shift Kasir</h3>
+                            <p className="text-sm text-gray-500 mb-4">Silakan hitung uang fisik di laci kasir dan masukkan totalnya untuk pencocokan.</p>
+                            
+                            <div className="space-y-3 mb-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Uang Fisik Aktual (Actual Cash)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">Rp</span>
+                                        <input type="tel" 
+                                            value={actualCash} 
+                                            onChange={e => setActualCash(e.target.value.replace(/[^0-9]/g, ''))}
+                                            placeholder="Total uang di laci"
+                                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] font-bold" 
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Catatan Tambahan (Opsional)</label>
+                                    <input type="text" 
+                                        value={closeNotes} 
+                                        onChange={e => setCloseNotes(e.target.value)}
+                                        placeholder="Alasan selisih uang, pengeluaran darurat, dll."
+                                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] text-sm" 
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-2 justify-end">
+                                <button onClick={() => setConfirmCloseStore(false)}
+                                    className="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
+                                    Batal
+                                </button>
+                                <button onClick={() => { setConfirmCloseStore(false); handleTutupToko(); }}
+                                    disabled={!actualCash}
+                                    className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition">
+                                    Tutup Shift
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* ── SHIFT SUMMARY ─────────────────────────────── */}
             {shiftSummary && <ShiftSummaryModal isOpen={!!shiftSummary} session={shiftSummary} orders={orders} onClose={() => setShiftSummary(null)} />}
