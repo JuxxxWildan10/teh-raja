@@ -1,3 +1,7 @@
+/**
+ * @file Firebase Client Configuration
+ * @description Inisialisasi SDK Firebase untuk frontend. Termasuk Auth, Firestore, dan Realtime Database.
+ */
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";

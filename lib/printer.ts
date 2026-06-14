@@ -1,3 +1,7 @@
+/**
+ * @file Thermal Printer Service (Web Bluetooth)
+ * @description Modul utilitas untuk menghubungkan aplikasi browser dengan printer struk thermal (Bluetooth) dengan mencetak perintah ESC/POS.
+ */
 import { Order, formatVariantLabel } from './store';
 
 // Default printer configs (80mm)

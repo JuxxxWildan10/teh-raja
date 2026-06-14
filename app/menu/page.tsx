@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * @file Menu Catalog Page
+ * @description Halaman Menu interaktif untuk pelanggan. Dilengkapi dengan sistem rekomendasi (Quiz AI) untuk mencocokkan rasa teh dengan profil pengguna.
+ */
+
+
 import Navbar from "@/components/Navbar";
 import RecommendationQuiz from "@/components/RecommendationQuiz";
 import OrderStatusOverlay from "@/components/OrderStatusOverlay"; // [NEW] 

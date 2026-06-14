@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * @file POS (Point of Sale) Page
+ * @description Halaman utama Kasir untuk memproses pesanan, memilih metode pembayaran, dan sinkronisasi data offline-first.
+ * Menggunakan Zustand untuk state management lokal dan Firebase untuk sinkronisasi Realtime.
+ */
+
+
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";

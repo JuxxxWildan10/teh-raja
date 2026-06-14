@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * @file Receipt Modal Component
+ * @description Komponen tampilan UI untuk struk belanja. Menyediakan opsi untuk mencetak via Bluetooth Thermal atau mendownloadnya sebagai gambar.
+ */
+
+
 import { useRef } from "react";
 import { Order, formatVariantLabel } from "@/lib/store";
 import { X, Printer, Share2, Bluetooth } from "lucide-react";

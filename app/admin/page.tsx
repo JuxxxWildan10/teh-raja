@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * @file Admin Dashboard
+ * @description Halaman Panel Kendali (Admin). Berfungsi untuk melihat grafik penjualan, laporan harian, manajemen stok produk, pengaturan promo, dan manajemen pelanggan.
+ * Terlindungi oleh Firebase Authentication.
+ */
+
+
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useProductStore, useSalesStore, useAuthStore, usePromoStore, useCustomerStore, useInventoryStore, ExtendedProduct, Order } from "@/lib/store";

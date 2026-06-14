@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * @file KDS (Kitchen Display System) Page
+ * @description Layar khusus dapur untuk menerima pesanan secara Real-time dari kasir. Mendukung notifikasi suara (audio alert) dan perubahan status pesanan.
+ */
+
+
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore, useSalesStore, formatVariantLabel } from "@/lib/store";

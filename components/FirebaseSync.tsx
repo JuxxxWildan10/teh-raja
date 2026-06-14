@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * @file Firebase Realtime Synchronizer
+ * @description Komponen tersembunyi yang bertugas di latar belakang. Bertanggung jawab memantau koneksi internet, mengunggah data kasir yang tertunda, dan mendengarkan pembaruan pesanan live.
+ */
+
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, set as firebaseSet, query, limitToLast } from "firebase/database";

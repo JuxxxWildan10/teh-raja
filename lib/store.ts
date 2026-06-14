@@ -1,3 +1,8 @@
+/**
+ * @file Global State Management (Zustand)
+ * @description Jantung arsitektur offline-first dari aplikasi. Semua logika penyimpanan lokal (Cart, Sales, Products, dll) dikonfigurasi di sini.
+ * Menggunakan idb-keyval (IndexedDB) untuk kapabilitas penyimpanan tanpa batas.
+ */
 import { create } from 'zustand';
 import { persist, StateStorage, createJSONStorage } from 'zustand/middleware';
 import { get, set as idbSet, del } from 'idb-keyval';

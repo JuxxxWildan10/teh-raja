@@ -1,3 +1,7 @@
+/**
+ * @file Root Layout
+ * @description Struktur dasar HTML (Layout) dari aplikasi Next.js. Mendeklarasikan meta tag untuk PWA (Progressive Web App) dan memuat komponen FirebaseSync.
+ */
 import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
