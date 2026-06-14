@@ -1,5 +1,18 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, StateStorage, createJSONStorage } from 'zustand/middleware';
+import { get, set as idbSet, del } from 'idb-keyval';
+
+const idbStorage: StateStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    return (await get(name)) || null;
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    await idbSet(name, value);
+  },
+  removeItem: async (name: string): Promise<void> => {
+    await del(name);
+  },
+};
 import { Product, products as initialProducts } from '@/data/menu';
 import { rtdb } from '@/lib/firebase'; // [NEW]
 import { ref, set as firebaseSet, update as firebaseUpdate } from 'firebase/database'; // [NEW]
@@ -253,7 +266,7 @@ export const useAuthStore = create<AuthState>()(
             removeUser: (id) => set((s) => ({ users: s.users.filter(u => u.id !== id) })),
             updateUser: (id, updated) => set((s) => ({ users: s.users.map(u => u.id === id ? { ...u, ...updated } : u) })),
         }),
-        { name: 'teh-raja-auth' }
+        { name: 'teh-raja-auth', storage: createJSONStorage(() => idbStorage) }
     )
 );
 
@@ -323,7 +336,7 @@ export const useCartStore = create<CartState>()(
             clearCart: () => set({ items: [] }),
             total: () => get().items.reduce((acc, item) => acc + (item.finalPrice ?? item.price) * item.quantity, 0),
         }),
-        { name: 'teh-raja-cart-v2' }  // Bumped version to clear old incompatible cache
+        { name: 'teh-raja-cart-v2', storage: createJSONStorage(() => idbStorage) }  // Bumped version to clear old incompatible cache
     )
 );
 
@@ -408,7 +421,7 @@ export const useProductStore = create<ProductState>()(
                 })
             }
         }),
-        { name: 'teh-raja-products-v4' }
+        { name: 'teh-raja-products-v4', storage: createJSONStorage(() => idbStorage) }
     )
 );
 
@@ -592,7 +605,7 @@ export const useSalesStore = create<SalesState>()(
                 firebaseSet(ref(rtdb, 'sessions'), null).catch(err => console.error(err));
             }
         }),
-        { name: 'teh-raja-sales-v3' }
+        { name: 'teh-raja-sales-v3', storage: createJSONStorage(() => idbStorage) }
     )
 );
 // ══════════════════════════════════════════════════════
@@ -670,7 +683,7 @@ export const usePromoStore = create<PromoState>()(
                 return best;
             },
         }),
-        { name: 'teh-raja-promos-v1' }
+        { name: 'teh-raja-promos-v1', storage: createJSONStorage(() => idbStorage) }
     )
 );
 
@@ -724,7 +737,7 @@ export const useCustomerStore = create<CustomerState>()(
             getRedeemValue: (points) => points * POINTS_REDEEM_VALUE,
             getPointsForOrder: (total) => Math.floor(total * POINTS_PER_RUPIAH),
         }),
-        { name: 'teh-raja-customers-v1' }
+        { name: 'teh-raja-customers-v1', storage: createJSONStorage(() => idbStorage) }
     )
 );
 
@@ -792,7 +805,7 @@ export const useInventoryStore = create<InventoryState>()(
                 });
             }
         }),
-        { name: 'teh-raja-inventory-v1' }
+        { name: 'teh-raja-inventory-v1', storage: createJSONStorage(() => idbStorage) }
     )
 );
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { rtdb } from "@/lib/firebase";
-import { ref, onValue, set as firebaseSet } from "firebase/database";
+import { ref, onValue, set as firebaseSet, query, limitToLast } from "firebase/database";
 import { useSalesStore, useCartStore, useProductStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
 import { Bell, BellOff } from "lucide-react";
 
@@ -64,8 +64,9 @@ export default function FirebaseSync() {
 
     // ── 3. Firebase Realtime DB Sync ──────────────────────────
     useEffect(() => {
-        const ordersRef = ref(rtdb, 'orders');
-        const unsubscribe = onValue(ordersRef, (snapshot) => {
+        // Paginasi: Hanya ambil 100 order terakhir
+        const ordersQuery = query(ref(rtdb, 'orders'), limitToLast(100));
+        const unsubscribe = onValue(ordersQuery, (snapshot) => {
             setIsConnected(true);
             setErrorMsg(null);
             const data = snapshot.val();
@@ -100,8 +101,9 @@ export default function FirebaseSync() {
             }
         });
 
-        const logsRef = ref(rtdb, 'logs');
-        const unsubLogs = onValue(logsRef, (snapshot) => {
+        // Paginasi: Hanya ambil 100 log terakhir
+        const logsQuery = query(ref(rtdb, 'logs'), limitToLast(100));
+        const unsubLogs = onValue(logsQuery, (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 const loadedLogs: ActivityLog[] = Object.values(data);
