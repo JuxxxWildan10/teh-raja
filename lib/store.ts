@@ -4,6 +4,8 @@ import { Product, products as initialProducts } from '@/data/menu';
 import { rtdb } from '@/lib/firebase'; // [NEW]
 import { ref, set as firebaseSet, update as firebaseUpdate } from 'firebase/database'; // [NEW]
 import { nanoid } from 'nanoid';
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 
 // --- Types ---
 export type Role = 'admin' | 'cashier';
@@ -195,8 +197,8 @@ interface AuthState {
     user: User | null;
     users: User[]; // [NEW] Staff accounts
     login: (username: string, role: Role) => User | null; // Mengembalikan user
-    loginWithPassword: (username: string, password: string) => User | null;
-    logout: () => void;
+    loginWithPassword: (username: string, password: string) => Promise<User | null>;
+    logout: () => Promise<void>;
     addUser: (user: User) => void;
     removeUser: (id: string) => void;
     updateUser: (id: string, updated: Partial<User>) => void;
@@ -219,15 +221,34 @@ export const useAuthStore = create<AuthState>()(
                 set({ user: u });
                 return u;
             },
-            loginWithPassword: (username, password) => {
+            loginWithPassword: async (username, password) => {
                 const found = get().users.find(u => u.username === username && u.password === password);
                 if (found) {
+                    // Firebase Auth integration
+                    const safePassword = password.length < 6 ? password + '123456' : password;
+                    const email = `${username}@tehraja.local`;
+                    try {
+                        await signInWithEmailAndPassword(auth, email, safePassword);
+                    } catch (err: any) {
+                        try {
+                            await createUserWithEmailAndPassword(auth, email, safePassword);
+                        } catch (e) {
+                            console.error("Firebase Auth Error:", e);
+                        }
+                    }
                     set({ user: found });
                     return found;
                 }
                 return null;
             },
-            logout: () => set({ user: null }),
+            logout: async () => {
+                try {
+                    await signOut(auth);
+                } catch (e) {
+                    console.error("SignOut Error", e);
+                }
+                set({ user: null });
+            },
             addUser: (u) => set((s) => ({ users: [...s.users, u] })),
             removeUser: (id) => set((s) => ({ users: s.users.filter(u => u.id !== id) })),
             updateUser: (id, updated) => set((s) => ({ users: s.users.map(u => u.id === id ? { ...u, ...updated } : u) })),

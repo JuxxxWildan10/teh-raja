@@ -1,0 +1,24 @@
+{
+  "rules": {
+    "products": {
+      // Anyone can read products (for POS and Ordering App)
+      ".read": true,
+      // Only authenticated users can write/modify products (Admin/Kasir)
+      ".write": "auth != null"
+    },
+    "orders": {
+      // Authenticated users can read orders
+      ".read": "auth != null",
+      // Authenticated users can create/update orders
+      ".write": "auth != null"
+    },
+    "logs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "sessions": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

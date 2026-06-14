@@ -57,7 +57,17 @@ export default function AdminPage() {
 
     const { promos, addPromo, updatePromo, deletePromo, togglePromo } = usePromoStore();
     const { customers } = useCustomerStore();
-    const { ingredients } = useInventoryStore(); // [NEW]
+    const { ingredients, addIngredient, updateIngredient, deleteIngredient } = useInventoryStore();
+
+    // ── Inventory CRUD State ──────────────────────────────────────
+    const [ingModalOpen, setIngModalOpen] = useState(false);
+    const [editingIngId, setEditingIngId] = useState<string | null>(null);
+    const [ingForm, setIngForm] = useState({ name: '', stock: 0, unit: 'ml' as 'ml' | 'gram' | 'pcs', minStockThreshold: 100 });
+
+    // ── Promo CRUD State ──────────────────────────────────────────
+    const [promoModalOpen, setPromoModalOpen] = useState(false);
+    const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
+    const [promoForm, setPromoForm] = useState({ name: '', type: 'percent' as 'percent' | 'amount' | 'happy_hour', value: 10, minSubtotal: '', startHour: 9, endHour: 17, description: '', isActive: true });
 
     // UI State
     const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory'>('dashboard');
@@ -86,10 +96,10 @@ export default function AdminPage() {
 
     useEffect(() => { setIsClient(true); }, []);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoginError("");
-        const loggedInUser = loginWithPassword(loginUsername, loginPassword);
+        const loggedInUser = await loginWithPassword(loginUsername, loginPassword);
         if (loggedInUser) {
             addLog("LOGIN", `${loggedInUser.role === 'admin' ? 'Admin' : 'Cashier'} logged in`, loggedInUser.name);
             if (loggedInUser.role === 'cashier') {
@@ -100,9 +110,9 @@ export default function AdminPage() {
         }
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         addLog("LOGOUT", `${user?.name} logged out`, user?.name || "Unknown");
-        logout();
+        await logout();
     };
 
     const openAddModal = () => {
@@ -202,20 +212,81 @@ export default function AdminPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    orders: orders.slice(-100), // pass last 100 orders
+                    orders: orders.slice(-100),
                     products: products.map(p => ({ id: p.id, name: p.name, stock: p.stock, category: p.category }))
                 })
             });
-            if (!res.ok) throw new Error("Gagal mengambil data AI");
             const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || `HTTP Error ${res.status}`);
+            }
+            if (!data.forecast) throw new Error('Respon AI kosong.');
             setAiForecastText(data.forecast);
             toast.success("AI berhasil menganalisis penjualan!");
-        } catch (err) {
-            console.error(err);
-            toast.error("Gagal melakukan prediksi AI.");
+        } catch (err: any) {
+            console.error('[AI Forecast Error]', err);
+            toast.error(`Gagal: ${err.message}`);
         } finally {
             setIsForecasting(false);
         }
+    };
+
+    // ── Inventory CRUD Handlers ─────────────────────────────────
+    const openAddIng = () => {
+        setEditingIngId(null);
+        setIngForm({ name: '', stock: 0, unit: 'ml', minStockThreshold: 100 });
+        setIngModalOpen(true);
+    };
+    const openEditIng = (ing: typeof ingredients[0]) => {
+        setEditingIngId(ing.id);
+        setIngForm({ name: ing.name, stock: ing.stock, unit: ing.unit, minStockThreshold: ing.minStockThreshold });
+        setIngModalOpen(true);
+    };
+    const saveIng = () => {
+        if (!ingForm.name.trim()) { toast.error('Nama bahan wajib diisi!'); return; }
+        if (editingIngId) {
+            updateIngredient(editingIngId, ingForm);
+            toast.success(`Bahan "${ingForm.name}" berhasil diperbarui.`);
+        } else {
+            addIngredient({ id: nanoid(), ...ingForm });
+            toast.success(`Bahan "${ingForm.name}" berhasil ditambahkan!`);
+        }
+        setIngModalOpen(false);
+    };
+
+    // ── Promo CRUD Handlers ─────────────────────────────────────
+    const openAddPromo = () => {
+        setEditingPromoId(null);
+        setPromoForm({ name: '', type: 'percent', value: 10, minSubtotal: '', startHour: 9, endHour: 17, description: '', isActive: true });
+        setPromoModalOpen(true);
+    };
+    const openEditPromo = (promo: typeof promos[0]) => {
+        setEditingPromoId(promo.id);
+        setPromoForm({
+            name: promo.name, type: promo.type, value: promo.value,
+            minSubtotal: promo.minSubtotal ? String(promo.minSubtotal) : '',
+            startHour: promo.startHour ?? 9, endHour: promo.endHour ?? 17,
+            description: promo.description ?? '', isActive: promo.isActive
+        });
+        setPromoModalOpen(true);
+    };
+    const savePromo = () => {
+        if (!promoForm.name.trim()) { toast.error('Nama promo wajib diisi!'); return; }
+        const payload = {
+            name: promoForm.name, type: promoForm.type, value: Number(promoForm.value),
+            minSubtotal: promoForm.minSubtotal ? Number(promoForm.minSubtotal) : undefined,
+            startHour: promoForm.type === 'happy_hour' ? promoForm.startHour : undefined,
+            endHour: promoForm.type === 'happy_hour' ? promoForm.endHour : undefined,
+            description: promoForm.description, isActive: promoForm.isActive,
+        };
+        if (editingPromoId) {
+            updatePromo(editingPromoId, payload);
+            toast.success(`Promo "${promoForm.name}" diperbarui!`);
+        } else {
+            addPromo({ id: nanoid(), ...payload });
+            toast.success(`Promo "${promoForm.name}" ditambahkan!`);
+        }
+        setPromoModalOpen(false);
     };
 
     // Filtered orders
@@ -1029,34 +1100,55 @@ export default function AdminPage() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
                             <div>
                                 <h2 className="text-lg md:text-xl font-bold font-serif">Inventaris & Bill of Materials</h2>
-                                <p className="text-sm text-gray-500">Pantau stok bahan baku dan peringatan stok menipis.</p>
+                                <p className="text-sm text-gray-500">Kelola stok bahan baku dan pantau peringatan stok menipis.</p>
                             </div>
+                            <button onClick={openAddIng} className="bg-[#0D2B20] text-amber-400 px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#1a3d2e] transition flex items-center gap-2">
+                                <Plus size={16} /> Tambah Bahan
+                            </button>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {ingredients.map(ing => {
-                                const isLowStock = ing.stock <= ing.minStockThreshold;
-                                return (
-                                    <div key={ing.id} className={`p-4 border rounded-xl relative ${isLowStock ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <h3 className="font-bold text-gray-800">{ing.name}</h3>
-                                                <p className="text-xs text-gray-500 font-mono mt-1">Batas Minimum: {ing.minStockThreshold} {ing.unit}</p>
-                                            </div>
-                                            {isLowStock && <AlertTriangle size={16} className="text-red-500 animate-pulse" />}
-                                        </div>
-                                        <div className="mt-3 flex items-end justify-between">
-                                            <span className={`text-2xl font-black ${isLowStock ? 'text-red-600' : 'text-[#0D2B20]'}`}>
-                                                {ing.stock.toLocaleString('id-ID')} <span className="text-sm font-normal">{ing.unit}</span>
-                                            </span>
-                                        </div>
-                                        {isLowStock && (
-                                            <p className="text-[10px] text-red-600 font-bold mt-2 bg-red-100 px-2 py-1 rounded w-fit">
-                                                Stok Menipis! Segera Restock.
-                                            </p>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
+                                    <tr>
+                                        <th className="p-4 rounded-tl-lg">Nama Bahan</th>
+                                        <th className="p-4">Satuan</th>
+                                        <th className="p-4 text-right">Stok Saat Ini</th>
+                                        <th className="p-4 text-right">Min. Stok</th>
+                                        <th className="p-4 text-center">Status</th>
+                                        <th className="p-4 text-right rounded-tr-lg">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {ingredients.map(ing => {
+                                        const isLow = ing.stock <= ing.minStockThreshold;
+                                        return (
+                                            <tr key={ing.id} className={`hover:bg-gray-50 transition ${isLow ? 'bg-red-50' : ''}`}>
+                                                <td className="p-4 font-bold text-gray-800">{ing.name}</td>
+                                                <td className="p-4 text-sm text-gray-500 font-mono uppercase">{ing.unit}</td>
+                                                <td className={`p-4 text-right font-black text-lg ${isLow ? 'text-red-600' : 'text-[#0D2B20]'}`}>
+                                                    {ing.stock.toLocaleString('id-ID')}
+                                                </td>
+                                                <td className="p-4 text-right text-sm text-gray-500">{ing.minStockThreshold.toLocaleString('id-ID')}</td>
+                                                <td className="p-4 text-center">
+                                                    {isLow
+                                                        ? <span className="inline-flex items-center gap-1 bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full"><AlertTriangle size={10} /> Menipis</span>
+                                                        : <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full"><CheckCircle size={10} /> Aman</span>
+                                                    }
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <div className="flex gap-2 justify-end">
+                                                        <button onClick={() => openEditIng(ing)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"><Edit size={14} /></button>
+                                                        <button onClick={() => { if (confirm(`Hapus bahan "${ing.name}"?`)) { deleteIngredient(ing.id); toast.success('Bahan dihapus.'); } }} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"><Trash size={14} /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {ingredients.length === 0 && (
+                                        <tr><td colSpan={6} className="p-8 text-center text-gray-400">Belum ada bahan baku terdaftar. Klik "Tambah Bahan".</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
@@ -1067,57 +1159,54 @@ export default function AdminPage() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
                             <div>
                                 <h2 className="text-lg md:text-xl font-bold font-serif">Promo Engine</h2>
-                                <p className="text-sm text-gray-500">Kelola diskon otomatis dan happy hour.</p>
+                                <p className="text-sm text-gray-500">Kelola diskon otomatis. Promo aktif akan diterapkan saat checkout kasir.</p>
                             </div>
-                            <button
-                                onClick={() => {
-                                    addPromo({
-                                        id: nanoid(), name: 'Promo Baru', type: 'percent', value: 10, isActive: false
-                                    });
-                                    toast.success("Promo draft berhasil ditambahkan. Silakan edit.");
-                                }}
-                                className="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-amber-200 transition flex items-center gap-2"
-                            >
+                            <button onClick={openAddPromo} className="bg-amber-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-amber-600 transition flex items-center gap-2">
                                 <Plus size={16} /> Buat Promo
                             </button>
                         </div>
+                        {promos.length === 0 && (
+                            <div className="text-center py-12 text-gray-400">
+                                <Ticket size={40} className="mx-auto mb-3 opacity-30" />
+                                <p>Belum ada promo. Klik &quot;Buat Promo&quot; untuk memulai.</p>
+                            </div>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {promos.map(promo => (
-                                <div key={promo.id} className={`p-4 border rounded-xl relative ${promo.isActive ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-gray-50 opacity-70'}`}>
-                                    <div className="flex justify-between items-start mb-2">
+                                <div key={promo.id} className={`p-4 border-2 rounded-xl ${promo.isActive ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}>
+                                    <div className="flex justify-between items-start">
                                         <div>
-                                            <h3 className="font-bold text-gray-800">{promo.name}</h3>
-                                            <p className="text-xs text-gray-500 uppercase font-mono mt-1">
-                                                {promo.type === 'percent' ? 'Diskon Persen' : promo.type === 'amount' ? 'Diskon Nominal' : 'Happy Hour'}
+                                            <h3 className="font-bold text-gray-800 text-base">{promo.name}</h3>
+                                            <p className="text-xs text-gray-500 uppercase font-mono mt-0.5">
+                                                {promo.type === 'percent' ? '📉 Diskon Persen' : promo.type === 'amount' ? '💵 Diskon Nominal' : '⏰ Happy Hour'}
                                             </p>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => togglePromo(promo.id)} className={`text-xs font-bold px-2 py-1 rounded ${promo.isActive ? 'bg-amber-400 text-amber-900' : 'bg-gray-200 text-gray-600'}`}>
+                                        <div className="flex gap-1.5">
+                                            <button onClick={() => togglePromo(promo.id)} className={`text-xs font-bold px-2.5 py-1 rounded-full transition ${promo.isActive ? 'bg-amber-400 text-amber-900 hover:bg-amber-500' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
                                                 {promo.isActive ? 'Aktif' : 'Nonaktif'}
                                             </button>
-                                            <button onClick={() => {
-                                                if (confirm("Hapus promo ini?")) deletePromo(promo.id);
-                                            }} className="text-red-500 hover:text-red-700"><Trash size={16} /></button>
+                                            <button onClick={() => openEditPromo(promo)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition"><Edit size={14} /></button>
+                                            <button onClick={() => { if (confirm(`Hapus promo "${promo.name}"?`)) { deletePromo(promo.id); toast.success('Promo dihapus.'); } }} className="p-1.5 text-red-500 hover:bg-red-100 rounded-lg transition"><Trash size={14} /></button>
                                         </div>
                                     </div>
-                                    <div className="text-sm text-gray-700 space-y-1 mt-3">
+                                    <div className="mt-3 pt-3 border-t border-gray-200 text-sm space-y-1.5">
                                         <div className="flex justify-between">
-                                            <span className="text-gray-500">Nilai Diskon:</span>
-                                            <span className="font-bold text-amber-600">{promo.type === 'percent' ? `${promo.value}%` : `Rp ${promo.value.toLocaleString('id-ID')}`}</span>
+                                            <span className="text-gray-500">Nilai Diskon</span>
+                                            <span className="font-black text-amber-600 text-base">{promo.type === 'percent' ? `${promo.value}%` : `Rp ${promo.value.toLocaleString('id-ID')}`}</span>
                                         </div>
                                         {promo.type === 'happy_hour' && (
                                             <div className="flex justify-between">
-                                                <span className="text-gray-500">Waktu:</span>
-                                                <span className="font-mono">{promo.startHour}:00 - {promo.endHour}:00</span>
+                                                <span className="text-gray-500">Jam Berlaku</span>
+                                                <span className="font-mono font-bold">{String(promo.startHour).padStart(2,'0')}:00 – {String(promo.endHour).padStart(2,'0')}:00</span>
                                             </div>
                                         )}
                                         {promo.minSubtotal && (
                                             <div className="flex justify-between">
-                                                <span className="text-gray-500">Min. Beli:</span>
+                                                <span className="text-gray-500">Min. Belanja</span>
                                                 <span>Rp {promo.minSubtotal.toLocaleString('id-ID')}</span>
                                             </div>
                                         )}
-                                        {promo.description && <p className="text-xs italic text-gray-500 mt-2">{promo.description}</p>}
+                                        {promo.description && <p className="text-xs italic text-gray-400 pt-1">{promo.description}</p>}
                                     </div>
                                 </div>
                             ))}
@@ -1314,6 +1403,133 @@ export default function AdminPage() {
                     orders={orders}
                     onClose={() => setShiftSummary(null)}
                 />
+            )}
+
+            {/* ============ MODAL: INVENTORY BAHAN BAKU ============ */}
+            {ingModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-bold font-serif">{editingIngId ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}</h3>
+                            <button onClick={() => setIngModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
+                        </div>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">Nama Bahan *</label>
+                                <input type="text" placeholder="cth: Daun Teh Hitam" value={ingForm.name}
+                                    onChange={e => setIngForm(f => ({ ...f, name: e.target.value }))}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0D2B20] transition" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-600 mb-1 block">Stok Saat Ini</label>
+                                    <input type="number" min={0} value={ingForm.stock}
+                                        onChange={e => setIngForm(f => ({ ...f, stock: Number(e.target.value) }))}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0D2B20] transition" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-600 mb-1 block">Satuan</label>
+                                    <select value={ingForm.unit} onChange={e => setIngForm(f => ({ ...f, unit: e.target.value as 'ml' | 'gram' | 'pcs' }))}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0D2B20] transition bg-white">
+                                        <option value="ml">ml (mililiter)</option>
+                                        <option value="gram">gram</option>
+                                        <option value="pcs">pcs (buah)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">Batas Minimum Stok (peringatan)</label>
+                                <input type="number" min={0} value={ingForm.minStockThreshold}
+                                    onChange={e => setIngForm(f => ({ ...f, minStockThreshold: Number(e.target.value) }))}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0D2B20] transition" />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                            <button onClick={() => setIngModalOpen(false)} className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-lg font-bold text-sm hover:bg-gray-50 transition">Batal</button>
+                            <button onClick={saveIng} className="flex-1 py-2.5 bg-[#0D2B20] text-amber-400 rounded-lg font-bold text-sm hover:bg-[#1a3d2e] transition flex items-center justify-center gap-2">
+                                <Save size={14} /> Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============ MODAL: PROMO ENGINE ============ */}
+            {promoModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-bold font-serif">{editingPromoId ? 'Edit Promo' : 'Buat Promo Baru'}</h3>
+                            <button onClick={() => setPromoModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
+                        </div>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">Nama Promo *</label>
+                                <input type="text" placeholder="cth: Happy Hour Sore" value={promoForm.name}
+                                    onChange={e => setPromoForm(f => ({ ...f, name: e.target.value }))}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">Tipe Promo</label>
+                                <select value={promoForm.type} onChange={e => setPromoForm(f => ({ ...f, type: e.target.value as 'percent' | 'amount' | 'happy_hour' }))}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition bg-white">
+                                    <option value="percent">Diskon Persen (%)</option>
+                                    <option value="amount">Diskon Nominal (Rp)</option>
+                                    <option value="happy_hour">Happy Hour (Jam Tertentu)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">
+                                    Nilai Diskon {promoForm.type === 'percent' ? '(%)' : '(Rp)'}
+                                </label>
+                                <input type="number" min={0} value={promoForm.value}
+                                    onChange={e => setPromoForm(f => ({ ...f, value: Number(e.target.value) }))}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition" />
+                            </div>
+                            {promoForm.type === 'happy_hour' && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-600 mb-1 block">Jam Mulai</label>
+                                        <input type="number" min={0} max={23} value={promoForm.startHour}
+                                            onChange={e => setPromoForm(f => ({ ...f, startHour: Number(e.target.value) }))}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-600 mb-1 block">Jam Selesai</label>
+                                        <input type="number" min={0} max={23} value={promoForm.endHour}
+                                            onChange={e => setPromoForm(f => ({ ...f, endHour: Number(e.target.value) }))}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition" />
+                                    </div>
+                                </div>
+                            )}
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">Min. Belanja (Rp) — opsional</label>
+                                <input type="number" min={0} placeholder="Kosongkan jika tidak ada batas" value={promoForm.minSubtotal}
+                                    onChange={e => setPromoForm(f => ({ ...f, minSubtotal: e.target.value }))}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">Deskripsi — opsional</label>
+                                <input type="text" placeholder="cth: Berlaku setiap hari pukul 15.00-17.00" value={promoForm.description}
+                                    onChange={e => setPromoForm(f => ({ ...f, description: e.target.value }))}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition" />
+                            </div>
+                            <div className="flex items-center gap-3 pt-1">
+                                <button type="button" onClick={() => setPromoForm(f => ({ ...f, isActive: !f.isActive }))}
+                                    className={`relative w-11 h-6 rounded-full transition-colors ${promoForm.isActive ? 'bg-amber-500' : 'bg-gray-300'}`}>
+                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${promoForm.isActive ? 'translate-x-5' : ''}`} />
+                                </button>
+                                <span className="text-sm font-bold text-gray-700">{promoForm.isActive ? 'Promo Aktif' : 'Promo Nonaktif'}</span>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                            <button onClick={() => setPromoModalOpen(false)} className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-lg font-bold text-sm hover:bg-gray-50 transition">Batal</button>
+                            <button onClick={savePromo} className="flex-1 py-2.5 bg-amber-500 text-white rounded-lg font-bold text-sm hover:bg-amber-600 transition flex items-center justify-center gap-2">
+                                <Save size={14} /> Simpan Promo
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
