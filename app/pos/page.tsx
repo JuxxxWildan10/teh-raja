@@ -29,7 +29,7 @@ import {
     RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie,
     Wand2, Sparkles, ChevronDown, Pause, Play, Trash, Tag, Percent, Mic, MicOff, Loader2,
     CheckCircle, RefreshCw
-} from "lucide-react";
+, Printer} from "lucide-react";
 
 // ── Category Tabs ─────────────────────────────────────────────
 const CATEGORIES = [
@@ -63,7 +63,7 @@ export default function POSPage() {
     const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders } = useSalesStore();
     const { getApplicablePromo } = usePromoStore(); // [NEW] Promo
     const { findByPhone, addCustomer, addPoints, getPointsForOrder, redeemPoints } = useCustomerStore(); // [NEW] Loyalty
-    const { decrementIngredientsForOrder } = useInventoryStore(); // [NEW] BOM
+    const { decrementIngredientsForOrder, ingredients } = useInventoryStore(); // [NEW] BOM
     const toast = useToast();
 
     const [isClient, setIsClient] = useState(false);
@@ -82,6 +82,7 @@ export default function POSPage() {
     const [qrisGenerated, setQrisGenerated] = useState(false);
     const [isCheckingQris, setIsCheckingQris] = useState(false);
     const [qrisSuccess, setQrisSuccess] = useState(false);
+    const [qrisUrl, setQrisUrl] = useState<string | null>(null);
     
     const [showReceipt, setShowReceipt] = useState(false);
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
@@ -99,6 +100,13 @@ export default function POSPage() {
 
     // Discount
     const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
+
+    // AI Upsell CRM  
+    const [upsellHint, setUpsellHint] = useState<string | null>(null);
+    const [isLoadingUpsell, setIsLoadingUpsell] = useState(false);
+
+    // Bluetooth Print
+    const [isPrinting, setIsPrinting] = useState(false);
     const [discountValue, setDiscountValue] = useState('');
 
     // Confirm Modals
@@ -196,7 +204,38 @@ export default function POSPage() {
     // Points Redemption Logic
     const customer = useMemo(() => findByPhone(customerPhone), [customerPhone, findByPhone]);
     const maxRedeemablePoints = customer ? Math.floor(customer.points / 100) * 100 : 0; // Assuming 1 point = Rp100, and we only redeem points in hundreds for simplicity, but let's just use raw points. Actually, store logic says POINTS_REDEEM_VALUE = 100.
-    const pointsDiscount = (usePoints && customer) ? customer.points * 100 : 0; // POINTS_REDEEM_VALUE = 100
+
+
+    // AI Smart Upsell: Triggered when a known customer + items in cart
+    useEffect(() => {
+        if (!customer || items.length === 0) { setUpsellHint(null); return; }
+        const controller = new AbortController();
+        const timer = setTimeout(async () => {
+            setIsLoadingUpsell(true);
+            try {
+                const orderHistory = orders.filter(o => (o as any).customerPhone === customer.phone);
+                const res = await fetch('/api/ai/crm-upsell', {
+                    signal: controller.signal,
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer,
+                        orderHistory: orderHistory.slice(-10),
+                        currentCart: items,
+                        availableProducts: products.filter(p => p.isAvailable).slice(0, 8)
+                    })
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.suggestion) setUpsellHint(data.suggestion);
+            } catch(e: any) {
+                if (e.name !== 'AbortError') console.warn('[Upsell]', e.message);
+            } finally {
+                setIsLoadingUpsell(false);
+            }
+        }, 900);
+        return () => { clearTimeout(timer); controller.abort(); };
+    }, [customer?.phone, items.length]);    const pointsDiscount = (usePoints && customer) ? customer.points * 100 : 0; // POINTS_REDEEM_VALUE = 100
 
     const orderTotal = Math.max(0, subtotal - discountAmount - pointsDiscount);
     const cashIn = parseFloat(cashReceived.replace(/\D/g, '')) || 0;
@@ -410,7 +449,7 @@ export default function POSPage() {
         clearCart();
         setCustomerName(''); setCustomerPhone(''); setTableNumber(''); setCashReceived('');
         setDiscountMode('none'); setDiscountValue(''); setUsePoints(false);
-        setQrisGenerated(false); setQrisSuccess(false);
+        setQrisGenerated(false); setQrisSuccess(false); setUpsellHint(null); setQrisUrl(null);
         setMobileCartOpen(false);
         toast.success(`Order #${newOrder.id.slice(0, 6)} berhasil! ${formatRp(orderTotal)}`);
     }, [isStoreOpen, items, customerName, paymentMethod, cashIn, orderTotal, subtotal,
@@ -785,6 +824,12 @@ export default function POSPage() {
 
                             {/* Loyalty Points */}
                             <AnimatePresence>
+                                {upsellHint && (
+                                    <div className="flex items-start gap-1.5 p-2 bg-violet-50 border border-violet-200 rounded-lg mb-1 animate-fade-in">
+                                        <Sparkles size={11} className="text-violet-500 flex-shrink-0 mt-0.5" />
+                                        <p className="text-[10px] text-violet-700 font-medium leading-tight">{upsellHint}</p>
+                                    </div>
+                                )}
                                 {customer && (
                                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex justify-between items-center text-xs">
@@ -869,10 +914,23 @@ export default function POSPage() {
                                         <div className="bg-white p-3 rounded-xl border border-gray-200 flex flex-col items-center text-center gap-2 mt-1">
                                             {!qrisGenerated ? (
                                                 <button
-                                                    onClick={() => setQrisGenerated(true)}
+                                                    onClick={async () => {
+                                                        setQrisGenerated(true);
+                                                        try {
+                                                            const res = await fetch('/api/payment/qris', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ orderId: 'TRX-' + Date.now(), total: orderTotal, items })
+                                                            });
+                                                            const data = await res.json();
+                                                            if (data.qrCodeUrl) setQrisUrl(data.qrCodeUrl);
+                                                        } catch (e) {
+                                                            console.error("Gagal buat QRIS", e);
+                                                        }
+                                                    }}
                                                     className="w-full bg-[#0D2B20] text-amber-400 font-bold py-2 rounded-lg text-xs"
                                                 >
-                                                    Generate QRIS (Midtrans)
+                                                    Generate QRIS Dinamis
                                                 </button>
                                             ) : (
                                                 <>
@@ -881,8 +939,14 @@ export default function POSPage() {
                                                         <div className="absolute inset-0 flex flex-col items-center justify-center z-0 p-2">
                                                             <QrCode size={24} className="text-gray-300 mb-1" />
                                                         </div>
-                                                        {/* Fake dynamic QR by using an image or just the same image for demo */}
-                                                        <Image src="/images/qris-gopay.jpg" alt="QRIS" fill className={`object-contain relative z-10 bg-white transition ${qrisSuccess ? 'opacity-30' : 'opacity-100'}`} unoptimized />
+                                                        {qrisUrl ? (
+                                                            <Image src={qrisUrl} alt="QRIS" fill className={`object-contain relative z-10 bg-white transition ${qrisSuccess ? 'opacity-30' : 'opacity-100'}`} unoptimized />
+                                                        ) : (
+                                                            <div className="relative z-10 flex flex-col items-center justify-center h-full w-full bg-white/80">
+                                                                <Loader2 size={24} className="animate-spin text-amber-500 mb-2" />
+                                                                <span className="text-[10px] text-gray-500 font-bold">Memuat...</span>
+                                                            </div>
+                                                        )}
                                                         {qrisSuccess && (
                                                             <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
                                                                 <div className="bg-green-500 rounded-full p-2 mb-1">
@@ -1134,13 +1198,22 @@ export default function POSPage() {
 }
 
 // ── Product Card ──────────────────────────────────────────────
-function ProductCard({ product, cartQty, isRecommended, onAdd }: {
+function ProductCard({ product, cartQty, isRecommended, onAdd, ingredients }: {
     product: ExtendedProduct;
     cartQty: number;
     isRecommended?: boolean;
     onAdd: () => void;
+    ingredients?: import('@/lib/store').Ingredient[];
 }) {
-    const isOutOfStock = product.stock <= 0;
+    let isOutOfStock = product.stock <= 0;
+    if (product.recipe && product.recipe.length > 0 && ingredients) {
+        // If it has a recipe, check if all ingredients have enough stock for at least 1 qty
+        const canMake = product.recipe.every(req => {
+            const ing = ingredients.find(i => i.id === req.ingredientId);
+            return ing && ing.stock >= req.quantity;
+        });
+        isOutOfStock = !canMake;
+    }
     const isLimited = !isOutOfStock && product.stock <= (product.minStockThreshold || 5);
 
     return (

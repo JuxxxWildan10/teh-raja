@@ -28,7 +28,7 @@ async function callGemini(prompt: string): Promise<string> {
 
 export async function POST(req: Request) {
     try {
-        const { orders, products } = await req.json();
+        const { orders, products, ingredients } = await req.json();
 
         if (!orders || orders.length === 0) {
             return NextResponse.json({ error: 'Tidak ada data order' }, { status: 400 });
@@ -81,6 +81,7 @@ export async function POST(req: Request) {
 
         // Low stock
         const lowStockProducts = (products || []).filter((p: any) => p.stock < 10);
+        const lowStockIngredients = (ingredients || []).filter((i: any) => i.stock <= i.minStockThreshold);
 
         const prompt = `
 Kamu adalah konsultan bisnis kuliner profesional dan analis data penjualan untuk kedai minuman teh bernama "Teh Raja". 
@@ -105,10 +106,15 @@ ${Object.entries(paymentBreakdown).length > 0
     ? Object.entries(paymentBreakdown).map(([k, v]) => `- ${k.toUpperCase()}: ${v} transaksi (${Math.round(Number(v) / totalOrders * 100)}%)`).join('\n')
     : 'Data belum tersedia'}
 
-PERINGATAN STOK (Stok < 10 cup):
+PERINGATAN STOK PRODUK (<10 cup):
 ${lowStockProducts.length > 0
-    ? lowStockProducts.map((p: any) => `- ${p.name}: sisa ${p.stock} cup`).join('\n')
-    : 'Semua stok dalam kondisi aman.'}
+    ? lowStockProducts.map((p: any) => `  * ${p.name}: sisa ${p.stock} cup`).join('\n')
+    : '  Semua produk aman'}
+
+PERINGATAN BAHAN BAKU (BOM - di bawah minimum):
+${lowStockIngredients.length > 0
+    ? lowStockIngredients.map((i: any) => `  * ${i.name}: sisa ${i.stock} ${i.unit} (min: ${i.minStockThreshold} ${i.unit})`).join('\n')
+    : '  Semua bahan baku aman'}
 
 Buatkan laporan analisis yang mencakup:
 1. 📊 RINGKASAN PERFORMA — Evaluasi singkat kondisi bisnis saat ini berdasarkan data.

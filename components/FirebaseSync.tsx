@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, set as firebaseSet, query, limitToLast } from "firebase/database";
-import { useSalesStore, useCartStore, useProductStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
+import { useSalesStore, useInventoryStore, useCartStore, useProductStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
 import { Bell, BellOff } from "lucide-react";
 
 const SUCCESS_SOUND = "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3";
@@ -107,6 +107,22 @@ export default function FirebaseSync() {
             }
         });
 
+        const ingredientsRef = ref(rtdb, 'ingredients');
+        const unsubIngredients = onValue(ingredientsRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedIngredients = Object.values(data) as any[];
+                useInventoryStore.setState({ ingredients: loadedIngredients as any });
+            } else {
+                const localIngredients = useInventoryStore.getState().ingredients;
+                if (localIngredients.length > 0) {
+                    localIngredients.forEach((i: any) => {
+                        firebaseSet(ref(rtdb, `ingredients/${i.id}`), i).catch(console.error);
+                    });
+                }
+            }
+        });
+
         // Paginasi: Hanya ambil 100 log terakhir
         const logsQuery = query(ref(rtdb, 'logs'), limitToLast(100));
         const unsubLogs = onValue(logsQuery, (snapshot) => {
@@ -169,6 +185,7 @@ export default function FirebaseSync() {
         return () => {
             unsubscribe();
             unsubProducts();
+            unsubIngredients();
             unsubLogs();
             unsubSessions();
             unsubscribeStatus();

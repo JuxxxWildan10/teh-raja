@@ -100,13 +100,16 @@ export interface Order {
     discountValue?: number; // Original input (e.g. 10 for 10%)
     customerName?: string;
     cashierName?: string;
-    status: 'pending' | 'processing' | 'completed' | 'cancelled';
+    status: 'pending' | 'awaiting_payment' | 'processing' | 'completed' | 'cancelled';
     // POS Fields
     paymentMethod?: 'cash' | 'qris' | 'transfer';
     cashReceived?: number;
     changeAmount?: number;
     tableNumber?: string;
+    branchId?: string; // [MULTI-BRANCH] Identifier cabang
     orderType?: 'dine-in' | 'take-away';
+    customerPhone?: string; // For CRM lookup
+    paymentNote?: string; // e.g. 'qris' | 'cash' - customer self-selected
 }
 
 export interface StoreSession {
@@ -114,6 +117,7 @@ export interface StoreSession {
     startTime: string; // ISO
     endTime?: string;  // ISO
     cashierName: string;
+    branchId?: string; // [MULTI-BRANCH]
     totalSales: number;
     totalOrders: number;
     startingCash?: number;
@@ -187,6 +191,9 @@ interface ProductState {
 }
 
 interface SalesState {
+    branchId: string;
+    branchName: string;
+    setBranch: (id: string, name: string) => void;
     orders: Order[];
     offlineOrders: Order[]; // [NEW] Robust Offline Queue
     heldOrders: Order[]; // Hold order feature
@@ -433,6 +440,8 @@ export const useProductStore = create<ProductState>()(
 export const useSalesStore = create<SalesState>()(
     persist(
         (set, get) => ({
+            branchId: 'main', // [MULTI-BRANCH] ID cabang aktif
+            branchName: 'Cabang Utama', // [MULTI-BRANCH]
             orders: [],
             offlineOrders: [], // [NEW]
             heldOrders: [],
@@ -442,11 +451,13 @@ export const useSalesStore = create<SalesState>()(
             currentSessionId: null,
             sessions: [],
 
+            setBranch: (id: string, name: string) => set({ branchId: id, branchName: name }),
             openStore: (cashierName, startingCash) => {
                 const newSession: StoreSession = {
                     id: nanoid(),
                     startTime: new Date().toISOString(),
                     cashierName,
+                    branchId: get().branchId,
                     totalSales: 0,
                     totalOrders: 0,
                     startingCash,
@@ -769,11 +780,18 @@ export const useInventoryStore = create<InventoryState>()(
                 { id: 'ing-ice', name: 'Es Batu', stock: 200, unit: 'pcs', minStockThreshold: 50 },
                 { id: 'ing-cup', name: 'Cup Plastik M', stock: 500, unit: 'pcs', minStockThreshold: 100 },
             ],
-            addIngredient: (ingredient) => set((s) => ({ ingredients: [...s.ingredients, ingredient] })),
-            updateIngredient: (id, updated) => set((s) => ({
-                ingredients: s.ingredients.map(i => i.id === id ? { ...i, ...updated } : i)
-            })),
-            deleteIngredient: (id) => set((s) => ({ ingredients: s.ingredients.filter(i => i.id !== id) })),
+            addIngredient: (ingredient) => {
+                set((s) => ({ ingredients: [...s.ingredients, ingredient] }));
+                firebaseSet(ref(rtdb, `ingredients/${ingredient.id}`), ingredient).catch(err => console.error(err));
+            },
+            updateIngredient: (id, updated) => {
+                set((s) => ({ ingredients: s.ingredients.map(i => i.id === id ? { ...i, ...updated } : i) }));
+                firebaseUpdate(ref(rtdb, `ingredients/${id}`), updated).catch(err => console.error(err));
+            },
+            deleteIngredient: (id) => {
+                set((s) => ({ ingredients: s.ingredients.filter(i => i.id !== id) }));
+                firebaseSet(ref(rtdb, `ingredients/${id}`), null).catch(err => console.error(err));
+            },
             decrementIngredientsForOrder: (items, products) => {
                 set((state) => {
                     const newIngredients = [...state.ingredients];
@@ -805,6 +823,14 @@ export const useInventoryStore = create<InventoryState>()(
                             }
                         });
                     });
+                    
+                    const updates: Record<string, any> = {};
+                    newIngredients.forEach(ing => {
+                        updates[`ingredients/${ing.id}`] = ing;
+                    });
+                    if (Object.keys(updates).length > 0) {
+                        firebaseUpdate(ref(rtdb), updates).catch(err => console.error("Firebase BOM Update Error:", err));
+                    }
                     
                     return { ingredients: newIngredients };
                 });
