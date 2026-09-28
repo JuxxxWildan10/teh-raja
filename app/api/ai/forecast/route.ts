@@ -2,28 +2,37 @@ import { NextResponse } from 'next/server';
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent`;
 
-async function callGemini(prompt: string): Promise<string> {
+async function callGemini(prompt: string, retries = 3): Promise<string> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === 'your_gemini_api_key_here' || apiKey.trim() === '') {
         throw new Error('GEMINI_API_KEY belum dikonfigurasi. Dapatkan API key gratis di: https://aistudio.google.com/app/apikey');
     }
 
-    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.4 },
-        }),
-    });
+    let lastError = '';
+    for (let i = 0; i < retries; i++) {
+        const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.4 },
+            }),
+        });
 
-    if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini API Error ${res.status}: ${errText}`);
+        if (res.ok) {
+            const data = await res.json();
+            return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        }
+        
+        lastError = await res.text();
+        if (res.status !== 503 && res.status !== 429) {
+            throw new Error(`Gemini API Error ${res.status}: ${lastError}`);
+        }
+        
+        // Wait before retrying (exponential backoff)
+        if (i < retries - 1) await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
     }
-
-    const data = await res.json();
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    throw new Error(`Gemini API Error: Terlalu banyak permintaan atau server sibuk. Coba lagi nanti. (${lastError})`);
 }
 
 export async function POST(req: Request) {
