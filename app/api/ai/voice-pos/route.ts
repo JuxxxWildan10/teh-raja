@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent`;
 
 async function callGemini(prompt: string, jsonMode = false): Promise<string> {
     const apiKey = process.env.GEMINI_API_KEY;
