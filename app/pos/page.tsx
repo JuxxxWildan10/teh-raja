@@ -1160,7 +1160,7 @@ export default function POSPage() {
                                             value={actualCash} 
                                             onChange={e => setActualCash(e.target.value.replace(/[^0-9]/g, ''))}
                                             placeholder="Total uang di laci"
-                                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] font-bold" 
+                                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] font-bold text-gray-900 placeholder-gray-400" 
                                         />
                                     </div>
                                 </div>
@@ -1170,7 +1170,7 @@ export default function POSPage() {
                                         value={closeNotes} 
                                         onChange={e => setCloseNotes(e.target.value)}
                                         placeholder="Alasan selisih uang, pengeluaran darurat, dll."
-                                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] text-sm" 
+                                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] text-sm text-gray-900 placeholder-gray-400" 
                                     />
                                 </div>
                             </div>

@@ -9,11 +9,11 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useProductStore, useSalesStore, useAuthStore, usePromoStore, useCustomerStore, useInventoryStore, ExtendedProduct, Order } from "@/lib/store";
+import { useProductStore, useSalesStore, useAuthStore, usePromoStore, useCustomerStore, useInventoryStore, useSupplierStore, ExtendedProduct, Order } from "@/lib/store";
 import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import ShiftSummaryModal from "@/components/ShiftSummaryModal";
-import { Line, Bar } from "react-chartjs-2";
+import { Line, Bar, Doughnut } from "react-chartjs-2";
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -21,6 +21,7 @@ import {
     PointElement,
     LineElement,
     BarElement,
+    ArcElement,
     Title,
     Tooltip,
     Legend,
@@ -31,8 +32,9 @@ import {
     ShieldAlert,
     History, AlertTriangle,
     CheckCircle, XCircle, Clock, Loader,
-    Menu, Search, Filter, Sparkles, BrainCircuit, RefreshCw, Ticket, Users as UsersIcon, Box
-, Building2 } from "lucide-react";
+    Menu, Search, Filter, Sparkles, BrainCircuit, RefreshCw, Ticket, Users as UsersIcon, Box,
+    Building2, BarChart2, TrendingUp, FileSpreadsheet, Bell
+} from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { nanoid } from "nanoid";
@@ -44,6 +46,7 @@ ChartJS.register(
     PointElement,
     LineElement,
     BarElement,
+    ArcElement,
     Title,
     Tooltip,
     Legend
@@ -59,12 +62,13 @@ export default function AdminPage() {
 
     // Stores
     const { products, addProduct, updateProduct, deleteProduct } = useProductStore();
-    const { getDailySales, getProductPopularity, orders, logs, addLog, resetData, updateOrderStatus, sessions, closeStore } = useSalesStore();
+    const { getDailySales, getProductPopularity, getPeakHours, orders, logs, addLog, resetData, updateOrderStatus, sessions, closeStore } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
 
     const { promos, addPromo, updatePromo, deletePromo, togglePromo } = usePromoStore();
     const { customers } = useCustomerStore();
     const { ingredients, addIngredient, updateIngredient, deleteIngredient } = useInventoryStore();
+    const { suppliers } = useSupplierStore();
 
     // ── Inventory CRUD State ──────────────────────────────────────
     const [ingModalOpen, setIngModalOpen] = useState(false);
@@ -77,7 +81,7 @@ export default function AdminPage() {
     const [promoForm, setPromoForm] = useState({ name: '', type: 'percent' as 'percent' | 'amount' | 'happy_hour', value: 10, minSubtotal: '', startHour: 9, endHour: 17, description: '', isActive: true });
 
     // UI State
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics'>('dashboard');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -202,9 +206,47 @@ export default function AdminPage() {
         toast.success("Data penjualan berhasil di-export ke CSV!");
     };
 
-    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang') => {
+    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics') => {
         setActiveTab(tab);
         setIsMobileMenuOpen(false);
+    };
+
+    // Export to Excel
+    const handleExportExcel = async () => {
+        const XLSX = await import('xlsx');
+        const wsData = [
+            ["Order ID", "Tanggal", "Waktu", "Pelanggan", "No. HP", "Items", "Subtotal", "Diskon", "Total", "Metode Bayar", "Status", "Kasir"],
+            ...orders.map(o => [
+                o.id,
+                new Date(o.date).toLocaleDateString('id-ID'),
+                new Date(o.date).toLocaleTimeString('id-ID'),
+                o.customerName || 'Guest',
+                o.customerPhone || '-',
+                o.items.map(i => `${i.quantity}x ${i.name}`).join('; '),
+                o.subtotal ?? o.total,
+                o.discount ?? 0,
+                o.total,
+                o.paymentMethod || '-',
+                o.status,
+                o.cashierName || '-',
+            ])
+        ];
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        // Column widths
+        ws['!cols'] = [12,12,10,18,14,40,12,10,12,12,12,14].map(w => ({ wch: w }));
+        XLSX.utils.book_append_sheet(wb, ws, 'Laporan Penjualan');
+
+        // Sheet 2: Product Summary
+        const popMap = new Map<string, number>();
+        orders.forEach(o => o.items.forEach(i => popMap.set(i.name, (popMap.get(i.name) || 0) + i.quantity)));
+        const popData = [['Nama Produk', 'Qty Terjual'], ...Array.from(popMap.entries()).sort((a,b) => b[1]-a[1])];
+        const ws2 = XLSX.utils.aoa_to_sheet(popData);
+        XLSX.utils.book_append_sheet(wb, ws2, 'Ringkasan Produk');
+
+        XLSX.writeFile(wb, `Laporan_TehRaja_${new Date().toISOString().split('T')[0]}.xlsx`);
+        addLog("EXPORT_XLSX", "Exported full report to Excel", user?.name || "Admin");
+        toast.success("Berhasil export ke Excel!");
     };
 
     // AI Forecast State
@@ -339,6 +381,25 @@ export default function AdminPage() {
     // Charts Data
     const dailySales = getDailySales();
     const popularity = getProductPopularity();
+    const peakHours = getPeakHours();
+
+    // Variant analysis
+    const variantAnalysis = useMemo(() => {
+        const sizeMap = new Map<string, number>();
+        const sugarMap = new Map<string, number>();
+        const tempMap = new Map<string, number>();
+        orders.forEach(o => o.items.forEach(item => {
+            const v = item.variants;
+            if (v?.size) sizeMap.set(v.size, (sizeMap.get(v.size) || 0) + item.quantity);
+            if (v?.sugar) sugarMap.set(v.sugar, (sugarMap.get(v.sugar) || 0) + item.quantity);
+            if (v?.temperature) tempMap.set(v.temperature, (tempMap.get(v.temperature) || 0) + item.quantity);
+        }));
+        return { size: sizeMap, sugar: sugarMap, temp: tempMap };
+    }, [orders]);
+
+    // Low stock alerts
+    const lowStockProducts = products.filter(p => p.stock <= (p.minStockThreshold ?? 5) && p.isAvailable);
+    const lowStockIngredients = ingredients.filter(i => i.stock <= i.minStockThreshold);
 
     const salesData = {
         labels: dailySales.map(d => d.date),
@@ -367,6 +428,17 @@ export default function AdminPage() {
                 label: "Terjual (Cup)",
                 data: popularity.map(p => p.count),
                 backgroundColor: "rgba(26, 77, 62, 0.8)",
+            }
+        ]
+    };
+
+    const peakHoursData = {
+        labels: peakHours.map(p => p.hour),
+        datasets: [
+            {
+                label: "Pesanan Masuk",
+                data: peakHours.map(p => p.count),
+                backgroundColor: "rgba(212, 175, 55, 0.8)",
             }
         ]
     };
@@ -412,10 +484,12 @@ export default function AdminPage() {
     }
 
     const pendingCount = orders.filter(o => o.status === 'pending').length;
+    const lowStockAlertCount = products.filter(p => p.stock <= (p.minStockThreshold ?? 5)).length + ingredients.filter(i => i.stock <= i.minStockThreshold).length;
     const tabs = [
         { id: 'dashboard' as const, label: 'Dashboard' },
         { id: 'products' as const, label: 'Menu & Stok' },
-        ...(user.role === 'admin' ? [{ id: 'inventory' as const, label: 'Inventaris & BOM', icon: <Box size={18} /> }] : []),
+        ...(user.role === 'admin' ? [{ id: 'analytics' as const, label: 'Analitik BI', icon: <BarChart2 size={18} /> }] : []),
+        ...(user.role === 'admin' ? [{ id: 'inventory' as const, label: 'Inventaris & BOM', icon: <Box size={18} />, badge: lowStockAlertCount }] : []),
         { id: 'orders' as const, label: 'Pesanan', badge: pendingCount },
         ...(user.role === 'admin' ? [{ id: 'promos' as const, label: 'Promo Engine', icon: <Ticket size={18} /> }] : []),
         ...(user.role === 'admin' ? [{ id: 'loyalty' as const, label: 'Loyalty Pelanggan', icon: <UsersIcon size={18} /> }] : []),
@@ -548,9 +622,35 @@ export default function AdminPage() {
                                 <button onClick={handleExportCSV} className="flex items-center gap-2 text-forest bg-white border border-gray-200 px-3 py-2 rounded text-sm hover:bg-gray-50 shadow-sm transition">
                                     <Download size={16} /> CSV
                                 </button>
+                                <button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-700 text-white px-3 py-2 rounded text-sm hover:bg-green-800 shadow-sm transition">
+                                    <FileSpreadsheet size={16} /> Excel
+                                </button>
                                 <ReportGenerator orders={orders} />
                             </div>
                         </div>
+
+                        {/* Low Stock Alert Banner */}
+                        {(lowStockProducts.length > 0 || lowStockIngredients.length > 0) && (
+                            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    <Bell size={18} className="text-amber-600 animate-pulse" />
+                                    <p className="font-bold text-amber-800 text-sm">Peringatan Stok Menipis!</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {lowStockProducts.map(p => (
+                                        <button key={p.id} onClick={() => handleTabChange('products')} className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 rounded-full font-bold hover:bg-amber-200 transition">
+                                            🍵 {p.name} ({p.stock} cup)
+                                        </button>
+                                    ))}
+                                    {lowStockIngredients.map(i => (
+                                        <button key={i.id} onClick={() => handleTabChange('inventory')} className="text-xs bg-red-100 text-red-800 border border-red-300 px-2 py-1 rounded-full font-bold hover:bg-red-200 transition">
+                                            ⚠️ {i.name} ({i.stock} {i.unit})
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
 
                         {/* KPI Cards */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -570,7 +670,7 @@ export default function AdminPage() {
                         </div>
 
                         {/* Charts */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
                             <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 h-72 md:h-96">
                                 <h3 className="font-bold text-base md:text-lg mb-4 text-forest flex items-center gap-2">
                                     <span className="w-1 h-5 bg-gold rounded-full"></span> Tren Penjualan
@@ -582,6 +682,12 @@ export default function AdminPage() {
                                     <span className="w-1 h-5 bg-forest rounded-full"></span> Produk Terpopuler
                                 </h3>
                                 <Bar data={popularityData} options={{ responsive: true, maintainAspectRatio: false }} />
+                            </div>
+                            <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 h-72 md:h-96">
+                                <h3 className="font-bold text-base md:text-lg mb-4 text-forest flex items-center gap-2">
+                                    <span className="w-1 h-5 bg-amber-500 rounded-full"></span> Waktu Tersibuk
+                                </h3>
+                                <Bar data={peakHoursData} options={{ responsive: true, maintainAspectRatio: false }} />
                             </div>
                         </div>
 
@@ -661,6 +767,143 @@ export default function AdminPage() {
                                 </button>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* === ANALYTICS BI TAB === */}
+                {activeTab === 'analytics' && user.role === 'admin' && (
+                    <div className="animate-fade-in space-y-6">
+                        {/* Header */}
+                        <div className="bg-gradient-to-br from-[#1a1a3e] to-[#2d2d6e] rounded-2xl p-6 text-white shadow-xl">
+                            <div className="flex items-center gap-4 mb-5">
+                                <div className="p-3 bg-violet-400 rounded-xl">
+                                    <BarChart2 size={28} className="text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-black text-violet-200">Business Intelligence</h2>
+                                    <p className="text-white/60 text-sm mt-0.5">Analitik mendalam · Berbasis data transaksi nyata</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {[
+                                    { label: 'Total Pendapatan', value: `Rp ${orders.reduce((s,o) => s+o.total,0).toLocaleString('id-ID')}`, icon: '💰' },
+                                    { label: 'Rata-rata/Order', value: `Rp ${orders.length ? Math.round(orders.reduce((s,o) => s+o.total,0)/orders.length).toLocaleString('id-ID') : '0'}`, icon: '📊' },
+                                    { label: 'Pelanggan Unik', value: new Set(orders.filter(o=>o.customerPhone).map(o=>o.customerPhone)).size, icon: '👥' },
+                                    { label: 'Item Terjual', value: orders.reduce((s,o) => s + o.items.reduce((si,i)=>si+i.quantity,0),0), icon: '🍵' },
+                                ].map(({ label, value, icon }) => (
+                                    <div key={label} className="bg-white/10 border border-white/10 rounded-xl p-3 text-center">
+                                        <p className="text-2xl mb-1">{icon}</p>
+                                        <p className="text-lg font-black text-violet-200">{value}</p>
+                                        <p className="text-white/50 text-[10px] mt-0.5">{label}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Charts Row 1 */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                                <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><span className="w-1 h-5 bg-violet-500 rounded-full"></span> Metode Pembayaran</h3>
+                                {orders.length > 0 ? (
+                                    <div className="h-52 flex items-center justify-center">
+                                        <Doughnut data={{ labels: ['Tunai','QRIS','Transfer'], datasets: [{ data: [orders.filter(o=>o.paymentMethod==='cash').length, orders.filter(o=>o.paymentMethod==='qris').length, orders.filter(o=>o.paymentMethod==='transfer').length], backgroundColor: ['#1A4D3E','#D4AF37','#6366F1'], borderWidth: 2 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+                                    </div>
+                                ) : <p className="text-gray-400 text-center py-16 text-sm">Belum ada data.</p>}
+                            </div>
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                                <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><span className="w-1 h-5 bg-amber-500 rounded-full"></span> Tipe Pesanan</h3>
+                                {orders.length > 0 ? (
+                                    <div className="h-52 flex items-center justify-center">
+                                        <Doughnut data={{ labels: ['Dine-in','Take Away','Lainnya'], datasets: [{ data: [orders.filter(o=>o.orderType==='dine-in').length, orders.filter(o=>o.orderType==='take-away').length, orders.filter(o=>!o.orderType).length], backgroundColor: ['#1A4D3E','#D4AF37','#9333EA'], borderWidth: 2 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+                                    </div>
+                                ) : <p className="text-gray-400 text-center py-16 text-sm">Belum ada data.</p>}
+                            </div>
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                                <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><span className="w-1 h-5 bg-amber-400 rounded-full"></span> Jam Tersibuk</h3>
+                                {peakHours.length > 0 ? (
+                                    <div className="h-52"><Bar data={peakHoursData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} /></div>
+                                ) : <p className="text-gray-400 text-center py-16 text-sm">Belum ada data.</p>}
+                            </div>
+                        </div>
+
+                        {/* Charts Row 2 - Variant Analysis */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                            <h3 className="font-bold text-gray-700 mb-5 flex items-center gap-2"><span className="w-1 h-5 bg-green-500 rounded-full"></span> Analisis Varian Favorit Pelanggan</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {/* Size */}
+                                <div>
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">📏 Ukuran Cup</p>
+                                    {variantAnalysis.size.size > 0 ? (
+                                        <div className="h-40 flex items-center justify-center">
+                                            <Doughnut data={{ labels: Array.from(variantAnalysis.size.keys()), datasets: [{ data: Array.from(variantAnalysis.size.values()), backgroundColor: ['#1A4D3E','#D4AF37'], borderWidth: 2 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+                                        </div>
+                                    ) : <p className="text-gray-400 text-xs text-center py-8">Data muncul setelah ada order dengan varian.</p>}
+                                </div>
+                                {/* Sugar */}
+                                <div>
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">🍯 Level Gula</p>
+                                    {variantAnalysis.sugar.size > 0 ? (
+                                        <div className="space-y-2">
+                                            {Array.from(variantAnalysis.sugar.entries()).sort((a,b)=>b[1]-a[1]).map(([sugar, count]) => {
+                                                const total = Array.from(variantAnalysis.sugar.values()).reduce((s,c)=>s+c,0);
+                                                const pct = total ? Math.round(count/total*100) : 0;
+                                                return (
+                                                    <div key={sugar}>
+                                                        <div className="flex justify-between text-xs font-bold text-gray-600 mb-1"><span>Gula {sugar}</span><span>{count} cup ({pct}%)</span></div>
+                                                        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }}></div></div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : <p className="text-gray-400 text-xs text-center py-8">Belum ada data varian gula.</p>}
+                                </div>
+                                {/* Temperature */}
+                                <div>
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">🌡️ Suhu Minuman</p>
+                                    {variantAnalysis.temp.size > 0 ? (
+                                        <div className="h-40 flex items-center justify-center">
+                                            <Doughnut data={{ labels: Array.from(variantAnalysis.temp.keys()).map(t => t==='panas' ? '☕ Panas' : '🧊 Es'), datasets: [{ data: Array.from(variantAnalysis.temp.values()), backgroundColor: ['#EF4444','#3B82F6'], borderWidth: 2 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }} />
+                                        </div>
+                                    ) : <p className="text-gray-400 text-xs text-center py-8">Belum ada data varian suhu.</p>}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Revenue Table by Day */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="p-5 border-b border-gray-100">
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2"><TrendingUp size={18} className="text-green-600" /> Tren Pendapatan Harian (7 Hari Terakhir)</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
+                                        <tr>
+                                            <th className="p-4">Tanggal</th>
+                                            <th className="p-4 text-right">Jumlah Order</th>
+                                            <th className="p-4 text-right">Total Pendapatan</th>
+                                            <th className="p-4 text-right">Rata-rata/Order</th>
+                                            <th className="p-4">Growth</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {dailySales.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-400">Belum ada data penjualan.</td></tr>}
+                                        {dailySales.map((day, idx) => {
+                                            const prev = dailySales[idx-1];
+                                            const growth = prev && prev.total > 0 ? ((day.total - prev.total) / prev.total * 100) : 0;
+                                            return (
+                                                <tr key={day.date} className="hover:bg-gray-50 transition">
+                                                    <td className="p-4 font-bold text-gray-800">{day.date}</td>
+                                                    <td className="p-4 text-right font-mono text-gray-700">{day.count}</td>
+                                                    <td className="p-4 text-right font-black text-forest">Rp {day.total.toLocaleString('id-ID')}</td>
+                                                    <td className="p-4 text-right text-sm text-gray-600">Rp {day.count ? Math.round(day.total/day.count).toLocaleString('id-ID') : '0'}</td>
+                                                    <td className="p-4">{idx === 0 ? <span className="text-xs text-gray-400">—</span> : <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-2 py-0.5 rounded-full ${growth >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{growth >= 0 ? '▲' : '▼'} {Math.abs(growth).toFixed(1)}%</span>}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -1184,6 +1427,35 @@ export default function AdminPage() {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Suppliers */}
+                        <div className="pt-6 border-t border-gray-100 mt-6">
+                            <h3 className="font-bold text-lg font-serif mb-4 flex items-center gap-2">
+                                <Building2 size={20} className="text-forest" />
+                                Manajemen Suplier & Vendor
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {suppliers.map(sup => (
+                                    <div key={sup.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50 flex flex-col gap-2 relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-1 h-full bg-forest"></div>
+                                        <div className="flex justify-between items-start pl-2">
+                                            <div>
+                                                <p className="font-bold text-gray-800">{sup.name}</p>
+                                                <p className="text-xs text-gray-500 font-mono flex items-center gap-1 mt-1">📞 {sup.phone} ({sup.contactPerson})</p>
+                                            </div>
+                                            <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1 rounded">Suplier</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600 pl-2 mt-1 line-clamp-1">{sup.address}</p>
+                                        <div className="mt-2 pl-2 flex gap-1 flex-wrap">
+                                            {sup.itemsSupplied.map(itemId => {
+                                                const ing = ingredients.find(i => i.id === itemId);
+                                                return ing ? <span key={itemId} className="text-[10px] bg-white border border-gray-200 px-1.5 py-0.5 rounded shadow-sm font-bold text-gray-600">{ing.name}</span> : null;
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}

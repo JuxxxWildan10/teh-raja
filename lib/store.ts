@@ -164,6 +164,24 @@ export interface Ingredient {
     minStockThreshold: number;
 }
 
+// ── Supplier Management ──────────────────────────────────────
+export interface Supplier {
+    id: string;
+    name: string;
+    contactPerson: string;
+    phone: string;
+    address: string;
+    itemsSupplied: string[]; // array of ingredient names or IDs
+}
+
+export interface PurchaseOrder {
+    id: string;
+    supplierId: string;
+    date: string; // ISO
+    totalAmount: number;
+    status: 'pending' | 'received' | 'cancelled';
+}
+
 // --- Stores ---
 
 interface CartState {
@@ -215,6 +233,7 @@ interface SalesState {
     removeOfflineLog: (id: string) => void; // [NEW]
     getDailySales: () => { date: string; total: number; count: number }[];
     getProductPopularity: () => { name: string; count: number }[];
+    getPeakHours: () => { hour: string; count: number }[]; // [NEW] Analytics
     resetData: () => void;
 }
 
@@ -614,6 +633,17 @@ export const useSalesStore = create<SalesState>()(
                     .sort((a, b) => b.count - a.count)
                     .slice(0, 5);
             },
+            getPeakHours: () => {
+                const orders = get().orders;
+                const hoursMap = new Map<string, number>();
+                orders.forEach(order => {
+                    const hour = new Date(order.date).getHours().toString().padStart(2, '0') + ':00';
+                    hoursMap.set(hour, (hoursMap.get(hour) || 0) + 1);
+                });
+                return Array.from(hoursMap.entries())
+                    .map(([hour, count]) => ({ hour, count }))
+                    .sort((a, b) => a.hour.localeCompare(b.hour));
+            },
             resetData: () => {
                 set({ orders: [], logs: [], sessions: [], isStoreOpen: false, currentSessionId: null });
                 firebaseSet(ref(rtdb, 'orders'), null).catch(err => console.error(err));
@@ -839,4 +869,39 @@ export const useInventoryStore = create<InventoryState>()(
         { name: 'teh-raja-inventory-v1', storage: createJSONStorage(() => idbStorage) }
     )
 );
+
+// ══════════════════════════════════════════════════════
+// SUPPLIER STORE
+// ══════════════════════════════════════════════════════
+interface SupplierState {
+    suppliers: Supplier[];
+    addSupplier: (supplier: Supplier) => void;
+    updateSupplier: (id: string, updated: Partial<Supplier>) => void;
+    deleteSupplier: (id: string) => void;
+}
+
+export const useSupplierStore = create<SupplierState>()(
+    persist(
+        (set) => ({
+            suppliers: [
+                { id: 'sup-1', name: 'PT Surya Daun Teh', contactPerson: 'Pak Budi', phone: '08123456789', address: 'Bandung', itemsSupplied: ['ing-tea'] },
+                { id: 'sup-2', name: 'CV Gula Manis', contactPerson: 'Bu Ani', phone: '08987654321', address: 'Cirebon', itemsSupplied: ['ing-sugar'] },
+            ],
+            addSupplier: (supplier) => {
+                set((s) => ({ suppliers: [...s.suppliers, supplier] }));
+                firebaseSet(ref(rtdb, `suppliers/${supplier.id}`), supplier).catch(err => console.error(err));
+            },
+            updateSupplier: (id, updated) => {
+                set((s) => ({ suppliers: s.suppliers.map(i => i.id === id ? { ...i, ...updated } : i) }));
+                firebaseUpdate(ref(rtdb, `suppliers/${id}`), updated).catch(err => console.error(err));
+            },
+            deleteSupplier: (id) => {
+                set((s) => ({ suppliers: s.suppliers.filter(i => i.id !== id) }));
+                firebaseSet(ref(rtdb, `suppliers/${id}`), null).catch(err => console.error(err));
+            }
+        }),
+        { name: 'teh-raja-suppliers-v1', storage: createJSONStorage(() => idbStorage) }
+    )
+);
+
 

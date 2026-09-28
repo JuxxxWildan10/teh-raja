@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
 
 async function callGemini(prompt: string, jsonMode = false): Promise<string> {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-        throw new Error('GEMINI_API_KEY belum dikonfigurasi di .env.local');
+    if (!apiKey || apiKey === 'your_gemini_api_key_here' || apiKey.trim() === '') {
+        throw new Error('GEMINI_API_KEY belum dikonfigurasi. Dapatkan API key gratis di: https://aistudio.google.com/app/apikey');
     }
 
     const body: any = {
