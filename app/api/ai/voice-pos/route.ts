@@ -1,46 +1,5 @@
 import { NextResponse } from 'next/server';
-
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent`;
-
-async function callGemini(prompt: string, jsonMode = false, retries = 3): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'your_gemini_api_key_here' || apiKey.trim() === '') {
-        throw new Error('GEMINI_API_KEY belum dikonfigurasi. Dapatkan API key gratis di: https://aistudio.google.com/app/apikey');
-    }
-
-    const body: any = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: jsonMode ? 0.1 : 0.4,
-        },
-    };
-
-    if (jsonMode) {
-        body.generationConfig.responseMimeType = 'application/json';
-    }
-
-    let lastError = '';
-    for (let i = 0; i < retries; i++) {
-        const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-
-        if (res.ok) {
-            const data = await res.json();
-            return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-        }
-        
-        lastError = await res.text();
-        if (res.status !== 503 && res.status !== 429) {
-            throw new Error(`Gemini API Error ${res.status}: ${lastError}`);
-        }
-        
-        if (i < retries - 1) await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
-    }
-    throw new Error(`Gemini API Error: Server sibuk, coba lagi nanti. (${lastError})`);
-}
+import { generate, hasGeminiKey } from '@/lib/gemini';
 
 export async function POST(req: Request) {
     try {
@@ -48,41 +7,48 @@ export async function POST(req: Request) {
         const { text, menu } = body;
 
         if (!text || !menu) {
-            return NextResponse.json({ error: 'Missing text or menu' }, { status: 400 });
+            return NextResponse.json({ error: 'Parameter text dan menu diperlukan' }, { status: 400 });
         }
 
-        const prompt = `
-Anda adalah AI asisten kasir Point of Sale (POS) bernama Teh Raja POS.
-Tugas Anda adalah mengekstrak pesanan dari transkrip suara kasir menjadi format JSON murni.
+        if (!hasGeminiKey()) {
+            return NextResponse.json({ error: 'GEMINI_API_KEY belum dikonfigurasi di server.' }, { status: 503 });
+        }
 
-Berikut adalah daftar menu yang tersedia:
+        const prompt = `Anda adalah asisten AI kasir Point of Sale (POS) untuk kedai teh "Teh Raja".
+Tugas Anda: mengekstrak pesanan dari transkrip suara kasir menjadi format JSON murni.
+
+Daftar Menu Tersedia:
 ${JSON.stringify(menu.map((m: any) => ({ id: m.id, name: m.name, category: m.category })), null, 2)}
 
 Transkrip Suara Kasir: "${text}"
 
-Ekstrak item pesanan dari transkrip tersebut. 
-Untuk setiap item, tentukan:
-- productId: ID produk yang paling cocok dari daftar menu (pastikan ejaannya mirip, misalnya "teh raja" -> "teh-raja-signature")
-- quantity: Jumlah yang dipesan (angka).
-- variants: (Opsional) Objek varian jika disebutkan. Properti varian yang valid:
-    - size: "M" atau "L" (default "M" jika tidak disebut, "besar" = "L", "sedang/kecil" = "M")
-    - sugar: "0%" | "25%" | "50%" | "75%" | "100%" (default "100%", "less" atau "sedikit" = "50%")
-    - ice: "no-ice" | "less" | "normal" | "extra" (default "normal")
-    - temperature: "panas" | "es" (default "es")
-- note: (Opsional) Catatan tambahan jika ada (misal "dibungkus pisah").
+Instruksi Ekstraksi:
+- productId: ID produk yang paling cocok dari daftar menu (cocokkan toleran ejaan / nama panggilan)
+- quantity: Jumlah yang dipesan (angka bulat positif, default 1 jika tidak disebut)
+- variants: Objek varian jika disebutkan:
+    - size: "M" atau "L" (default "M", jika bilang "besar" / "large" -> "L")
+    - sugar: "0%" | "25%" | "50%" | "75%" | "100%" (default "100%", "less sugar" / "sedikit gula" -> "50%", "tanpa gula" -> "0%")
+    - ice: "no-ice" | "less" | "normal" | "extra" (default "normal", "tanpa es" -> "no-ice", "sedikit es" -> "less")
+    - temperature: "panas" | "es" (default "es", "hangat/panas" -> "panas")
+- note: Catatan khusus jika ada (misal: "jangan terlalu manis", "dibungkus pisah")
 
-Format Output (HANYA JSON Array of Objects, TANPA markdown, TANPA penjelasan):
+Format Output: HANYA JSON array tanpa pembuka markdown dan tanpa teks lain:
 [
   {
-    "productId": "teh-raja-signature",
+    "productId": "1",
     "quantity": 2,
     "variants": { "size": "L", "sugar": "50%", "ice": "normal", "temperature": "es" },
     "note": ""
   }
-]
-`;
+]`;
 
-        const rawText = await callGemini(prompt, true);
+        const { text: rawText } = await generate({
+            prompt,
+            json: true,
+            temperature: 0.1,
+            timeoutMs: 15000,
+            thinkingLevel: 'low',
+        });
 
         let parsed: any[] = [];
         try {
@@ -92,7 +58,7 @@ Format Output (HANYA JSON Array of Objects, TANPA markdown, TANPA penjelasan):
             if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
         }
 
-        return NextResponse.json({ items: parsed });
+        return NextResponse.json({ items: Array.isArray(parsed) ? parsed : [] });
 
     } catch (error: any) {
         console.error('Voice POS AI Error:', error);

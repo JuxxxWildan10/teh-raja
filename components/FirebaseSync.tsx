@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, set as firebaseSet, query, limitToLast } from "firebase/database";
-import { useSalesStore, useInventoryStore, useCartStore, useProductStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
+import { useSalesStore, useInventoryStore, useCartStore, useProductStore, useForecastHistoryStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
 import { Bell, BellOff } from "lucide-react";
 
 const SUCCESS_SOUND = "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3";
@@ -121,6 +121,8 @@ export default function FirebaseSync() {
                     });
                 }
             }
+        }, (err) => {
+            console.debug("[FirebaseSync] ingredients sync paused (auth required):", err.message);
         });
 
         // Paginasi: Hanya ambil 100 log terakhir
@@ -139,6 +141,8 @@ export default function FirebaseSync() {
             } else {
                 useSalesStore.setState((state) => ({ ...state, logs: [...state.offlineLogs] }));
             }
+        }, (err) => {
+            console.debug("[FirebaseSync] logs sync paused (auth required):", err.message);
         });
 
         const sessionsRef = ref(rtdb, 'sessions');
@@ -153,6 +157,20 @@ export default function FirebaseSync() {
                     currentSessionId: activeSession ? activeSession.id : null
                 });
             }
+        }, (err) => {
+            console.debug("[FirebaseSync] sessions sync paused (auth required):", err.message);
+        });
+
+        const historyRef = ref(rtdb, 'salesHistory');
+        const unsubHistory = onValue(historyRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedHistory = Object.values(data) as any[];
+                loadedHistory.sort((a, b) => a.date.localeCompare(b.date));
+                useForecastHistoryStore.setState({ records: loadedHistory });
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] salesHistory sync paused (auth required):", err.message);
         });
 
         const connectedRef = ref(rtdb, ".info/connected");
@@ -188,6 +206,7 @@ export default function FirebaseSync() {
             unsubIngredients();
             unsubLogs();
             unsubSessions();
+            unsubHistory();
             unsubscribeStatus();
         };
     }, []);

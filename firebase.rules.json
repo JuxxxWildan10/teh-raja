@@ -4,15 +4,27 @@
       ".read": true,
       ".write": "auth != null"
     },
-    "orders": {
+    "ingredients": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "suppliers": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "orders": {
+      ".read": true,
+      ".write": true
     },
     "logs": {
       ".read": "auth != null",
       ".write": "auth != null"
     },
     "sessions": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "salesHistory": {
       ".read": "auth != null",
       ".write": "auth != null"
     }

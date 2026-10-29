@@ -904,4 +904,56 @@ export const useSupplierStore = create<SupplierState>()(
     )
 );
 
+// ══════════════════════════════════════════════════════
+// FORECAST HISTORY STORE (Import & Simulation)
+// ══════════════════════════════════════════════════════
+import type { DailyRecord, HistorySource } from '@/lib/forecast/data';
+
+interface ForecastHistoryState {
+    records: DailyRecord[];
+    addRecords: (newRecords: DailyRecord[]) => void;
+    deleteRecord: (id: string) => void;
+    clearBySource: (source: HistorySource) => void;
+    clearAll: () => void;
+    setRecords: (records: DailyRecord[]) => void;
+}
+
+export const useForecastHistoryStore = create<ForecastHistoryState>()(
+    persist(
+        (set, get) => ({
+            records: [],
+            setRecords: (records) => set({ records }),
+            addRecords: (newRecords) => {
+                set((state) => {
+                    const map = new Map<string, DailyRecord>();
+                    state.records.forEach(r => map.set(r.id, r));
+                    newRecords.forEach(r => map.set(r.id, r));
+                    const sorted = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+                    return { records: sorted };
+                });
+                newRecords.forEach(r => {
+                    const cleanRecord = JSON.parse(JSON.stringify(r));
+                    firebaseSet(ref(rtdb, `salesHistory/${r.id}`), cleanRecord).catch(err => console.error("Firebase History Set Error:", err));
+                });
+            },
+            deleteRecord: (id) => {
+                set((state) => ({ records: state.records.filter(r => r.id !== id) }));
+                firebaseSet(ref(rtdb, `salesHistory/${id}`), null).catch(err => console.error(err));
+            },
+            clearBySource: (source) => {
+                const toDelete = get().records.filter(r => r.source === source);
+                set((state) => ({ records: state.records.filter(r => r.source !== source) }));
+                toDelete.forEach(r => {
+                    firebaseSet(ref(rtdb, `salesHistory/${r.id}`), null).catch(err => console.error(err));
+                });
+            },
+            clearAll: () => {
+                set({ records: [] });
+                firebaseSet(ref(rtdb, 'salesHistory'), null).catch(err => console.error(err));
+            }
+        }),
+        { name: 'teh-raja-forecast-history-v1', storage: createJSONStorage(() => idbStorage) }
+    )
+);
+
 

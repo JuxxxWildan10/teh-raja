@@ -39,6 +39,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { nanoid } from "nanoid";
 import ReportGenerator from "@/components/ReportGenerator";
+import ForecastDashboard from "@/components/forecast/ForecastDashboard";
 
 ChartJS.register(
     CategoryScale,
@@ -1213,95 +1214,7 @@ export default function AdminPage() {
                 
                 {/* ============ TAB: AI FORECAST ============ */}
                 {activeTab === 'ai-forecast' && user.role === 'admin' && (
-                    <div className="animate-fade-in space-y-6">
-                        {/* Header */}
-                        <div className="bg-gradient-to-br from-[#0D2B20] to-[#1a4433] rounded-2xl p-6 text-white shadow-xl">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-amber-400 rounded-xl">
-                                        <BrainCircuit size={28} className="text-[#0D2B20]" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-2xl font-black text-amber-400">AI Sales Forecast</h2>
-                                        <p className="text-white/60 text-sm mt-0.5">Ditenagai oleh Gemini AI · Analisis berbasis data historis</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={handleAIForecast}
-                                    disabled={isForecasting || orders.length === 0}
-                                    className="flex items-center gap-2 bg-amber-400 text-[#0D2B20] px-6 py-3 rounded-xl font-black hover:bg-amber-300 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:scale-105 active:scale-95"
-                                >
-                                    {isForecasting
-                                        ? <><RefreshCw size={18} className="animate-spin" /> Menganalisis...</>
-                                        : <><Sparkles size={18} /> Generate Laporan AI</>
-                                    }
-                                </button>
-                            </div>
-
-                            {/* Quick Stats */}
-                            <div className="grid grid-cols-3 gap-3 mt-5">
-                                {[
-                                    { label: 'Total Order Dianalisis', value: orders.length },
-                                    { label: 'Produk dalam Menu', value: products.length },
-                                    { label: 'Order Hari Ini', value: orders.filter(o => new Date(o.date).toDateString() === new Date().toDateString()).length },
-                                ].map(({ label, value }) => (
-                                    <div key={label} className="bg-white/10 border border-white/10 rounded-xl p-3 text-center">
-                                        <p className="text-2xl font-black text-amber-400">{value}</p>
-                                        <p className="text-white/50 text-[11px] mt-0.5">{label}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* AI Result Output */}
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-5 border-b border-gray-100 flex items-center gap-3">
-                                <Sparkles size={20} className="text-amber-500" />
-                                <h3 className="font-bold text-gray-800">Hasil Analisis & Rekomendasi AI</h3>
-                            </div>
-                            <div className="p-6 min-h-64">
-                                {!aiForecastText && !isForecasting && (
-                                    <div className="flex flex-col items-center justify-center h-48 text-center text-gray-400">
-                                        <BrainCircuit size={48} className="mb-3 opacity-20" />
-                                        <p className="font-medium">Belum ada laporan</p>
-                                        <p className="text-sm mt-1">Klik tombol "Generate Laporan AI" untuk memulai analisis.</p>
-                                        {orders.length === 0 && (
-                                            <p className="text-xs mt-3 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                                                ⚠️ Belum ada data order. Lakukan beberapa transaksi dulu di POS.
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
-                                {isForecasting && (
-                                    <div className="flex flex-col items-center justify-center h-48 text-center">
-                                        <div className="relative">
-                                            <div className="w-16 h-16 rounded-full border-4 border-amber-200 border-t-amber-500 animate-spin"></div>
-                                            <BrainCircuit size={20} className="absolute inset-0 m-auto text-amber-500" />
-                                        </div>
-                                        <p className="font-bold text-gray-700 mt-4">AI sedang menganalisis data...</p>
-                                        <p className="text-sm text-gray-400 mt-1">Proses ini membutuhkan beberapa detik</p>
-                                    </div>
-                                )}
-                                {aiForecastText && !isForecasting && (
-                                    <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">
-                                        {aiForecastText}
-                                    </div>
-                                )}
-                            </div>
-                            {aiForecastText && (
-                                <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
-                                    <p className="text-xs text-gray-400 italic">* Analisis dilakukan oleh Gemini AI. Gunakan sebagai referensi, bukan keputusan tunggal.</p>
-                                    <button
-                                        onClick={handleAIForecast}
-                                        disabled={isForecasting}
-                                        className="flex items-center gap-1.5 text-xs font-bold text-[#0D2B20] hover:underline"
-                                    >
-                                        <RefreshCw size={12} /> Refresh
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <ForecastDashboard />
                 )}
 
                 {/* ============ TAB: KARYAWAN ============ */}
