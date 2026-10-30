@@ -120,6 +120,7 @@ export default function OrderStatusOverlay() {
     const stepKeyMap: Record<string, number> = {
         pending: 0,
         awaiting_payment: 1,
+        payment: 1,
         processing: 2,
         completed: 3,
     };
@@ -152,6 +153,12 @@ export default function OrderStatusOverlay() {
             desc: "Kasir sedang memverifikasi pembayaran Anda...",
             icon: <Clock size={56} className="text-yellow-500 animate-pulse" />,
             gradient: "from-yellow-400 to-yellow-600",
+        },
+        payment: {
+            title: "Menunggu Verifikasi Kasir 💳",
+            desc: "Kasir sedang memverifikasi pembayaran Anda...",
+            icon: <Clock size={56} className="text-yellow-500 animate-pulse" />,
+            gradient: "from-amber-400 to-amber-600",
         },
         processing: {
             title: "Sedang Diracik ✨",

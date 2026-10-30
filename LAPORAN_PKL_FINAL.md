@@ -1201,17 +1201,13 @@ Berdasarkan hasil pengembangan dan pengujian selama Praktik Kerja Lapangan di Ke
 
 **Saran Teknis untuk Pengembangan Lanjutan:**
 
-1. **Migrasi ke PostgreSQL untuk Analitik:** Menambahkan PostgreSQL via Supabase sebagai *data warehouse* untuk analitik lintas-periode yang kompleks (perbandingan bulanan/tahunan) yang tidak efisien di Firebase NoSQL.
-
-2. **Implementasi Unit & Integration Testing:** Menambahkan test coverage menggunakan Jest + React Testing Library untuk logika kritis di Zustand stores dan komponen POS.
-
-3. **Optimasi Bundle Size:** Melakukan *code splitting* agresif pada Admin Dashboard (142KB) untuk mempercepat *first load time*.
-
-4. **Aktivasi Multi-Cabang:** Field `branchId` sudah tersedia di schema data. Mengaktifkannya untuk mendukung manajemen beberapa cabang dalam satu platform.
-
-5. **Payment Gateway Penuh:** Mengintegrasikan API resmi (Midtrans/Xendit) untuk QRIS dan transfer bank yang lebih aman dan otomatis.
-
-6. **Granular RBAC:** Menambahkan level perizinan lebih detail (kasir tidak bisa hapus produk, supervisor approve diskon > 20%).
+1. **Generator & Cetak Standing QR Meja (O2O Dine-In):** Otomatisasi generate dan cetak kartu QR meja akrilik untuk pemesanan mandiri pelanggan tanpa antre di kasir.
+2. **Visual Table Management (Denah Meja POS):** Monitoring denah meja real-time di POS (meja kosong, antrean bayar, sedang diracik).
+3. **Split Tiket Dapur / Barista Cup Slip:** Cetak slip stiker cup minuman khusus barista tanpa rincian nominal harga untuk mempermudah penyiapan pesanan.
+4. **Web Audio Chime Offline:** Menggunakan Web Audio API Synthesizer agar lonceng nada ganda pesanan dapur tetap berbunyi tanpa kuota internet.
+5. **Fast Keyboard Shortcuts Kasir:** Transaksi kilat dengan hotkey keyboard (`/`, `F1-F4`, `Space`) saat jam sibuk (*rush hour*).
+6. **Payment Gateway Produksi & Multi-Cabang Cloud:** Mengintegrasikan API resmi berlisensi Bank Indonesia (Midtrans/Xendit) untuk verifikasi otomatis QRIS dinamis serta aktivasi cabang lintas kota via schema `branchId`.
+7. **Migrasi ke PostgreSQL untuk Analitik Lintas-Tahun:** Menambahkan PostgreSQL/Supabase sebagai data warehouse untuk analitik multi-periode yang kompleks.
 
 **Saran Non-Teknis:**
 

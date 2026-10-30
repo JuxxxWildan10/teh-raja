@@ -47,7 +47,8 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
     const handleWhatsApp = async () => {
         const itemsList = order.items.map(i => `• ${i.quantity}x ${i.name} - ${formatRp(i.price * i.quantity)}${i.variants ? ` (${formatVariantLabel(i.variants)})` : ''}`).join('\n');
         const textReceipt = `🍵 *STRUK PEMBELIAN TEH RAJA*
-Authentic Premium Tea Experience
+_Rajanya Es Teh_
+📍 2XVC+5Q3, Siandong, Kec. Larangan, Kab. Brebes, Jawa Tengah 52262
 ──────────────────────────────
 No. Order : #${order.id.slice(0, 8).toUpperCase()}
 Tanggal   : ${new Date(order.date).toLocaleString('id-ID')}
@@ -103,9 +104,10 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
                 {/* Store Header */}
                 <div className="text-center mb-4 border-b border-dashed border-gray-400 pb-3">
                     <h2 className="text-base font-bold uppercase tracking-widest">TEH RAJA</h2>
-                    <p className="text-gray-500 text-[10px]">Authentic Tea &amp; Blends</p>
-                    <p className="text-gray-500 text-[10px] mt-0.5">Jl. Raja Tea No. 1, Indonesia</p>
-                    <p className="text-gray-500 text-[10px]">@tehraja.id</p>
+                    <p className="text-gray-700 text-[10px] font-semibold">Rajanya Es Teh</p>
+                    <p className="text-gray-500 text-[9px] mt-0.5">2XVC+5Q3, Siandong, Kec. Larangan</p>
+                    <p className="text-gray-500 text-[9px]">Kabupaten Brebes, Jawa Tengah 52262</p>
+                    <p className="text-gray-400 text-[9px]">@tehraja.id</p>
                 </div>
 
                 {/* Order Info */}

@@ -1181,14 +1181,27 @@
                 <div class="hero-crown">✨</div>
                 <div class="slide-tag">14. Penutup</div>
                 <h2 class="hero-main-title" style="font-size:36px;">KESIMPULAN & SESI TANYA JAWAB</h2>
-                <div class="grid-2" style="max-width:850px; text-align:left; margin-bottom:24px;">
+                <div class="grid-2" style="max-width:960px; text-align:left; margin-bottom:20px;">
                     <div class="card">
                         <div class="card-title"><span>🏆</span> Kesimpulan Proyek</div>
-                        <p class="card-text">Sistem ini berhasil memadukan teknologi modern web (PWA Offline-First, Realtime NoSQL, dan AI Rantai Pasok) menjadi solusi praktis, andal, dan berdaya guna nyata untuk mendongkrak profitabilitas UMKM kedai teh.</p>
+                        <p class="card-text" style="font-size:13px; line-height:1.5;">Sistem ini berhasil memadukan teknologi modern web (PWA Offline-First, Realtime NoSQL, dan AI Rantai Pasok) menjadi solusi praktis, andal, dan berdaya guna nyata untuk mendongkrak profitabilitas UMKM kedai teh.</p>
+                        <div style="margin-top:12px; font-size:12px; color:rgba(250,247,242,0.85); line-height:1.6;">
+                            ✔ 100% Bebas Macet Kasir (Offline-First IndexedDB)<br>
+                            ✔ Zero Cash Discrepancy (Modul Kas Keluar Terpadu)<br>
+                            ✔ Paperless Barista Display (&lt;500ms Realtime)<br>
+                            ✔ Peramalan Stok Berbasis Bukti Ilmiah (MAPE &lt; 8.4%)
+                        </div>
                     </div>
                     <div class="card card-gold">
-                        <div class="card-title"><span>🚀</span> Rencana Masa Depan</div>
-                        <p class="card-text">Integrasi sistem pembayaran dinamis QRIS (Midtrans/Xendit) serta skalabilitas manajemen multi-cabang terpusat untuk ekspansi kedai.</p>
+                        <div class="card-title"><span>🚀</span> Rencana Pengembangan Lanjutan</div>
+                        <ul style="font-size:12px; color:rgba(250,247,242,0.95); line-height:1.6; padding-left:18px; margin:0;">
+                            <li><strong>Generator &amp; Cetak QR Meja:</strong> Cetak standing card akrilik meja (O2O Dine-In) otomatis mengunci nomor meja pelanggan.</li>
+                            <li><strong>Visual Table Management:</strong> Monitoring denah meja interaktif real-time di POS (meja kosong, antre bayar, diracik).</li>
+                            <li><strong>Split Tiket Barista:</strong> Cetak slip stiker cup minuman khusus barista tanpa rincian harga.</li>
+                            <li><strong>Web Audio Chime Offline:</strong> Sintesis bel pesanan ganda (Web Audio API) tanpa kuota internet.</li>
+                            <li><strong>Fast Keyboard Shortcuts:</strong> Transaksi kilat kasir dengan hotkey keyboard saat jam sibuk.</li>
+                            <li><strong>Payment Gateway QRIS Produksi:</strong> Integrasi langsung dengan API Xendit/Midtrans.</li>
+                        </ul>
                     </div>
                 </div>
                 <div style="font-family:'Cinzel',serif; font-size:22px; color:var(--gold-light); font-weight:700;">
@@ -1262,7 +1275,7 @@
             12: "Integrasi Bill of Materials (BOM) menghubungkan prediksi penjualan cup ke takaran resep bahan fisik. Sistem otomatis menghitung ketahanan stok dan memberi peringatan reorder sebelum stok kedai habis.",
             13: "Sistem telah melalui serangkaian pengujian: Black-Box testing 100% valid, uji jaringan offline tidak ada data hilang, uji akurasi AI menghasilkan MAPE di bawah 8.4% (kategori 'Sangat Akurat'), serta 0 error pada kompilasi TypeScript dan Next.js Build.",
             14: "Dampak bisnis bagi kedai Teh Raja sangat nyata: kasir bebas macet saat internet mati, selisih uang laci saat tutup shift tuntas menjadi nol rupiah, operasional dapur paperless, dan pembelanjaan bahan baku terencana rapi.",
-            15: "Kesimpulannya, sistem POS Teh Raja membuktikan bahwa teknologi modern web dapat diterapkan secara terjangkau untuk memecahkan masalah operasional UMKM secara nyata. Terima kasih, saya siap menjawab pertanyaan dari Dewan Penguji."
+            15: "Kesimpulannya, sistem POS Teh Raja membuktikan bahwa teknologi modern web dapat diterapkan secara terjangkau untuk memecahkan masalah operasional UMKM secara nyata: kasir bebas macet saat offline, selisih kas laci tuntas nol rupiah, dapur paperless, dan belanja bahan terencana ilmiah. Untuk rencana pengembangan lanjutan, sistem ini siap berevolusi dengan Generator QR Meja Akrilik, Denah Meja Interaktif di POS, Cetak Tiket Barista Cup Slip, Bel Audio Chime Offline, Hotkeys Kasir Kilat, serta Payment Gateway QRIS Produksi. Terima kasih, saya siap menjawab pertanyaan dari Dewan Penguji."
         };
 
         function updateSlide() {

@@ -105,8 +105,9 @@ export function buildReceiptPayload(order: Order): Uint8Array {
 
     p.setTextSize(1, 1);
     p.setBold(false);
-    p.printLn('Authentic Tea & Blends');
-    p.printLn('Jl. Raja Tea No. 1, Indonesia');
+    p.printLn('Rajanya Es Teh');
+    p.printLn('2XVC+5Q3, Siandong, Kec. Larangan');
+    p.printLn('Kab. Brebes, Jawa Tengah 52262');
     p.printLn('IG @tehraja.id');
     p.printDivider();
 

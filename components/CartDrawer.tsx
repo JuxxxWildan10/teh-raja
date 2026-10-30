@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useCartStore, useSalesStore, useProductStore, Order, formatVariantLabel } from "@/lib/store";
 import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ReceiptModal from "./ReceiptModal";
 import { nanoid } from "nanoid";
 import NextImage from "next/image";
@@ -27,6 +27,18 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     const [orderType, setOrderType] = useState<OrderType>('dine-in');
     const [showReceipt, setShowReceipt] = useState(false);
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
+
+    // Auto-detect No. Meja from URL (?table= atau ?meja=)
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const tableParam = params.get('table') || params.get('meja');
+            if (tableParam) {
+                setTable(tableParam.trim());
+                setOrderType('dine-in');
+            }
+        }
+    }, [isOpen]);
 
     const checkStock = () => {
         return items.filter(cartItem => {

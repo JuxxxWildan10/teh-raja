@@ -282,13 +282,17 @@
   2. Masalah klasik selisih kas laci dan kebocoran bahan baku UMKM berhasil diselesaikan melalui modul *Petty Cash* dan *Stock Opname Waste Tracker*.
   3. Modul AI Forecasting hibrida 3 lapisan terbukti mampu meramalkan kebutuhan rantai pasok kedai secara presisi.
 - **Rencana Pengembangan Lanjutan:**
-  - Integrasi pembayaran otomatis QRIS Dinamis (Midtrans/Xendit).
-  - Skalabilitas sistem multi-outlet / multi-cabang terpusat.
+  1. **Generator & Cetak QR Meja Akrilik**: Otomatisasi pembuatan dan cetak kartu standing QR meja (O2O Dine-In) yang langsung mengunci nomor meja pelanggan.
+  2. **Visual Table Management (Denah Meja POS)**: Monitoring denah meja real-time di POS (meja kosong, antrean bayar, sedang diracik).
+  3. **Split Tiket Dapur / Barista Cup Slip**: Cetak slip stiker cup minuman khusus barista tanpa rincian nominal harga.
+  4. **Web Audio Chime Offline**: Sintesis bel pesanan ganda (Web Audio API) tanpa ketergantungan kuota internet.
+  5. **Fast Keyboard Shortcuts Kasir**: Transaksi kilat dengan hotkey keyboard (`/`, `F1-F4`, `Space`) saat jam sibuk (*rush hour*).
+  6. **Payment Gateway QRIS Produksi**: Integrasi langsung dengan API berlisensi BI (Midtrans/Xendit) & skalabilitas multi-cabang cloud.
 - **Live Demo Link**: `http://localhost:3005`
 - **Ucapan**: Terima Kasih — *Wassalamu'alaikum Wr. Wb.* / Sesi Tanya Jawab Dibuka.
 
 #### Naskah Pembicara (Speaker Script):
-> *"Sebagai penutup, sistem informasi manajemen Teh Raja ini telah membuktikan bahwa teknologi modern seperti PWA Offline-First, Realtime NoSQL, dan Time Series AI dapat diterapkan secara terjangkau namun berdaya guna tinggi untuk mendongkrak daya saing UMKM lokal.*
+> *"Sebagai penutup, sistem informasi manajemen Teh Raja ini telah membuktikan bahwa teknologi modern seperti PWA Offline-First, Realtime NoSQL, dan Time Series AI dapat diterapkan secara terjangkau namun berdaya guna tinggi untuk mendongkrak daya saing UMKM lokal. Untuk peta jalan pengembangan selanjutnya, sistem ini telah dirancang siap berevolusi dengan Generator QR Meja Akrilik, Denah Meja Interaktif di POS, Cetak Tiket Barista Cup Slip, Bel Audio Chime Offline, Hotkeys Kasir Kilat, serta Payment Gateway QRIS Produksi.*
 > *Demikian presentasi dari saya. Saya menyambut masukan, saran, dan pertanyaan dari Bapak/Ibu Dewan Penguji. Terima kasih."*
 
 ---
