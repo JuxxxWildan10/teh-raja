@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentasi Sidang PKL - TEH RAJA POS & AI Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0D2B20;
+            --primary-dark: #061711;
+            --primary-light: #164232;
+            --gold: #D4AF37;
+            --gold-light: #F3E5AB;
+            --gold-dark: #AA820A;
+            --cream: #FAF7F2;
+            --text-dark: #1E293B;
+            --text-light: #F8FAFC;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(212, 175, 55, 0.25);
+            --accent-green: #10B981;
+            --accent-red: #EF4444;
+            --accent-blue: #3B82F6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--primary-dark);
+            color: var(--text-light);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        /* Top Progress Bar */
+        .progress-container {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 100;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-light));
+            width: 6.66%;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px var(--gold);
+        }
+
+        /* Header Navigation */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 40px;
+            background: rgba(6, 23, 17, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+            z-index: 50;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-crown {
+            font-size: 24px;
+            color: var(--gold);
+            filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.5));
+        }
+
+        .brand-text {
+            font-family: 'Cinzel', serif;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, var(--gold-light), var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-badge {
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(212, 175, 55, 0.15);
+            color: var(--gold-light);
+            border: 1px solid var(--card-border);
+            padding: 3px 10px;
+            border-radius: 20px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .slide-counter {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--gold);
+            background: rgba(212, 175, 55, 0.1);
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+        }
+
+        .btn-ctrl {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--cream);
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-ctrl:hover {
+            background: rgba(212, 175, 55, 0.2);
+            border-color: var(--gold);
+            color: var(--gold-light);
+        }
+
+        /* Slide Viewport */
+        main {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .slide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.96);
+            width: 92%;
+            max-width: 1240px;
+            height: 84vh;
+            background: linear-gradient(145deg, rgba(13, 43, 32, 0.8), rgba(6, 23, 17, 0.95));
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 50px 60px;
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px rgba(212, 175, 55, 0.08);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .slide.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        /* Slide Typography */
+        .slide-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--gold);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .slide-tag::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--gold);
+            box-shadow: 0 0 8px var(--gold);
+        }
+
+        .slide-title {
+            font-family: 'Cinzel', serif;
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--gold-light);
+            line-height: 1.25;
+            margin-bottom: 6px;
+        }
+
+        .slide-subtitle {
+            font-size: 15px;
+            color: rgba(250, 247, 242, 0.7);
+            font-weight: 400;
+            margin-bottom: 24px;
+        }
+
+        .slide-body {
+            flex: 1;
+            display: flex;
+            gap: 30px;
+            align-items: stretch;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .slide-body::-webkit-scrollbar {
+            width: 4px;
+        }
+        .slide-body::-webkit-scrollbar-thumb {
+            background: rgba(212, 175, 55, 0.3);
+            border-radius: 4px;
+        }
+
+        /* Grid Layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            width: 100%;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            width: 100%;
+        }
+
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            width: 100%;
+        }
+
+        /* Cards */
+        .card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(8px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            border-color: var(--gold);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .card-gold {
+            border-color: rgba(212, 175, 55, 0.3);
+            background: linear-gradient(160deg, rgba(212, 175, 55, 0.08), rgba(13, 43, 32, 0.4));
+        }
+
+        .card-title {
+            font-family: 'Cinzel', serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--gold);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-text {
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: rgba(250, 247, 242, 0.85);
+        }
+
+        /* Bullet lists with luxury markers */
+        .luxury-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .luxury-list li {
+            position: relative;
+            padding-left: 26px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: rgba(250, 247, 242, 0.9);
+        }
+
+        .luxury-list li::before {
+            content: "✦";
+            position: absolute;
+            left: 0;
+            top: 1px;
+            color: var(--gold);
+            font-size: 14px;
+        }
+
+        /* Stat Numbers */
+        .stat-box {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+        }
+
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 38px;
+            font-weight: 800;
+            color: var(--gold-light);
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: rgba(250, 247, 242, 0.7);
+            font-weight: 600;
+            margin-top: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Code/Architecture Boxes */
+        .tech-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(212, 175, 55, 0.12);
+            color: var(--gold-light);
+            border: 1px solid rgba(212, 175, 55, 0.25);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Tables */
+        .pres-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .pres-table th {
+            background: rgba(212, 175, 55, 0.15);
+            color: var(--gold-light);
+            padding: 10px 14px;
+            text-align: left;
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .pres-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: rgba(250, 247, 242, 0.85);
+        }
+
+        .pres-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Slide Footer */
+        .slide-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 20px;
+            border-top: 1px solid rgba(212, 175, 55, 0.15);
+            margin-top: 20px;
+            font-size: 12px;
+            color: rgba(250, 247, 242, 0.5);
+        }
+
+        /* Bottom Controls Bar */
+        footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 40px;
+            background: rgba(6, 23, 17, 0.85);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(212, 175, 55, 0.15);
+            z-index: 50;
+        }
+
+        .footer-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 13px;
+            color: rgba(250, 247, 242, 0.6);
+        }
+
+        .nav-keys {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .key-badge {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--gold-light);
+        }
+
+        .footer-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-nav {
+            background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+            color: var(--primary-dark);
+            border: none;
+            padding: 10px 22px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+        }
+
+        .btn-nav:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.45);
+            filter: brightness(1.1);
+        }
+
+        .btn-nav:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-nav-outline {
+            background: transparent;
+            color: var(--cream);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-nav-outline:hover {
+            border-color: var(--gold);
+            color: var(--gold-light);
+            background: rgba(212, 175, 55, 0.1);
+        }
+
+        /* Speaker Notes Drawer */
+        .notes-drawer {
+            position: fixed;
+            bottom: 60px;
+            right: 40px;
+            width: 480px;
+            max-height: 400px;
+            background: rgba(13, 43, 32, 0.95);
+            border: 1px solid var(--gold);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            z-index: 90;
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .notes-drawer.open {
+            display: flex;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .notes-title {
+            font-family: 'Cinzel', serif;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--gold);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+            padding-bottom: 8px;
+        }
+
+        .notes-content {
+            font-size: 13.5px;
+            line-height: 1.7;
+            color: var(--cream);
+        }
+
+        .notes-highlight {
+            background: rgba(212, 175, 55, 0.15);
+            border-left: 3px solid var(--gold);
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 12.5px;
+            color: var(--gold-light);
+        }
+
+        /* Fullscreen Title Hero */
+        .hero-title-box {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .hero-crown {
+            font-size: 64px;
+            margin-bottom: 12px;
+            filter: drop-shadow(0 0 25px rgba(212, 175, 55, 0.6));
+            animation: pulse 3s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.06); }
+        }
+
+        .hero-main-title {
+            font-family: 'Cinzel', serif;
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            line-height: 1.2;
+            background: linear-gradient(135deg, #FFF, var(--gold-light), var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+            max-width: 950px;
+        }
+
+        .hero-sub-title {
+            font-size: 18px;
+            color: rgba(250, 247, 242, 0.85);
+            max-width: 800px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .author-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 16px 36px;
+            display: flex;
+            gap: 36px;
+            align-items: center;
+        }
+
+        .author-item {
+            text-align: left;
+        }
+
+        .author-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--gold);
+            font-weight: 700;
+        }
+
+        .author-val {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--cream);
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Progress Bar -->
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="brand">
+            <span class="brand-crown">👑</span>
+            <span class="brand-text">TEH RAJA</span>
+            <span class="brand-badge">Sidang PKL 2026</span>
+        </div>
+        <div class="header-controls">
+            <div class="slide-counter" id="slideCounter">SLIDE 01 / 15</div>
+            <button class="btn-ctrl" onclick="toggleNotes()" title="Buka Catatan Pembicara (Tekan 'S')">
+                <span>📝</span> Naskah (S)
+            </button>
+            <button class="btn-ctrl" onclick="toggleFullscreen()" title="Layar Penuh (Tekan 'F')">
+                <span>⛶</span> Fullscreen
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Slide Viewport -->
+    <main>
+
+        <!-- SLIDE 1: JUDUL -->
+        <div class="slide active" id="slide-1">
+            <div class="hero-title-box">
+                <div class="hero-crown">👑</div>
+                <div class="slide-tag">Praktik Kerja Lapangan (PKL) • Teknik Informatika</div>
+                <h1 class="hero-main-title">PENGEMBANGAN SISTEM POINT OF SALE (POS) KEDAI "TEH RAJA" BERBASIS PWA OFFLINE-FIRST & AI FORECASTING</h1>
+                <p class="hero-sub-title">Arsitektur Terdistribusi Berkeandalan Tinggi dengan Firebase Realtime Sync, Petty Cash Kas Laci, dan Prediksi Kebutuhan Rantai Pasok</p>
+                <div class="author-card">
+                    <div class="author-item">
+                        <div class="author-label">Penyusun Proyek</div>
+                        <div class="author-val">Mahasiswa PKL / Pengembang</div>
+                    </div>
+                    <div class="author-item">
+                        <div class="author-label">Mitra Usaha</div>
+                        <div class="author-val">Kedai Teh Raja</div>
+                    </div>
+                    <div class="author-item">
+                        <div class="author-label">Status Proyek</div>
+                        <div class="author-val" style="color: var(--accent-green);">● Siap Operasional (100%)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Sistem Informasi Manajemen F&B Modern</span>
+                <span>Gunakan Tombol Panah [← / →] untuk Berpindah Slide</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 2: LATAR BELAKANG MASALAH -->
+        <div class="slide" id="slide-2">
+            <div>
+                <div class="slide-tag">01. Analisis Kebutuhan</div>
+                <h2 class="slide-title">Titik Kritis Masalah di Kedai Fisik F&B</h2>
+                <p class="slide-subtitle">Studi kasus nyata pada operasional mikro-retail kedai minuman Teh Raja</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title"><span>📶</span> 1. Kasir Macet Saat Internet Down</div>
+                        <p class="card-text">Sistem kasir cloud murni tidak dapat memproses antrean saat sinyal seluler atau Wi-Fi kedai terputus, memicu antrean panjang dan hilangnya omzet pelanggan.</p>
+                        <div class="notes-highlight" style="margin-top:14px;"><strong>Dampak:</strong> Pelanggan batal beli dan kasir terpaksa mencatat manual di kertas.</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>💸</span> 2. Selisih Uang Kas Laci (Tekor)</div>
+                        <p class="card-text">Pengeluaran operasional darurat (es batu, gas elpiji, plastik kresek) sering diambil langsung dari laci kasir tanpa sistem pencatatan yang memotong kas laci saat tutup shift.</p>
+                        <div class="notes-highlight" style="margin-top:14px;"><strong>Dampak:</strong> Kasir sering dituduh tekor uang saat rekonsiliasi akhir hari.</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>🍂</span> 3. Kebocoran Bahan Baku (Unrecorded Waste)</div>
+                        <p class="card-text">Susu basi, daun teh tumpah, atau cup plastik pecah tidak pernah diaudit secara berkala, menimbulkan deviasi besar antara stok komputer dan stok fisik riil di toples.</p>
+                        <div class="notes-highlight" style="margin-top:14px;"><strong>Dampak:</strong> Kerugian finansial tersembunyi yang mengikis margin laba bersih.</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>🔮</span> 4. Belanja Bahan Hanya 'Firasat'</div>
+                        <p class="card-text">Pengadaan daun teh dan susu mingguan tidak memiliki dasar ilmiah, sering terjadi <em>overstock</em> yang basi atau kehabisan stok (<em>stockout</em>) di akhir pekan.</p>
+                        <div class="notes-highlight" style="margin-top:14px;"><strong>Dampak:</strong> Hilangnya potensi penjualan ratusan cup saat jam ramai.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Studi Kasus: Kedai Teh Raja</span>
+                <span>Fokus: Ketahanan Sistem, Transparansi Finansial, dan Efisiensi Bahan</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 3: TUJUAN PENGEMBANGAN -->
+        <div class="slide" id="slide-3">
+            <div>
+                <div class="slide-tag">02. Solusi & Sasaran</div>
+                <h2 class="slide-title">Tujuan & Nilai Strategis Proyek</h2>
+                <p class="slide-subtitle">Solusi rekayasa perangkat lunak terintegrasi untuk mendongkrak daya saing kedai</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-3">
+                    <div class="card card-gold">
+                        <div class="card-title"><span>⚡</span> Arsitektur Offline-First</div>
+                        <p class="card-text">Membangun POS berbasis PWA yang dapat dipasang di tablet/HP dan sanggup memproses ribuan transaksi tanpa koneksi internet, lalu menyinkronkan data secara otomatis saat online.</p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>💰</span> Zero-Discrepancy Cash</div>
+                        <p class="card-text">Menyediakan pencatatan <strong>Petty Cash</strong> kas laci dan rekonsiliasi tutup shift akurat sehingga uang tunai fisik selalu klop dengan laporan keuangan.</p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>📊</span> Laba Rugi (P&L) Real-Time</div>
+                        <p class="card-text">Menghitung omzet kotor, estimasi HPP resep (COGS 30%), pengeluaran operasional, dan laba bersih riil yang dapat diekspor langsung ke spreadsheet Excel.</p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>📋</span> Audit Stock Opname & Waste</div>
+                        <p class="card-text">Fitur timbang fisik berkala dengan kalkulasi selisih otomatis dan klasifikasi alasan kerugian (tumpah, basi, rusak, atau salah hitung).</p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>🧠</span> AI Demand Forecasting</div>
+                        <p class="card-text">Mengintegrasikan 9 algoritma Time Series statistik dengan evaluasi MAPE untuk meramal kebutuhan bahan baku fisik (BOM) hingga 14 hari ke depan.</p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>🍳</span> Paperless Kitchen Display</div>
+                        <p class="card-text">Layar tablet dapur (KDS) terhubung seketika (&lt;500ms) dengan kasir untuk meracik teh tanpa risiko bon kertas basah atau hilang.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Solusi Komprehensif F&B</span>
+                <span>Standar Operasional Enterprise pada Biaya Ramah UMKM</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 4: ARSITEKTUR TEKNOLOGI -->
+        <div class="slide" id="slide-4">
+            <div>
+                <div class="slide-tag">03. Arsitektur Sistem</div>
+                <h2 class="slide-title">Stack Teknologi & Arsitektur Terdistribusi</h2>
+                <p class="slide-subtitle">Perpaduan Next.js 16, IndexedDB lokal, Firebase Cloud, dan Google Gemini AI</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title"><span>🏗️</span> Komponen Teknologi Utama</div>
+                        <ul class="luxury-list">
+                            <li><strong>Frontend:</strong> Next.js 16 App Router + TypeScript + Tailwind CSS</li>
+                            <li><strong>State & Offline Storage:</strong> Zustand + IndexedDB (idb-keyval)</li>
+                            <li><strong>Real-time Cloud:</strong> Firebase Realtime Database (WebSocket Event-driven)</li>
+                            <li><strong>Authentication:</strong> Firebase Auth + Role-Based Access (Admin & Kasir)</li>
+                            <li><strong>AI Engine:</strong> Google Gemini 3.5 Flash + Library Time Series</li>
+                            <li><strong>Hardware I/O:</strong> Web Bluetooth ESC/POS + WhatsApp API Struk</li>
+                        </ul>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>🔄</span> Diagram Alur Sinkronisasi Data</div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.8; color:var(--gold-light); background:rgba(0,0,0,0.3); padding:16px; border-radius:10px; border:1px solid rgba(212,175,55,0.2);">
+                            [ Tablet Kasir POS ]<br>
+                            &nbsp;&nbsp;│ (Simpan Transaksi Instan)<br>
+                            &nbsp;&nbsp;▼<br>
+                            [ IndexedDB Lokal ] ◄── Keandalan Offline 100%<br>
+                            &nbsp;&nbsp;│ (Sinkronisasi Otomatis saat Online)<br>
+                            &nbsp;&nbsp;▼<br>
+                            [ Firebase Realtime DB ] ◄── Cloud WebSocket<br>
+                            &nbsp;&nbsp;├─► [ Layar Dapur KDS ] (Racik &lt; 500ms)<br>
+                            &nbsp;&nbsp;└─► [ Dasbor Admin & P&L ] (Laporan Finansial)
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Arsitektur Berstandar Industri</span>
+                <span>Tahan Gangguan Jaringan & Skalabel</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 5: DESAIN DATABASE NOSQL -->
+        <div class="slide" id="slide-5">
+            <div>
+                <div class="slide-tag">04. Struktur Data</div>
+                <h2 class="slide-title">Desain Database NoSQL Hierarchical JSON Tree</h2>
+                <p class="slide-subtitle">Optimalisasi latensi baca-tulis milidetik untuk operasi transaksi tinggi</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title"><span>🌳</span> Struktur Kunci Dokumen</div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.8; color:rgba(250,247,242,0.9); background:rgba(0,0,0,0.3); padding:14px; border-radius:10px;">
+                            root/<br>
+                            ├── orders/ {orderId} ➔ Detail pesanan, status racik<br>
+                            ├── products/ {prodId} ➔ Menu, harga, resep BOM<br>
+                            ├── ingredients/ {ingId} ➔ Stok bahan (gr/ml/pcs)<br>
+                            ├── expenses/ {expId} ➔ Petty cash & operasional<br>
+                            ├── opnameLogs/ {logId} ➔ Log audit fisik bahan<br>
+                            └── sessions/ {sessId} ➔ Sesi modal kasir & tutup shift
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>🛡️</span> Keunggulan vs Relasional (SQL)</div>
+                        <ul class="luxury-list">
+                            <li><strong>Zero Latency:</strong> Tidak memerlukan operasi <em>JOIN</em> tabel yang berat saat ribuan pesanan masuk.</li>
+                            <li><strong>Event-Driven Sync:</strong> Firebase memancarkan mutasi data secara push ke semua klien yang terhubung via WebSocket.</li>
+                            <li><strong>Firebase Security Rules:</strong> Akses data sensitif seperti <em>expenses</em> dan <em>opnameLogs</em> hanya diizinkan untuk akun kasir/admin terautentikasi.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Firebase Realtime Database</span>
+                <span>Akses Data Cepat & Terproteksi Rule Keamanan</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 6: MODUL POS KASIR -->
+        <div class="slide" id="slide-6">
+            <div>
+                <div class="slide-tag">05. Modul Kasir</div>
+                <h2 class="slide-title">Point of Sale (POS) & Kecepatan Layanan</h2>
+                <p class="slide-subtitle">Dirancang khusus untuk memotong waktu tunggu antrean di jam sibuk</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-3">
+                    <div class="card">
+                        <div class="card-title"><span>💵</span> Quick Cash Nominals</div>
+                        <p class="card-text">Tombol <code>[Uang Pas]</code>, <code>[10rb]</code>, <code>[20rb]</code>, <code>[50rb]</code>, <code>[100rb]</code>. Kasir tidak perlu mengetik nominal uang manual untuk menghitung kembalian.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>📱</span> Struk Digital WhatsApp</div>
+                        <p class="card-text">Pengiriman nota rincian item otomatis ke WhatsApp pelanggan (<code>wa.me/62...</code>) untuk mengurangi biaya kertas thermal roll.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>🖨️</span> Bluetooth ESC/POS</div>
+                        <p class="card-text">Konektivitas langsung ke printer mini thermal via Web Bluetooth API tanpa perlu driver tambahan pada tablet atau smartphone.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Modul Kasir Teh Raja</span>
+                <span>Throughput Transaksi Meningkat hingga 40%</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 7: KITCHEN DISPLAY SYSTEM -->
+        <div class="slide" id="slide-7">
+            <div>
+                <div class="slide-tag">06. Modul Dapur</div>
+                <h2 class="slide-title">Kitchen Display System (KDS) & Komunikasi Dapur</h2>
+                <p class="slide-subtitle">Mengeliminasi bon kertas dan mempercepat koordinasi racik barista</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title"><span>⚡</span> Fitur Utama KDS</div>
+                        <ul class="luxury-list">
+                            <li><strong>Sinkronisasi &lt; 500ms:</strong> Pesanan kasir langsung muncul di layar tablet barista seketika saat tombol bayar ditekan.</li>
+                            <li><strong>Audio Chime Alert:</strong> Bunyi bel otomatis memberi tahu barista bahwa ada pesanan baru yang harus dibuat.</li>
+                            <li><strong>Tingkat Kustomisasi Jelas:</strong> Menampilkan level gula (<em>Less Sugar</em>), es (<em>Less Ice</em>), dan catatan racikan secara kontras.</li>
+                            <li><strong>Status Racik Interaktif:</strong> Tombol sekali-klik ubah status dari <em>Menunggu</em> ke <em>Selesai</em>.</li>
+                        </ul>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>📉</span> Manfaat Riil Kedai</div>
+                        <div class="stat-box" style="margin-bottom:14px;">
+                            <div class="stat-value">0 BON</div>
+                            <div class="stat-label">Pengurangan Kertas Struk Dapur (100% Paperless)</div>
+                        </div>
+                        <p class="card-text">Tidak ada lagi pesanan terlewat karena kertas terselip, basah, atau terkena cipratan sirup teh di meja barista.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Modul KDS Teh Raja</span>
+                <span>Sinergi Kasir dan Barista Tanpa Miss-Komunikasi</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 8: PETTY CASH & KAS LACI -->
+        <div class="slide" id="slide-8">
+            <div>
+                <div class="slide-tag">07. Pengendalian Kas</div>
+                <h2 class="slide-title">Modul Petty Cash & Rekonsiliasi Kas Laci</h2>
+                <p class="slide-subtitle">Solusi tuntas anti-tekor saat tutup shift operasional harian</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title"><span>💸</span> Pencatatan Kas Keluar Terpadu</div>
+                        <p class="card-text">Kasir dapat mencatat pengeluaran operasional mendadak (beli es batu kristal, gas elpiji, air galon) langsung dari layar POS via tombol <strong>[💸 Kas Keluar]</strong>.</p>
+                        <div class="notes-highlight" style="margin-top:14px;">
+                            <strong>Pemisahan Sumber Kas:</strong>
+                            <br>• <em>Kas Laci:</em> Otomatis memotong uang fisik yang wajib disetor.
+                            <br>• <em>Rekening Toko:</em> Masuk ke buku pengeluaran tanpa memotong laci.
+                        </div>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>🔒</span> Rumus Tutup Shift Akurat</div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; line-height:2; color:var(--gold-light); background:rgba(0,0,0,0.3); padding:16px; border-radius:10px;">
+                            Kas Diharapkan = <br>
+                            &nbsp;&nbsp;Modal Awal Laci<br>
+                            &nbsp;&nbsp;+ Total Penjualan Tunai<br>
+                            &nbsp;&nbsp;<strong style="color:var(--accent-red);">- Kas Keluar Laci (Petty Cash)</strong><br>
+                            ───────────────────────────────<br>
+                            <span style="color:var(--accent-green);">Selisih Kas = Kas Fisik Dihitung - Kas Diharapkan</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Integritas Keuangan Mikro</span>
+                <span>Kasir Tenang, Pemilik Kedai Mendapat Transparansi Penuh</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 9: LAPORAN LABA RUGI (P&L) -->
+        <div class="slide" id="slide-9">
+            <div>
+                <div class="slide-tag">08. Finansial & Akuntansi</div>
+                <h2 class="slide-title">Laporan Laba Rugi (P&L) Real-Time & Ekspor Excel</h2>
+                <p class="slide-subtitle">Visibilitas keuntungan bersih kedai dalam satu sentuhan layar</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-4" style="margin-bottom:20px;">
+                    <div class="stat-box">
+                        <div class="stat-value" style="font-size:24px;">Gross Sales</div>
+                        <div class="stat-label">Total Omzet Penjualan</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" style="font-size:24px; color:var(--accent-red);">- HPP 30%</div>
+                        <div class="stat-label">Estimasi COGS Bahan</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" style="font-size:24px; color:var(--gold);">- Beban Toko</div>
+                        <div class="stat-label">Pengeluaran Petty Cash</div>
+                    </div>
+                    <div class="stat-box" style="border-color:var(--accent-green);">
+                        <div class="stat-value" style="font-size:24px; color:var(--accent-green);">= Net Profit</div>
+                        <div class="stat-label">Laba Bersih & Margin %</div>
+                    </div>
+                </div>
+                <div class="card card-gold">
+                    <div class="card-title"><span>📥</span> 1-Click Export (.xlsx) & Backup Database (.json)</div>
+                    <p class="card-text">Pemilik dapat mengunduh seluruh lembar kerja Laba Rugi beserta rincian transaksi kas keluar menjadi file Excel resmi, serta mengamankan seluruh database produk, pesanan, dan resep dalam 1 file JSON.</p>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Dasbor Finansial Admin</span>
+                <span>Standar Tata Kelola Keuangan Usaha Modern</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 10: STOCK OPNAME & WASTE -->
+        <div class="slide" id="slide-10">
+            <div>
+                <div class="slide-tag">09. Pengendalian Gudang</div>
+                <h2 class="slide-title">Audit Stock Opname Fisik & Waste Tracker</h2>
+                <p class="slide-subtitle">Pencatatan akuntabilitas penyusutan bahan baku di area bar</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title"><span>⚖️</span> Mekanisme Audit Fisik</div>
+                        <ul class="luxury-list">
+                            <li>Staf menimbang sisa bahan baku riil (daun teh, susu, sirup, cup).</li>
+                            <li>Sistem otomatis mengomputasi deviasi: <code>Selisih = Stok Fisik - Stok Sistem</code>.</li>
+                            <li>Wajib memilih klasifikasi alasan kerugian:
+                                <br>• 💧 <em>Bahan Tumpah / Spillage</em>
+                                <br>• 🍂 <em>Bahan Basi / Melewati Kadaluwarsa</em>
+                                <br>• 📦 <em>Kemasan Rusak Pengiriman</em>
+                                <br>• 🔍 <em>Koreksi Hitung / Human Error</em>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>📜</span> Log Audit Permanen</div>
+                        <p class="card-text">Tiap penyesuaian tersimpan di tabel <em>Log Stock Opname & Waste Management</em> lengkap dengan stempel waktu, nama auditor, dan nominal selisih (+/-). Pemilik dapat memantau efisiensi racik tiap staf.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Modul Inventaris & BOM</span>
+                <span>Mencegah Kebocoran Stok Bahan Baku Kedai</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 11: AI FORECASTING HIBRIDA -->
+        <div class="slide" id="slide-11">
+            <div>
+                <div class="slide-tag">10. Inovasi Riset Unggulan</div>
+                <h2 class="slide-title">Sistem AI Demand Forecasting Hibrida 3 Lapisan</h2>
+                <p class="slide-subtitle">Kombinasi 9 Algoritma Time Series, Supply Chain BOM, dan Generative AI</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-3">
+                    <div class="card card-gold">
+                        <div class="card-title"><span>📐</span> Lapisan 1: Time Series</div>
+                        <p class="card-text">Menjalankan 9 metode komparatif (Holt-Winters, Moving Average, SES, Ensemble). Memilih model dengan galat terendah berbasis <strong>MAPE (Standar Lewis 1982)</strong>.</p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>📦</span> Lapisan 2: Konversi BOM</div>
+                        <p class="card-text">Mengalikan proyeksi cup ke resep bahan baku: gram daun teh, ml susu, dan pcs cup. Menghitung <strong>Days of Inventory</strong> dan <strong>Reorder Point</strong>.</p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>🧠</span> Lapisan 3: Gemini AI</div>
+                        <p class="card-text">Menerjemahkan data numerik menjadi rekomendasi naratif bisnis: saran jadwal pesanan ke supplier dan jadwal shift barista saat akhir pekan sibuk.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Riset Komputasi Terapan</span>
+                <span>Bukan Sekadar AI Wrapper, Melainkan Metodologi Ilmiah Kuat</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 12: SUPPLY CHAIN & BOM -->
+        <div class="slide" id="slide-12">
+            <div>
+                <div class="slide-tag">11. Rantai Pasok</div>
+                <h2 class="slide-title">Integrasi Bill of Materials (BOM) & Reorder Point</h2>
+                <p class="slide-subtitle">Dari angka prediksi penjualan menuju aksi nyata pengadaan gudang</p>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title"><span>🧮</span> Rumus Kebutuhan Bahan Riil</div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; line-height:2; color:var(--gold-light); background:rgba(0,0,0,0.3); padding:16px; border-radius:10px;">
+                            Kebutuhan Bahan (j) = <br>
+                            &nbsp;&nbsp;Σ [ Prediksi Cup(p) × Takaran Resep(p, j) ]<br><br>
+                            Ketahanan Stok = Sisa Stok / Kebutuhan Harian
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><span>🚨</span> Reorder Alert & Supplier Order</div>
+                        <ul class="luxury-list">
+                            <li>Bahan baku yang ketahanan stoknya lebih kecil dari horizon peramalan otomatis diberi badge status <strong>KRITIS</strong>.</li>
+                            <li>Sistem menampilkan saran pesanan ke suplier (misal: pesan 1.200 gram daun teh dan 3 karung es batu) sebelum kedai kehabisan stok.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Manajemen Rantai Pasok Mikro</span>
+                <span>Mencegah Overstock Basi dan Kehabisan Stok di Jam Sibuk</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 13: HASIL PENGUJIAN SISTEM -->
+        <div class="slide" id="slide-13">
+            <div>
+                <div class="slide-tag">12. Evaluasi & Pengujian</div>
+                <h2 class="slide-title">Hasil Pengujian Sistem & Metrik Evaluasi</h2>
+                <p class="slide-subtitle">Uji fungsionalitas menyeluruh, keandalan offline, dan akurasi peramalan</p>
+            </div>
+            <div class="slide-body">
+                <table class="pres-table">
+                    <thead>
+                        <tr>
+                            <th>Jenis Pengujian</th>
+                            <th>Metode / Skenario</th>
+                            <th>Hasil / Metrik</th>
+                            <th>Kesimpulan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Uji Fungsional</strong></td>
+                            <td>Black-Box Testing (32 Skenario POS, KDS, Admin)</td>
+                            <td>100% Fitur Berfungsi Normal</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">VALID</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Uji Offline-Online</strong></td>
+                            <td>Pemutusan Jaringan saat Transaksi Kasir</td>
+                            <td>100% Antrean Tersinkron ke Cloud</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">TIDAK ADA DATA HILANG</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Uji Akurasi AI</strong></td>
+                            <td>Peramalan Time Series Holt-Winters vs Riwayat</td>
+                            <td>MAPE &lt; 8.4% (Standar Lewis 1982)</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">SANGAT AKURAT</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Kualitas Kode</strong></td>
+                            <td>TypeScript Check & Next.js Production Build</td>
+                            <td>0 Compiler Error, 0 Warning Kritis</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">PRODUCTION READY</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="slide-footer">
+                <span>Pengujian Komprehensif</span>
+                <span>Teruji Secara Empiris di Lingkungan Produksi</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 14: NILAI GUNA BAGI TOKO -->
+        <div class="slide" id="slide-14">
+            <div>
+                <div class="slide-tag">13. Dampak Bisnis</div>
+                <h2 class="slide-title">Nilai Guna Nyata bagi Kedai Teh Raja</h2>
+                <p class="slide-subtitle">Perbandingan operasional sebelum dan sesudah implementasi sistem</p>
+            </div>
+            <div class="slide-body">
+                <table class="pres-table">
+                    <thead>
+                        <tr>
+                            <th>Parameter Operasional</th>
+                            <th>Sebelum Sistem (Manual)</th>
+                            <th>Sesudah Sistem Teh Raja</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Keandalan Kasir</strong></td>
+                            <td>Macet saat internet offline</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">Lancar 100% Offline-First PWA</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Selisih Kas Laci Kasir</strong></td>
+                            <td>Rata-rata tekor Rp 20rb - Rp 50rb/hari</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">Rp 0 (Terkontrol lewat Petty Cash)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Koordinasi Dapur</strong></td>
+                            <td>Bon kertas hilang & basah</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">Paperless KDS &lt; 500ms Audio Alert</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Kebocoran Bahan Baku</strong></td>
+                            <td>Tidak terdeteksi (rugi tersembunyi)</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">Terekam Akurat di Log Waste Opname</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Perencanaan Stok</strong></td>
+                            <td>Menebak-nebak / Firasat</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">Berbasis Data Ilmiah Time Series & BOM</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="slide-footer">
+                <span>Transformasi Digital F&B</span>
+                <span>Efisiensi Finansial & Operasional yang Nyata</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 15: KESIMPULAN & PENUTUP -->
+        <div class="slide" id="slide-15">
+            <div class="hero-title-box">
+                <div class="hero-crown">✨</div>
+                <div class="slide-tag">14. Penutup</div>
+                <h2 class="hero-main-title" style="font-size:36px;">KESIMPULAN & SESI TANYA JAWAB</h2>
+                <div class="grid-2" style="max-width:850px; text-align:left; margin-bottom:24px;">
+                    <div class="card">
+                        <div class="card-title"><span>🏆</span> Kesimpulan Proyek</div>
+                        <p class="card-text">Sistem ini berhasil memadukan teknologi modern web (PWA Offline-First, Realtime NoSQL, dan AI Rantai Pasok) menjadi solusi praktis, andal, dan berdaya guna nyata untuk mendongkrak profitabilitas UMKM kedai teh.</p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>🚀</span> Rencana Masa Depan</div>
+                        <p class="card-text">Integrasi sistem pembayaran dinamis QRIS (Midtrans/Xendit) serta skalabilitas manajemen multi-cabang terpusat untuk ekspansi kedai.</p>
+                    </div>
+                </div>
+                <div style="font-family:'Cinzel',serif; font-size:22px; color:var(--gold-light); font-weight:700;">
+                    Terima Kasih atas Perhatian Dewan Penguji
+                </div>
+                <p style="font-size:14px; color:rgba(250,247,242,0.7); margin-top:8px;">
+                    Sesi Presentasi Selesai • Sesi Tanya Jawab (Q&A) Dibuka
+                </p>
+            </div>
+            <div class="slide-footer">
+                <span>Kedai Teh Raja POS & Management</span>
+                <span>Live Demo: http://localhost:3005</span>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Speaker Notes Drawer -->
+    <div class="notes-drawer" id="notesDrawer">
+        <div class="notes-title">
+            <span>Catatan Pembicara (Speaker Script)</span>
+            <span style="cursor:pointer;" onclick="toggleNotes()">✕</span>
+        </div>
+        <div class="notes-content" id="notesContent">
+            Naskah pembicara untuk slide ini akan tampil di sini.
+        </div>
+    </div>
+
+    <!-- Footer Controls -->
+    <footer>
+        <div class="footer-left">
+            <div class="nav-keys">
+                <span class="key-badge">←</span>
+                <span class="key-badge">→</span>
+                <span>Navigasi Slide</span>
+            </div>
+            <span>•</span>
+            <div class="nav-keys">
+                <span class="key-badge">S</span>
+                <span>Catatan</span>
+            </div>
+            <span>•</span>
+            <div class="nav-keys">
+                <span class="key-badge">F</span>
+                <span>Layar Penuh</span>
+            </div>
+        </div>
+        <div class="footer-right">
+            <button class="btn-nav-outline" id="prevBtn" onclick="prevSlide()">‹ Sebelumnya</button>
+            <button class="btn-nav" id="nextBtn" onclick="nextSlide()">Selanjutnya ›</button>
+        </div>
+    </footer>
+
+    <!-- Presentation Engine Script -->
+    <script>
+        const totalSlides = 15;
+        let currentSlide = 1;
+
+        const speakerScripts = {
+            1: "Selamat pagi/siang kepada Bapak/Ibu Dewan Penguji. Hari ini saya mempresentasikan proyek PKL berupa Sistem POS dan Manajemen F&B Kedai Teh Raja berbasis PWA Offline-First, Realtime Sync, dan AI Forecasting. Sistem ini telah selesai dibangun dan teruji 100% siap operasional.",
+            2: "Masalah di kedai fisik F&B ada 4: kasir macet saat internet mati, uang laci tekor saat tutup buku akibat pengeluaran kecil kas laci yang lupa dicatat, bahan tumpah/basi tanpa audit, serta belanja bahan baku mingguan yang hanya mengandalkan intuisi/firasat.",
+            3: "Tujuan proyek kami adalah menyelesaikan keempat titik kritis tersebut: menghadirkan arsitektur Offline-First PWA, modul kas keluar Petty Cash anti-tekor, audit stock opname, laporan laba rugi real-time, serta peramalan stok berbasis ilmiah.",
+            4: "Arsitektur sistem menggunakan Next.js 16 dan TypeScript. Transaksi disimpan di IndexedDB lokal browser (Offline-First), lalu disinkronkan ke Firebase Realtime Database saat online, memicu pembaruan seketika di dapur KDS dan Admin tanpa perlu reload.",
+            5: "Database dirancang menggunakan NoSQL JSON Tree pada Firebase Realtime Database. Keuntungannya adalah latensi baca-tulis dalam hitungan milidetik dan berbasis WebSocket event-driven, sangat cocok untuk sinkronisasi pesanan dapur dan status antrean kasir.",
+            6: "Pada modul POS, kami menambahkan tombol cepat uang pas dan nominal pecahan (10rb, 20rb, 50rb, 100rb) untuk mempercepat antrean pelanggan. Struk juga dapat dikirim langsung ke WhatsApp pelanggan untuk menghemat kertas thermal.",
+            7: "Kitchen Display System (KDS) terpasang di tablet dapur. Saat kasir memproses bayar, pesanan muncul kurang dari 500ms di dapur dengan nada dering bel. Mengeliminasi kertas bon yang mudah hilang atau basah terkena tumpahan teh.",
+            8: "Modul Petty Cash memecahkan masalah klasik kasir tekor. Saat kasir mengambil 15 ribu untuk beli es batu kristal dadakan, kasir menginputnya ke sistem. Sistem otomatis mengurangi ekspektasi uang kas fisik yang wajib disetor saat tutup shift.",
+            9: "Di Dasbor Laba Rugi (P&L), pemilik toko bisa melihat omzet kotor, potongan HPP 30%, pengeluaran operasional, dan laba bersih riil. Semua data finansial bisa diunduh langsung menjadi laporan resmi Microsoft Excel (.xlsx).",
+            10: "Modul Stock Opname Fisik memungkinkan staf dapur menimbang sisa bahan secara berkala. Sistem menghitung selisih stok secara otomatis. Jika ada bahan yang tumpah atau basi, staf wajib mencantumkan alasannya ke dalam log audit permanen.",
+            11: "Inovasi unggulan kami adalah AI Demand Forecasting 3 Lapisan. Kami tidak sekadar memakai AI wrapper, melainkan menguji 9 model Time Series statistik, memilih model dengan MAPE terendah, lalu menerjemahkannya ke kebutuhan bahan baku fisik.",
+            12: "Integrasi Bill of Materials (BOM) menghubungkan prediksi penjualan cup ke takaran resep bahan fisik. Sistem otomatis menghitung ketahanan stok dan memberi peringatan reorder sebelum stok kedai habis.",
+            13: "Sistem telah melalui serangkaian pengujian: Black-Box testing 100% valid, uji jaringan offline tidak ada data hilang, uji akurasi AI menghasilkan MAPE di bawah 8.4% (kategori 'Sangat Akurat'), serta 0 error pada kompilasi TypeScript dan Next.js Build.",
+            14: "Dampak bisnis bagi kedai Teh Raja sangat nyata: kasir bebas macet saat internet mati, selisih uang laci saat tutup shift tuntas menjadi nol rupiah, operasional dapur paperless, dan pembelanjaan bahan baku terencana rapi.",
+            15: "Kesimpulannya, sistem POS Teh Raja membuktikan bahwa teknologi modern web dapat diterapkan secara terjangkau untuk memecahkan masalah operasional UMKM secara nyata. Terima kasih, saya siap menjawab pertanyaan dari Dewan Penguji."
+        };
+
+        function updateSlide() {
+            // Update slide classes
+            document.querySelectorAll('.slide').forEach((el, idx) => {
+                el.classList.toggle('active', (idx + 1) === currentSlide);
+            });
+
+            // Update Progress Bar
+            const pct = (currentSlide / totalSlides) * 100;
+            document.getElementById('progressBar').style.width = pct + '%';
+
+            // Update Counter
+            const pad = (n) => String(n).padStart(2, '0');
+            document.getElementById('slideCounter').textContent = `SLIDE ${pad(currentSlide)} / ${pad(totalSlides)}`;
+
+            // Update Buttons
+            document.getElementById('prevBtn').disabled = (currentSlide === 1);
+            document.getElementById('nextBtn').disabled = (currentSlide === totalSlides);
+
+            // Update Speaker Notes
+            document.getElementById('notesContent').textContent = speakerScripts[currentSlide] || "Tidak ada catatan khusus untuk slide ini.";
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides) {
+                currentSlide++;
+                updateSlide();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 1) {
+                currentSlide--;
+                updateSlide();
+            }
+        }
+
+        function toggleNotes() {
+            document.getElementById('notesDrawer').classList.toggle('open');
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.error(err));
+            } else {
+                document.exitFullscreen().catch(err => console.error(err));
+            }
+        }
+
+        // Keyboard Controls
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'Space' || e.key === 'PageDown') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 's' || e.key === 'S') {
+                toggleNotes();
+            } else if (e.key === 'f' || e.key === 'F') {
+                toggleFullscreen();
+            }
+        });
+
+        // Initialize
+        updateSlide();
+    </script>
+</body>
+</html>

@@ -12,8 +12,8 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     useAuthStore, useCartStore, useProductStore, useSalesStore,
-    usePromoStore, useCustomerStore, useInventoryStore, // [NEW] Promo & Customer & Inventory
-    Order, ExtendedProduct, formatVariantLabel
+    usePromoStore, useCustomerStore, useInventoryStore, useExpenseStore,
+    Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES
 } from "@/lib/store";
 import { nanoid } from "nanoid";
 import Image from "next/image";
@@ -28,7 +28,7 @@ import {
     Banknote, QrCode, Building2, ChevronRight,
     RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie,
     Wand2, Sparkles, ChevronDown, Pause, Play, Trash, Tag, Percent, Mic, MicOff, Loader2,
-    CheckCircle, RefreshCw
+    CheckCircle, RefreshCw, Bell
 , Printer} from "lucide-react";
 
 // ── Category Tabs ─────────────────────────────────────────────
@@ -60,7 +60,7 @@ export default function POSPage() {
     const { user, logout } = useAuthStore();
     const { items, addToCart, removeFromCart, updateQuantity, updateNote, clearCart, total } = useCartStore();
     const { products, decrementStock } = useProductStore();
-    const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders } = useSalesStore();
+    const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders, updateOrderStatus } = useSalesStore();
     const { getApplicablePromo } = usePromoStore(); // [NEW] Promo
     const { findByPhone, addCustomer, addPoints, getPointsForOrder, redeemPoints } = useCustomerStore(); // [NEW] Loyalty
     const { decrementIngredientsForOrder, ingredients } = useInventoryStore(); // [NEW] BOM
@@ -119,6 +119,53 @@ export default function POSPage() {
 
     // Hold Order panel
     const [showHeldOrders, setShowHeldOrders] = useState(false);
+
+    // Incoming Orders panel (Web / Table QR - Always sorted newest first)
+    const [showIncomingOrders, setShowIncomingOrders] = useState(false);
+    const incomingOrders = useMemo(() => {
+        return orders
+            .filter(o => !o.status || o.status === 'pending' || o.status === 'awaiting_payment')
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [orders]);
+
+    // Live Today's Orders & Revenue Counter (includes both web/menu and manual POS orders)
+    const todayOrders = useMemo(() => {
+        const todayStr = new Date().toDateString();
+        return orders.filter(o => {
+            const d = new Date(o.date);
+            return !isNaN(d.getTime()) && d.toDateString() === todayStr && o.status !== 'cancelled';
+        });
+    }, [orders]);
+
+    const todayRevenue = useMemo(() => {
+        return todayOrders.reduce((sum, o) => sum + o.total, 0);
+    }, [todayOrders]);
+
+    // Petty Cash / Kas Keluar Modal
+    const [showExpenseModal, setShowExpenseModal] = useState(false);
+    const [expenseAmount, setExpenseAmount] = useState('');
+    const [expenseDesc, setExpenseDesc] = useState('');
+    const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>('bahan_tambahan');
+
+    const handleAddExpense = () => {
+        const amount = parseFloat(expenseAmount.replace(/\D/g, '')) || 0;
+        if (amount <= 0 || !expenseDesc.trim()) {
+            toast.error("Masukkan keterangan dan nominal pengeluaran!");
+            return;
+        }
+        useExpenseStore.getState().addExpense({
+            amount,
+            description: expenseDesc.trim(),
+            category: expenseCategory,
+            paidVia: 'kas_laci',
+            cashierName: user?.name || 'Kasir',
+        });
+        addLog("EXPENSE_ADDED", `Kas Keluar: ${expenseDesc.trim()} (${formatRp(amount)})`, user?.name || 'Kasir');
+        toast.success(`Kas keluar ${formatRp(amount)} berhasil dicatat!`);
+        setExpenseAmount('');
+        setExpenseDesc('');
+        setShowExpenseModal(false);
+    };
 
     // ── Flavor Finder ─────────────────────────────────────────
     const [showFlavorFinder, setShowFlavorFinder] = useState(false);
@@ -492,8 +539,21 @@ export default function POSPage() {
                     </div>
                     <span className="font-bold text-amber-400 tracking-widest text-sm uppercase">Teh Raja</span>
                     <span className="hidden sm:block text-white/30 text-xs border-l border-white/20 pl-3 tracking-wider uppercase">Point of Sale</span>
+                    <div className="hidden lg:flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg text-xs font-mono text-amber-300 border border-amber-400/20 ml-2">
+                        <ShoppingBag size={12} className="text-amber-400" />
+                        <span>Hari Ini: <strong>{todayOrders.length}</strong> Order · Rp {todayRevenue.toLocaleString('id-ID')}</span>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {incomingOrders.length > 0 && (
+                        <button onClick={() => setShowIncomingOrders(true)}
+                            className="relative flex items-center gap-1.5 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-400/50 px-2.5 py-1 rounded-lg hover:bg-amber-500/30 transition shadow-sm animate-pulse"
+                            title="Pesanan Online / Meja Baru Masuk">
+                            <Bell size={12} className="text-amber-400 animate-bounce" />
+                            <span className="hidden sm:inline">Order Masuk</span>
+                            <span className="bg-amber-400 text-[#0D2B20] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">{incomingOrders.length}</span>
+                        </button>
+                    )}
                     {heldOrders.length > 0 && (
                         <button onClick={() => setShowHeldOrders(true)}
                             className="relative flex items-center gap-1.5 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg hover:bg-amber-500/30 transition">
@@ -507,10 +567,16 @@ export default function POSPage() {
                         <span>{user.name}</span>
                     </div>
                     {isStoreOpen && (
-                        <button onClick={() => setConfirmCloseStore(true)}
-                            className="text-[10px] sm:text-xs font-bold bg-amber-400 text-[#0D2B20] hover:bg-amber-300 transition px-2 py-1 rounded-md">
-                            Tutup Toko
-                        </button>
+                        <>
+                            <button onClick={() => setShowExpenseModal(true)}
+                                className="text-[10px] sm:text-xs font-bold bg-white/10 hover:bg-white/20 text-amber-300 border border-amber-400/30 transition px-2.5 py-1 rounded-md flex items-center gap-1 shadow-sm">
+                                💸 Kas Keluar
+                            </button>
+                            <button onClick={() => setConfirmCloseStore(true)}
+                                className="text-[10px] sm:text-xs font-bold bg-amber-400 text-[#0D2B20] hover:bg-amber-300 transition px-2.5 py-1 rounded-md shadow-sm">
+                                Tutup Toko
+                            </button>
+                        </>
                     )}
                     <a href="/admin" className="flex items-center gap-1.5 text-[10px] sm:text-xs text-white/70 hover:text-white transition px-2 py-1 rounded hover:bg-white/10">
                         <LayoutDashboard size={13} />
@@ -1000,10 +1066,14 @@ export default function POSPage() {
                                             </div>
                                         )}
                                         {isInsufficientCash && <p className="text-[10px] text-red-500 text-center">⚠ Uang kurang {formatRp(orderTotal - cashIn)}</p>}
-                                        <div className="flex gap-1 flex-wrap">
-                                            {[5000, 10000, 20000, 50000, 100000].filter(n => n >= orderTotal).slice(0, 4).map(n => (
+                                        <div className="flex gap-1.5 flex-wrap pt-1">
+                                            <button onClick={() => setCashReceived(String(orderTotal))}
+                                                className="text-[#0D2B20] text-[10px] px-2.5 py-1 bg-amber-400 hover:bg-amber-300 rounded font-mono font-bold transition flex items-center gap-1 shadow-sm">
+                                                💵 Uang Pas ({formatRp(orderTotal)})
+                                            </button>
+                                            {[10000, 20000, 50000, 100000].filter(n => n > orderTotal).slice(0, 3).map(n => (
                                                 <button key={n} onClick={() => setCashReceived(String(n))}
-                                                    className="text-gray-900 text-[10px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 rounded font-mono border border-gray-200 transition">
+                                                    className="text-gray-900 text-[10px] px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded font-mono font-bold border border-gray-200 transition">
                                                     {n >= 1000 ? `${n / 1000}rb` : n}
                                                 </button>
                                             ))}
@@ -1135,6 +1205,127 @@ export default function POSPage() {
                 )}
             </AnimatePresence>
 
+            {/* ── INCOMING ONLINE / TABLE ORDERS PANEL ─────── */}
+            <AnimatePresence>
+                {showIncomingOrders && (
+                    <>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} exit={{ opacity: 0 }} onClick={() => setShowIncomingOrders(false)} className="fixed inset-0 bg-black z-40" />
+                        <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed right-0 top-0 h-full w-96 max-w-full bg-white z-50 shadow-2xl flex flex-col">
+                            <div className="px-4 py-3 border-b border-gray-100 bg-[#0D2B20] text-white flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Bell size={16} className="text-amber-400 animate-bounce" />
+                                    <div>
+                                        <span className="font-bold text-amber-300 text-sm">Pesanan Masuk Online ({incomingOrders.length})</span>
+                                        <p className="text-[10px] text-white/60">Pesanan baru otomatis paling atas</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowIncomingOrders(false)} className="p-1 hover:bg-white/20 text-white rounded-full transition"><X size={16} /></button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50/50">
+                                {incomingOrders.length === 0 && (
+                                    <div className="text-center text-gray-400 py-16 text-sm">
+                                        <CheckCircle size={36} className="mx-auto text-green-500 mb-2 opacity-50" />
+                                        <p className="font-bold text-gray-700">Semua pesanan sudah diproses</p>
+                                        <p className="text-xs text-gray-400 mt-1">Tidak ada pesanan online/meja baru saat ini.</p>
+                                    </div>
+                                )}
+                                {incomingOrders.map(order => {
+                                    const orderTime = new Date(order.date);
+                                    const diffMins = Math.floor((Date.now() - orderTime.getTime()) / 60000);
+                                    const isAwaitingPayment = order.status === 'awaiting_payment';
+                                    return (
+                                        <div key={order.id} className="bg-white border-2 border-amber-300/80 rounded-2xl p-3.5 shadow-sm space-y-2.5">
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-black text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</span>
+                                                        {diffMins < 5 && (
+                                                            <span className="text-[9px] bg-red-100 text-red-600 font-bold px-1.5 py-0.2 rounded-full animate-pulse">BARU</span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                                                        #{order.id.slice(0, 6).toUpperCase()} · {orderTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                                        {order.tableNumber ? ` · Meja ${order.tableNumber}` : ' · Bawa Pulang'}
+                                                    </p>
+                                                </div>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAwaitingPayment ? 'bg-orange-100 text-orange-800 border border-orange-200' : 'bg-amber-100 text-amber-900 border border-amber-300'}`}>
+                                                    {isAwaitingPayment ? '2. Menunggu Bayar' : '1. Pesan Masuk'}
+                                                </span>
+                                            </div>
+
+                                            <div className="bg-gray-50 rounded-xl p-2.5 text-xs text-gray-700 space-y-1.5 border border-gray-100">
+                                                {order.items.map((it, idx) => (
+                                                    <div key={idx} className="flex justify-between items-start">
+                                                        <span className="font-medium"><strong>{it.quantity}x</strong> {it.name}</span>
+                                                        {it.note && <span className="text-[10px] text-blue-600 italic">"{it.note}"</span>}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            <div className="flex justify-between items-center pt-1 border-t border-gray-100 text-xs">
+                                                <span className="text-gray-400 uppercase text-[10px] font-mono">{order.paymentMethod || 'TUNAI'}</span>
+                                                <span className="font-black text-forest text-sm">Rp {order.total.toLocaleString('id-ID')}</span>
+                                            </div>
+
+                                            <div className="flex gap-2 pt-1">
+                                                {isAwaitingPayment ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            updateOrderStatus(order.id, 'processing');
+                                                            addLog("CONFIRM_PAYMENT", `Konfirmasi bayar order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                                            toast.success(`Pembayaran #${order.id.slice(0, 6)} lunas! Order dikirim ke dapur.`);
+                                                        }}
+                                                        className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm"
+                                                    >
+                                                        <CheckCircle size={12} /> Lunas &amp; Racik
+                                                    </button>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={() => {
+                                                                updateOrderStatus(order.id, 'processing');
+                                                                addLog("PROCESS_ORDER", `Terima order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                                                toast.success(`Order #${order.id.slice(0, 6)} diterima & diteruskan ke dapur!`);
+                                                            }}
+                                                            className="flex-1 py-2 bg-[#0D2B20] hover:bg-[#1a4433] text-amber-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm"
+                                                        >
+                                                            <CheckCircle size={12} /> Terima &amp; Racik
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                updateOrderStatus(order.id, 'awaiting_payment');
+                                                                addLog("AWAIT_PAYMENT", `Tagih bayar order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                                                toast.info(`Order #${order.id.slice(0, 6)} ditandai menunggu pembayaran.`);
+                                                            }}
+                                                            className="px-2.5 py-2 bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 rounded-xl text-xs font-bold transition"
+                                                            title="Tandai menunggu pembayaran QRIS/Transfer"
+                                                        >
+                                                            Tagih
+                                                        </button>
+                                                    </>
+                                                )}
+                                                <button
+                                                    onClick={() => {
+                                                        updateOrderStatus(order.id, 'cancelled');
+                                                        addLog("CANCEL_ORDER", `Tolak order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                                        toast.info(`Order #${order.id.slice(0, 6)} ditolak.`);
+                                                    }}
+                                                    className="px-3 py-2 bg-gray-100 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition"
+                                                    title="Tolak / Batalkan"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
             {/* ── CONFIRM MODALS ────────────────────────────── */}
             <ConfirmModal isOpen={confirmClearCart} title="Kosongkan Keranjang?" message="Semua item akan dihapus. Gunakan Hold untuk menyimpan pesanan." confirmLabel="Ya, Kosongkan" danger
                 onConfirm={() => { clearCart(); setConfirmClearCart(false); toast.info('Keranjang dikosongkan.'); }}
@@ -1143,6 +1334,88 @@ export default function POSPage() {
                 onConfirm={() => { setConfirmLogout(false); addLog('LOGOUT', `${user?.name} logged out`, user?.name || ''); logout(); router.push('/admin'); }}
                 onCancel={() => setConfirmLogout(false)} />
                 
+            {/* ── KAS KELUAR / PETTY CASH MODAL ──────────────── */}
+            <AnimatePresence>
+                {showExpenseModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                            <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                                <div className="flex items-center gap-2 text-[#0D2B20]">
+                                    <span className="text-xl">💸</span>
+                                    <h3 className="text-lg font-black">Catat Kas Keluar (Petty Cash)</h3>
+                                </div>
+                                <button onClick={() => setShowExpenseModal(false)} className="text-gray-400 hover:text-gray-600">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-500 mb-4">
+                                Catat pengambilan uang dari laci kasir (beli es batu, galon, sedotan, dll) agar perhitungan kas di akhir shift tetap akurat.
+                            </p>
+
+                            <div className="space-y-3 mb-5">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Kategori Pengeluaran</label>
+                                    <select
+                                        value={expenseCategory}
+                                        onChange={e => setExpenseCategory(e.target.value as ExpenseCategory)}
+                                        className="w-full text-xs font-medium text-gray-900 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20]">
+                                        {EXPENSE_CATEGORIES.map(c => (
+                                            <option key={c.id} value={c.id}>{c.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Nominal (Rp)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-xs">Rp</span>
+                                        <input
+                                            type="tel"
+                                            value={expenseAmount}
+                                            onChange={e => setExpenseAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                                            placeholder="Contoh: 15000"
+                                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] font-bold text-sm text-gray-900"
+                                        />
+                                    </div>
+                                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                                        {[10000, 15000, 20000, 25000, 50000].map(val => (
+                                            <button key={val} type="button" onClick={() => setExpenseAmount(String(val))}
+                                                className="text-[10px] font-mono font-bold bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded text-gray-700">
+                                                {val >= 1000 ? `${val / 1000}rb` : val}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Keperluan / Keterangan</label>
+                                    <input
+                                        type="text"
+                                        value={expenseDesc}
+                                        onChange={e => setExpenseDesc(e.target.value)}
+                                        placeholder="Contoh: Beli es batu kristal 1 karung"
+                                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] text-xs text-gray-900"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 justify-end">
+                                <button
+                                    onClick={() => setShowExpenseModal(false)}
+                                    className="px-4 py-2 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={handleAddExpense}
+                                    disabled={!expenseAmount || !expenseDesc}
+                                    className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-[#0D2B20] hover:bg-[#1a4433] disabled:opacity-50 transition shadow-md">
+                                    Simpan Pengeluaran
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
             <AnimatePresence>
                 {confirmCloseStore && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

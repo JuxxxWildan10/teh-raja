@@ -123,6 +123,7 @@ export interface StoreSession {
     startingCash?: number;
     actualCash?: number;
     expectedCash?: number;
+    cashExpenses?: number; // Total pengeluaran kas kecil (petty cash) selama shift
     notes?: string;
     status: 'open' | 'closed';
 }
@@ -502,13 +503,24 @@ export const useSalesStore = create<SalesState>()(
 
                 // Calculate total sales that occurred during this session time
                 // Filter out cancelled orders
-                const sessionOrders = state.orders.filter(o => o.date >= session.startTime && o.status !== 'cancelled');
+                const sessionOrders = state.orders.filter(o => {
+                    const oTime = new Date(o.date).getTime();
+                    const sTime = new Date(session.startTime).getTime();
+                    return !isNaN(oTime) && oTime >= sTime && o.status !== 'cancelled';
+                });
                 const totalSales = sessionOrders.reduce((sum, order) => sum + order.total, 0);
                 const totalOrders = sessionOrders.length;
                 
-                // Calculate expected cash: starting cash + total cash sales
-                const cashSales = sessionOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, order) => sum + order.total, 0);
-                const expectedCash = (session.startingCash || 0) + cashSales;
+                // Calculate expected cash: starting cash + total cash sales - cash expenses paid from drawer
+                const cashSales = sessionOrders.filter(o => o.paymentMethod === 'cash' || !o.paymentMethod).reduce((sum, order) => sum + order.total, 0);
+                const sessionCashExpenses = (useExpenseStore.getState()?.expenses || [])
+                    .filter(e => {
+                        const eTime = new Date(e.date).getTime();
+                        const sTime = new Date(session.startTime).getTime();
+                        return e.paidVia === 'kas_laci' && !isNaN(eTime) && eTime >= sTime;
+                    })
+                    .reduce((sum, e) => sum + e.amount, 0);
+                const expectedCash = Math.max(0, (session.startingCash || 0) + cashSales - sessionCashExpenses);
 
                 const closedSession: StoreSession = {
                     ...session,
@@ -518,6 +530,7 @@ export const useSalesStore = create<SalesState>()(
                     totalOrders,
                     actualCash,
                     expectedCash,
+                    cashExpenses: sessionCashExpenses,
                     notes
                 };
 
@@ -539,8 +552,8 @@ export const useSalesStore = create<SalesState>()(
 
             addOrder: (order) => {
                 set((state) => ({ 
-                    orders: [...state.orders, order],
-                    offlineOrders: [...state.offlineOrders, order]
+                    orders: [order, ...state.orders.filter(o => o.id !== order.id)],
+                    offlineOrders: [order, ...state.offlineOrders.filter(o => o.id !== order.id)]
                 }));
                 // Sync to Firebase
                 // Sanitize undefined fields which Firebase Realtime Database Rejects
@@ -605,22 +618,30 @@ export const useSalesStore = create<SalesState>()(
                 set((state) => ({ offlineLogs: state.offlineLogs.filter(l => l.id !== id) }));
             },
             getDailySales: () => {
-                const orders = get().orders;
-                const salesMap = new Map<string, { total: number; count: number }>();
+                const orders = get().orders.filter(o => o.status !== 'cancelled');
+                const salesMap = new Map<string, { total: number; count: number; displayDate: string }>();
                 orders.forEach(order => {
-                    const date = new Date(order.date).toLocaleDateString('id-ID');
-                    const current = salesMap.get(date) || { total: 0, count: 0 };
-                    salesMap.set(date, {
+                    const d = new Date(order.date);
+                    if (isNaN(d.getTime())) return;
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const isoDate = `${year}-${month}-${day}`;
+                    const displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+                    const current = salesMap.get(isoDate) || { total: 0, count: 0, displayDate };
+                    salesMap.set(isoDate, {
                         total: current.total + order.total,
-                        count: current.count + 1
+                        count: current.count + 1,
+                        displayDate
                     });
                 });
                 return Array.from(salesMap.entries())
-                    .map(([date, data]) => ({ date, ...data }))
-                    .slice(-7);
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .slice(-7)
+                    .map(([, data]) => ({ date: data.displayDate, total: data.total, count: data.count }));
             },
             getProductPopularity: () => {
-                const orders = get().orders;
+                const orders = get().orders.filter(o => o.status !== 'cancelled');
                 const popularityMap = new Map<string, number>();
                 orders.forEach(order => {
                     order.items.forEach(item => {
@@ -634,7 +655,7 @@ export const useSalesStore = create<SalesState>()(
                     .slice(0, 5);
             },
             getPeakHours: () => {
-                const orders = get().orders;
+                const orders = get().orders.filter(o => o.status !== 'cancelled');
                 const hoursMap = new Map<string, number>();
                 orders.forEach(order => {
                     const hour = new Date(order.date).getHours().toString().padStart(2, '0') + ':00';
@@ -791,13 +812,28 @@ export { POINTS_PER_RUPIAH, POINTS_REDEEM_VALUE };
 
 // ══════════════════════════════════════════════════════
 // INVENTORY STORE (BOM)
-// ══════════════════════════════════════════════════════
+export interface OpnameLog {
+    id: string;
+    date: string; // ISO
+    ingredientId: string;
+    ingredientName: string;
+    systemStock: number;
+    actualStock: number;
+    difference: number;
+    unit: string;
+    reason: 'tumpah' | 'basi' | 'rusak' | 'koreksi_hitung' | 'lainnya';
+    notes?: string;
+    recordedBy: string;
+}
+
 interface InventoryState {
     ingredients: Ingredient[];
+    opnameLogs: OpnameLog[];
     addIngredient: (ingredient: Ingredient) => void;
     updateIngredient: (id: string, updated: Partial<Ingredient>) => void;
     deleteIngredient: (id: string) => void;
     decrementIngredientsForOrder: (items: CartItem[], products: ExtendedProduct[]) => void;
+    recordOpname: (log: Omit<OpnameLog, 'id' | 'date'>) => void;
 }
 
 export const useInventoryStore = create<InventoryState>()(
@@ -810,6 +846,20 @@ export const useInventoryStore = create<InventoryState>()(
                 { id: 'ing-ice', name: 'Es Batu', stock: 200, unit: 'pcs', minStockThreshold: 50 },
                 { id: 'ing-cup', name: 'Cup Plastik M', stock: 500, unit: 'pcs', minStockThreshold: 100 },
             ],
+            opnameLogs: [],
+            recordOpname: (data) => {
+                const newLog: OpnameLog = {
+                    ...data,
+                    id: nanoid(),
+                    date: new Date().toISOString(),
+                };
+                set((state) => ({
+                    ingredients: state.ingredients.map(i => i.id === data.ingredientId ? { ...i, stock: data.actualStock } : i),
+                    opnameLogs: [newLog, ...(state.opnameLogs || [])]
+                }));
+                firebaseUpdate(ref(rtdb, `ingredients/${data.ingredientId}`), { stock: data.actualStock }).catch(console.error);
+                firebaseSet(ref(rtdb, `opnameLogs/${newLog.id}`), JSON.parse(JSON.stringify(newLog))).catch(console.error);
+            },
             addIngredient: (ingredient) => {
                 set((s) => ({ ingredients: [...s.ingredients, ingredient] }));
                 firebaseSet(ref(rtdb, `ingredients/${ingredient.id}`), ingredient).catch(err => console.error(err));
@@ -955,5 +1005,81 @@ export const useForecastHistoryStore = create<ForecastHistoryState>()(
         { name: 'teh-raja-forecast-history-v1', storage: createJSONStorage(() => idbStorage) }
     )
 );
+
+// ══════════════════════════════════════════════════════
+// EXPENSE & PETTY CASH STORE
+// ══════════════════════════════════════════════════════
+export type ExpenseCategory = 'bahan_tambahan' | 'operasional' | 'utilitas' | 'gaji' | 'lainnya';
+
+export const EXPENSE_CATEGORIES: { id: ExpenseCategory; label: string }[] = [
+    { id: 'bahan_tambahan', label: 'Bahan Tambahan (Es batu, susu, sirup, dll)' },
+    { id: 'operasional', label: 'Operasional Toko (Sedotan, kresek, sabun, dll)' },
+    { id: 'utilitas', label: 'Utilitas (Listrik, air galon, internet)' },
+    { id: 'gaji', label: 'Uang Makan / Kasbon Staff' },
+    { id: 'lainnya', label: 'Lain-lain' },
+];
+
+export interface Expense {
+    id: string;
+    date: string; // ISO
+    category: ExpenseCategory;
+    description: string;
+    amount: number;
+    paidVia: 'kas_laci' | 'rekening_toko';
+    cashierName?: string;
+    sessionId?: string;
+    notes?: string;
+}
+
+interface ExpenseState {
+    expenses: Expense[];
+    addExpense: (expense: Omit<Expense, 'id' | 'date'>) => Expense;
+    deleteExpense: (id: string) => void;
+    setExpenses: (expenses: Expense[]) => void;
+}
+
+export const useExpenseStore = create<ExpenseState>()(
+    persist(
+        (set, get) => ({
+            expenses: [
+                {
+                    id: 'exp-demo-1',
+                    date: new Date(Date.now() - 3600000 * 5).toISOString(),
+                    category: 'bahan_tambahan',
+                    description: 'Beli Es Batu Kristal (2 Karung)',
+                    amount: 24000,
+                    paidVia: 'kas_laci',
+                    cashierName: 'Kasir Default',
+                },
+                {
+                    id: 'exp-demo-2',
+                    date: new Date(Date.now() - 3600000 * 24).toISOString(),
+                    category: 'utilitas',
+                    description: 'Air Mineral Galon (2 Galon)',
+                    amount: 40000,
+                    paidVia: 'kas_laci',
+                    cashierName: 'Kasir Default',
+                }
+            ],
+            setExpenses: (expenses) => set({ expenses }),
+            addExpense: (expenseData) => {
+                const newExp: Expense = {
+                    ...expenseData,
+                    id: nanoid(),
+                    date: new Date().toISOString(),
+                };
+                set((s) => ({ expenses: [newExp, ...s.expenses] }));
+                firebaseSet(ref(rtdb, `expenses/${newExp.id}`), JSON.parse(JSON.stringify(newExp))).catch(console.error);
+                return newExp;
+            },
+            deleteExpense: (id) => {
+                set((s) => ({ expenses: s.expenses.filter(e => e.id !== id) }));
+                firebaseSet(ref(rtdb, `expenses/${id}`), null).catch(console.error);
+            }
+        }),
+        { name: 'teh-raja-expenses-v1', storage: createJSONStorage(() => idbStorage) }
+    )
+);
+
 
 

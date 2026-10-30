@@ -16,14 +16,16 @@ function formatRp(n: number) {
 }
 
 export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: ShiftSummaryModalProps) {
-    // Filter orders during this session
-    const sessionOrders = orders.filter(
-        o => o.date >= session.startTime && o.status !== 'cancelled'
-    );
+    // Filter orders during this session (both manual POS and online web orders)
+    const sessionOrders = orders.filter(o => {
+        const oTime = new Date(o.date).getTime();
+        const sTime = new Date(session.startTime).getTime();
+        return !isNaN(oTime) && oTime >= sTime && o.status !== 'cancelled';
+    });
 
     // Breakdown per payment method
     const paymentSummary = {
-        cash: sessionOrders.filter(o => o.paymentMethod === 'cash').reduce((s, o) => s + o.total, 0),
+        cash: sessionOrders.filter(o => o.paymentMethod === 'cash' || (!o.paymentMethod && o.cashReceived)).reduce((s, o) => s + o.total, 0),
         qris: sessionOrders.filter(o => o.paymentMethod === 'qris').reduce((s, o) => s + o.total, 0),
         transfer: sessionOrders.filter(o => o.paymentMethod === 'transfer').reduce((s, o) => s + o.total, 0),
     };
@@ -31,7 +33,11 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
     const cashCount = sessionOrders.filter(o => o.paymentMethod === 'cash').length;
     const qrisCount = sessionOrders.filter(o => o.paymentMethod === 'qris').length;
     const transferCount = sessionOrders.filter(o => o.paymentMethod === 'transfer').length;
-    const cancelledCount = orders.filter(o => o.date >= session.startTime && o.status === 'cancelled').length;
+    const cancelledCount = orders.filter(o => {
+        const oTime = new Date(o.date).getTime();
+        const sTime = new Date(session.startTime).getTime();
+        return !isNaN(oTime) && oTime >= sTime && o.status === 'cancelled';
+    }).length;
 
     const avgTransaction = sessionOrders.length > 0 ? session.totalSales / sessionOrders.length : 0;
 
@@ -130,6 +136,12 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
                                         <span>Pemasukan Tunai</span>
                                         <span className="font-bold text-green-600">+{formatRp(paymentSummary.cash)}</span>
                                     </div>
+                                    {Boolean(session.cashExpenses) && (
+                                        <div className="flex justify-between items-center text-gray-600">
+                                            <span>Kas Keluar (Petty Cash)</span>
+                                            <span className="font-bold text-red-600">-{formatRp(session.cashExpenses || 0)}</span>
+                                        </div>
+                                    )}
                                     <div className="border-t border-amber-200/50 my-1 pt-1 flex justify-between items-center">
                                         <span className="font-bold text-gray-800">Kas Seharusnya (Expected)</span>
                                         <span className="font-black text-gray-800">{formatRp(session.expectedCash || 0)}</span>

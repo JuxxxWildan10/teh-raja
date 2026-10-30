@@ -54,6 +54,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             customerName: name.trim(),
             cashierName: "Web Store",
             status: 'pending',
+            paymentMethod: 'qris',
             orderType,
             tableNumber: table.trim() || undefined,
         };

@@ -27,6 +27,14 @@
     "salesHistory": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "expenses": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "opnameLogs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }

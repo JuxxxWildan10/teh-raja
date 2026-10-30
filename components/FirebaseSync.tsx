@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, set as firebaseSet, query, limitToLast } from "firebase/database";
-import { useSalesStore, useInventoryStore, useCartStore, useProductStore, useForecastHistoryStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
+import { useSalesStore, useInventoryStore, useCartStore, useProductStore, useForecastHistoryStore, useExpenseStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
 import { Bell, BellOff } from "lucide-react";
 
 const SUCCESS_SOUND = "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3";
@@ -77,13 +77,23 @@ export default function FirebaseSync() {
             setErrorMsg(null);
             const data = snapshot.val();
             if (data) {
-                const loadedOrders: Order[] = Object.values(data);
+                const loadedOrders: Order[] = (Object.values(data) as Order[]).sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                );
                 useSalesStore.setState((state) => {
                     const offlineOnly = state.offlineOrders.filter(oo => !loadedOrders.find(lo => lo.id === oo.id));
-                    return { ...state, orders: [...loadedOrders, ...offlineOnly] };
+                    const combined = [...offlineOnly, ...loadedOrders].sort(
+                        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                    );
+                    return { ...state, orders: combined };
                 });
             } else {
-                useSalesStore.setState((state) => ({ ...state, orders: [...state.offlineOrders] }));
+                useSalesStore.setState((state) => ({
+                    ...state,
+                    orders: [...state.offlineOrders].sort(
+                        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                    )
+                }));
             }
         }, (error) => {
             console.error("Firebase Sync Error:", error);
@@ -173,6 +183,18 @@ export default function FirebaseSync() {
             console.debug("[FirebaseSync] salesHistory sync paused (auth required):", err.message);
         });
 
+        const expensesRef = ref(rtdb, 'expenses');
+        const unsubExpenses = onValue(expensesRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loaded = Object.values(data) as any[];
+                loaded.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                useExpenseStore.setState({ expenses: loaded });
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] expenses sync paused (auth required):", err.message);
+        });
+
         const connectedRef = ref(rtdb, ".info/connected");
         const unsubscribeStatus = onValue(connectedRef, (snap) => {
             const connected = snap.val() === true;
@@ -207,6 +229,7 @@ export default function FirebaseSync() {
             unsubLogs();
             unsubSessions();
             unsubHistory();
+            unsubExpenses();
             unsubscribeStatus();
         };
     }, []);

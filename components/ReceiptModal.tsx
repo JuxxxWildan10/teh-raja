@@ -45,35 +45,38 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
     };
 
     const handleWhatsApp = async () => {
-        if (!receiptRef.current) return;
-        try {
-            const canvas = await html2canvas(receiptRef.current, { scale: 2 });
-            canvas.toBlob(async (blob) => {
-                if (!blob) return;
-                const file = new File([blob], `Struk_${order.id.slice(0, 8)}.png`, { type: 'image/png' });
-                
-                const text = `*Struk Teh Raja*\nOrder #${order.id.slice(0, 8).toUpperCase()}\nTotal: ${formatRp(order.total)}`;
+        const itemsList = order.items.map(i => `• ${i.quantity}x ${i.name} - ${formatRp(i.price * i.quantity)}${i.variants ? ` (${formatVariantLabel(i.variants)})` : ''}`).join('\n');
+        const textReceipt = `🍵 *STRUK PEMBELIAN TEH RAJA*
+Authentic Premium Tea Experience
+──────────────────────────────
+No. Order : #${order.id.slice(0, 8).toUpperCase()}
+Tanggal   : ${new Date(order.date).toLocaleString('id-ID')}
+Kasir     : ${order.cashierName || 'Kasir Teh Raja'}
+Pelanggan : ${order.customerName || 'Tamu'}
+${order.tableNumber ? `Meja/Tipe : ${order.tableNumber} (${order.orderType || 'Dine-in'})\n` : ''}──────────────────────────────
+*PESANAN:*
+${itemsList}
+──────────────────────────────
+Subtotal  : ${formatRp(order.subtotal || order.total)}
+${order.discount ? `Diskon    : -${formatRp(order.discount)}\n` : ''}*TOTAL     : ${formatRp(order.total)}*
+Bayar     : ${(order.paymentMethod || 'cash').toUpperCase()} (${formatRp(order.cashReceived || order.total)})
+${order.changeAmount ? `Kembali   : ${formatRp(order.changeAmount)}\n` : ''}──────────────────────────────
+_Terima kasih telah menikmati Teh Raja!_
+_Simpan pesan ini sebagai bukti pembayaran resmi._`;
 
-                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        title: 'Struk Teh Raja',
-                        text: text,
-                        files: [file]
-                    });
-                } else {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = file.name;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    window.open(`https://wa.me/?text=${encodeURIComponent(text + '\n\nSilakan lampirkan gambar struk yang baru saja diunduh.')}`, '_blank');
-                }
-            }, 'image/png');
-        } catch (err) {
-            console.error('Error generating receipt image:', err);
-            alert('Gagal membuat gambar struk');
+        let waPhone = '';
+        if (order.customerPhone) {
+            let clean = order.customerPhone.replace(/\D/g, '');
+            if (clean.startsWith('0')) clean = '62' + clean.slice(1);
+            if (clean.startsWith('8')) clean = '62' + clean;
+            waPhone = clean;
         }
+
+        const waUrl = waPhone
+            ? `https://wa.me/${waPhone}?text=${encodeURIComponent(textReceipt)}`
+            : `https://wa.me/?text=${encodeURIComponent(textReceipt)}`;
+
+        window.open(waUrl, '_blank');
     };
 
     const payLabel = order.paymentMethod ? PAYMENT_LABEL[order.paymentMethod] : '-';

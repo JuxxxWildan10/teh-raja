@@ -7,12 +7,18 @@
  */
 
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useProductStore, useSalesStore, useAuthStore, usePromoStore, useCustomerStore, useInventoryStore, useSupplierStore, ExtendedProduct, Order } from "@/lib/store";
+import {
+    useProductStore, useSalesStore, useAuthStore, usePromoStore,
+    useCustomerStore, useInventoryStore, useSupplierStore, useExpenseStore,
+    ExtendedProduct, Order, ExpenseCategory, EXPENSE_CATEGORIES, OpnameLog
+} from "@/lib/store";
 import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import ShiftSummaryModal from "@/components/ShiftSummaryModal";
+import ReceiptModal from "@/components/ReceiptModal";
+import * as XLSX from "xlsx";
 import { Line, Bar, Doughnut } from "react-chartjs-2";
 import {
     Chart as ChartJS,
@@ -33,7 +39,7 @@ import {
     History, AlertTriangle,
     CheckCircle, XCircle, Clock, Loader,
     Menu, Search, Filter, Sparkles, BrainCircuit, RefreshCw, Ticket, Users as UsersIcon, Box,
-    Building2, BarChart2, TrendingUp, FileSpreadsheet, Bell
+    Building2, BarChart2, TrendingUp, FileSpreadsheet, Bell, Wallet, DollarSign, Upload, Database, ClipboardCheck
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -82,19 +88,44 @@ export default function AdminPage() {
     const [promoForm, setPromoForm] = useState({ name: '', type: 'percent' as 'percent' | 'amount' | 'happy_hour', value: 10, minSubtotal: '', startHour: 9, endHour: 17, description: '', isActive: true });
 
     // UI State
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics' | 'keuangan'>('dashboard');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // ── Expense & P&L State ──────────────────────────────────────
+    const { expenses, addExpense, deleteExpense } = useExpenseStore();
+    const [expenseModalOpen, setExpenseModalOpen] = useState(false);
+    const [expenseForm, setExpenseForm] = useState({
+        amount: '',
+        description: '',
+        category: 'bahan_tambahan' as ExpenseCategory,
+        paidVia: 'kas_laci' as 'kas_laci' | 'rekening_toko',
+        notes: ''
+    });
+
+    // ── Stock Opname State ───────────────────────────────────────
+    const { opnameLogs, recordOpname } = useInventoryStore();
+    const [opnameModalOpen, setOpnameModalOpen] = useState(false);
+    const [opnameForm, setOpnameForm] = useState({
+        ingredientId: '',
+        actualStock: '',
+        reason: 'koreksi_hitung' as 'tumpah' | 'basi' | 'rusak' | 'koreksi_hitung' | 'lainnya',
+        notes: ''
+    });
+
+    const backupFileRef = useRef<HTMLInputElement>(null);
 
     // Confirm modals
     const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
     const [confirmReset, setConfirmReset] = useState(false);
     const [confirmCancelOrder, setConfirmCancelOrder] = useState<string | null>(null);
 
-    // Orders filter
+    // Orders filter & sort
     const [orderSearch, setOrderSearch] = useState('');
     const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
+    const [orderSortMode, setOrderSortMode] = useState<'newest' | 'pipeline' | 'oldest'>('newest');
+    const [viewReceiptOrder, setViewReceiptOrder] = useState<Order | null>(null);
 
     // Shift summary
     const [shiftSummary, setShiftSummary] = useState<import("@/lib/store").StoreSession | null>(null);
@@ -207,7 +238,7 @@ export default function AdminPage() {
         toast.success("Data penjualan berhasil di-export ke CSV!");
     };
 
-    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics') => {
+    const handleTabChange = (tab: 'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics' | 'keuangan') => {
         setActiveTab(tab);
         setIsMobileMenuOpen(false);
     };
@@ -248,6 +279,191 @@ export default function AdminPage() {
         XLSX.writeFile(wb, `Laporan_TehRaja_${new Date().toISOString().split('T')[0]}.xlsx`);
         addLog("EXPORT_XLSX", "Exported full report to Excel", user?.name || "Admin");
         toast.success("Berhasil export ke Excel!");
+    };
+
+    // ── Live Today Stats (Semua pesanan: Web/Menu & Manual POS) ───
+    const todayOrders = useMemo(() => {
+        const todayStr = new Date().toDateString();
+        return orders.filter(o => {
+            const d = new Date(o.date);
+            return !isNaN(d.getTime()) && d.toDateString() === todayStr;
+        });
+    }, [orders]);
+
+    const todayValidOrders = useMemo(() => {
+        return todayOrders.filter(o => o.status !== 'cancelled');
+    }, [todayOrders]);
+
+    const todayGrossRevenue = useMemo(() => {
+        return todayValidOrders.reduce((sum, o) => sum + o.total, 0);
+    }, [todayValidOrders]);
+
+    const todayCompletedOrders = useMemo(() => {
+        return todayOrders.filter(o => o.status === 'completed');
+    }, [todayOrders]);
+
+    // ── Financials (P&L) Calculations ─────────────────────────────
+    const validOrders = useMemo(() => orders.filter(o => o.status !== 'cancelled'), [orders]);
+    const grossRevenue = useMemo(() => validOrders.reduce((sum, o) => sum + o.total, 0), [validOrders]);
+    const estimatedCOGS = useMemo(() => Math.round(grossRevenue * 0.30), [grossRevenue]); // 30% standar HPP tea shop
+    const grossProfit = useMemo(() => grossRevenue - estimatedCOGS, [grossRevenue, estimatedCOGS]);
+    const totalExpenses = useMemo(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
+    const netProfit = useMemo(() => grossProfit - totalExpenses, [grossProfit, totalExpenses]);
+    const netMargin = useMemo(() => grossRevenue > 0 ? ((netProfit / grossRevenue) * 100).toFixed(1) : '0.0', [grossRevenue, netProfit]);
+    const drawerExpenses = useMemo(() => expenses.filter(e => e.paidVia === 'kas_laci').reduce((sum, e) => sum + e.amount, 0), [expenses]);
+    const transferExpenses = useMemo(() => expenses.filter(e => e.paidVia === 'rekening_toko').reduce((sum, e) => sum + e.amount, 0), [expenses]);
+
+    const handleSaveExpense = (e: React.FormEvent) => {
+        e.preventDefault();
+        const amt = parseFloat(String(expenseForm.amount).replace(/\D/g, '')) || 0;
+        if (amt <= 0 || !expenseForm.description.trim()) {
+            toast.error("Nominal dan keperluan pengeluaran wajib diisi!");
+            return;
+        }
+        addExpense({
+            amount: amt,
+            description: expenseForm.description.trim(),
+            category: expenseForm.category,
+            paidVia: expenseForm.paidVia,
+            notes: expenseForm.notes.trim(),
+            cashierName: user?.name || 'Admin',
+        });
+        addLog("EXPENSE_ADDED", `Pengeluaran: ${expenseForm.description} (Rp ${amt.toLocaleString('id-ID')})`, user?.name || 'Admin');
+        toast.success("Pengeluaran operasional berhasil dicatat!");
+        setExpenseModalOpen(false);
+        setExpenseForm({
+            amount: '',
+            description: '',
+            category: 'bahan_tambahan',
+            paidVia: 'kas_laci',
+            notes: ''
+        });
+    };
+
+    const handleSaveOpname = (e: React.FormEvent) => {
+        e.preventDefault();
+        const ing = ingredients.find(i => i.id === opnameForm.ingredientId);
+        if (!ing) {
+            toast.error("Pilih bahan baku!");
+            return;
+        }
+        const actual = parseFloat(String(opnameForm.actualStock).replace(/,/g, '.')) || 0;
+        const diff = actual - ing.stock;
+
+        recordOpname({
+            ingredientId: ing.id,
+            ingredientName: ing.name,
+            systemStock: ing.stock,
+            actualStock: actual,
+            difference: diff,
+            unit: ing.unit,
+            reason: opnameForm.reason,
+            notes: opnameForm.notes.trim(),
+            recordedBy: user?.name || 'Admin',
+        });
+
+        addLog("STOCK_OPNAME", `Opname ${ing.name}: Fisik ${actual} vs Sistem ${ing.stock} (${diff >= 0 ? '+' : ''}${diff} ${ing.unit})`, user?.name || 'Admin');
+        toast.success(`Stok ${ing.name} berhasil disesuaikan ke ${actual} ${ing.unit}!`);
+        setOpnameModalOpen(false);
+        setOpnameForm({
+            ingredientId: '',
+            actualStock: '',
+            reason: 'koreksi_hitung',
+            notes: ''
+        });
+    };
+
+    const handleExportPNL = () => {
+        const wb = XLSX.utils.book_new();
+
+        const pnlRows = [
+            ["LAPORAN LABA RUGI (PROFIT & LOSS) - TEH RAJA"],
+            [`Periode Cetak: ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}`],
+            [`Dicatat Oleh : ${user?.name || 'Admin'}`],
+            [],
+            ["Komponen Keuangan", "Nominal (Rp)", "Persentase (%)"],
+            ["1. Pendapatan Kotor (Gross Sales)", grossRevenue, "100.0%"],
+            ["2. Estimasi HPP Bahan Baku (COGS 30%)", -estimatedCOGS, "-30.0%"],
+            ["3. Laba Kotor (Gross Profit)", grossProfit, `${grossRevenue > 0 ? ((grossProfit / grossRevenue) * 100).toFixed(1) : 0}%`],
+            ["4. Total Biaya Operasional (Petty Cash)", -totalExpenses, `${grossRevenue > 0 ? ((-totalExpenses / grossRevenue) * 100).toFixed(1) : 0}%`],
+            ["   - Kas Keluar dari Laci (Petty Cash)", -drawerExpenses, ""],
+            ["   - Pengeluaran Transfer / Rekening Toko", -transferExpenses, ""],
+            ["5. LABA BERSIH (NET PROFIT)", netProfit, `${netMargin}%`],
+        ];
+
+        const wsPNL = XLSX.utils.aoa_to_sheet(pnlRows);
+        XLSX.utils.book_append_sheet(wb, wsPNL, "Laba Rugi (P&L)");
+
+        const expRows = [
+            ["No", "Tanggal", "Kategori", "Keperluan / Deskripsi", "Metode Bayar", "Jumlah (Rp)", "Dicatat Oleh"],
+            ...expenses.map((e, idx) => [
+                idx + 1,
+                new Date(e.date).toLocaleDateString('id-ID'),
+                EXPENSE_CATEGORIES.find(c => c.id === e.category)?.label || e.category,
+                e.description,
+                e.paidVia === 'kas_laci' ? 'Kas Laci Kasir' : 'Rekening Toko',
+                e.amount,
+                e.cashierName || 'Admin'
+            ])
+        ];
+        const wsExp = XLSX.utils.aoa_to_sheet(expRows);
+        XLSX.utils.book_append_sheet(wb, wsExp, "Daftar Pengeluaran");
+
+        XLSX.writeFile(wb, `Laporan_Laba_Rugi_TehRaja_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        toast.success("Laporan Laba Rugi (.xlsx) berhasil diunduh!");
+    };
+
+    const handleExportBackup = () => {
+        const backupData = {
+            appName: "Teh Raja POS & Management",
+            version: "3.0.0",
+            exportDate: new Date().toISOString(),
+            products: useProductStore.getState().products,
+            orders: useSalesStore.getState().orders,
+            ingredients: useInventoryStore.getState().ingredients,
+            opnameLogs: useInventoryStore.getState().opnameLogs || [],
+            expenses: useExpenseStore.getState().expenses,
+            promos: usePromoStore.getState().promos,
+            customers: useCustomerStore.getState().customers,
+            sessions: useSalesStore.getState().sessions,
+        };
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Backup_Database_TehRaja_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("Seluruh database toko berhasil di-backup ke file JSON!");
+    };
+
+    const handleRestoreBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target?.result as string);
+                if (!data.appName || !data.products) {
+                    toast.error("Format file backup tidak valid!");
+                    return;
+                }
+                if (confirm("Restore database akan menimpa data saat ini dengan isi file backup. Lanjutkan?")) {
+                    if (data.products) useProductStore.setState({ products: data.products });
+                    if (data.orders) useSalesStore.setState({ orders: data.orders });
+                    if (data.ingredients) useInventoryStore.setState({ ingredients: data.ingredients, opnameLogs: data.opnameLogs || [] });
+                    if (data.expenses) useExpenseStore.setState({ expenses: data.expenses });
+                    if (data.promos) usePromoStore.setState({ promos: data.promos });
+                    if (data.customers) useCustomerStore.setState({ customers: data.customers });
+                    if (data.sessions) useSalesStore.setState({ sessions: data.sessions });
+                    toast.success("Database toko berhasil dipulihkan secara penuh!");
+                }
+            } catch (err: any) {
+                toast.error("Gagal membaca file backup: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
     };
 
     // AI Forecast State
@@ -366,10 +582,31 @@ export default function AdminPage() {
         setPromoModalOpen(false);
     };
 
-    // Filtered orders
+    // Lifecycle Stage Counts (1. Pesan -> 2. Bayar -> 3. Racik -> 4. Selesai)
+    const orderStageCounts = useMemo(() => {
+        return {
+            all: orders.length,
+            pending: orders.filter(o => !o.status || o.status === 'pending').length,
+            awaiting_payment: orders.filter(o => o.status === 'awaiting_payment').length,
+            processing: orders.filter(o => o.status === 'processing').length,
+            completed: orders.filter(o => o.status === 'completed').length,
+            cancelled: orders.filter(o => o.status === 'cancelled').length,
+        };
+    }, [orders]);
+
+    // Filtered & Sorted orders: Newest ALWAYS at the top by timestamp
     const filteredOrders = useMemo(() => {
-        return orders.slice().reverse().filter(order => {
-            const matchStatus = orderStatusFilter === 'all' || order.status === orderStatusFilter;
+        const statusWeight: Record<string, number> = {
+            pending: 1,           // 1. Pesan Masuk
+            awaiting_payment: 2,  // 2. Pembayaran
+            processing: 3,        // 3. Sedang Diracik
+            completed: 4,         // 4. Selesai
+            cancelled: 5,         // Dibatalkan
+        };
+
+        const list = orders.filter(order => {
+            const currentStatus = order.status || 'pending';
+            const matchStatus = orderStatusFilter === 'all' || currentStatus === orderStatusFilter;
             const q = orderSearch.toLowerCase();
             const matchSearch = !q
                 || (order.customerName || '').toLowerCase().includes(q)
@@ -377,7 +614,24 @@ export default function AdminPage() {
                 || order.items.some(i => i.name.toLowerCase().includes(q));
             return matchStatus && matchSearch;
         });
-    }, [orders, orderStatusFilter, orderSearch]);
+
+        return list.sort((a, b) => {
+            const timeA = new Date(a.date).getTime() || 0;
+            const timeB = new Date(b.date).getTime() || 0;
+
+            if (orderSortMode === 'pipeline') {
+                const wA = statusWeight[a.status || 'pending'] || 99;
+                const wB = statusWeight[b.status || 'pending'] || 99;
+                if (wA !== wB) return wA - wB; // Prioritas alur: Pesan -> Bayar -> Racik
+                return timeB - timeA;          // Di dalam tahap yang sama, pesanan baru paling atas
+            } else if (orderSortMode === 'oldest') {
+                return timeA - timeB;
+            } else {
+                // Default 'newest': Pesanan baru SELALU paling atas (Timestamp descending)
+                return timeB - timeA;
+            }
+        });
+    }, [orders, orderStatusFilter, orderSearch, orderSortMode]);
 
     // Charts Data
     const dailySales = getDailySales();
@@ -484,10 +738,11 @@ export default function AdminPage() {
         );
     }
 
-    const pendingCount = orders.filter(o => o.status === 'pending').length;
+    const pendingCount = orders.filter(o => !o.status || o.status === 'pending' || o.status === 'awaiting_payment').length;
     const lowStockAlertCount = products.filter(p => p.stock <= (p.minStockThreshold ?? 5)).length + ingredients.filter(i => i.stock <= i.minStockThreshold).length;
     const tabs = [
         { id: 'dashboard' as const, label: 'Dashboard' },
+        ...(user.role === 'admin' ? [{ id: 'keuangan' as const, label: 'Laba Rugi (P&L) 💰', icon: <Wallet size={18} /> }] : []),
         { id: 'products' as const, label: 'Menu & Stok' },
         ...(user.role === 'admin' ? [{ id: 'analytics' as const, label: 'Analitik BI', icon: <BarChart2 size={18} /> }] : []),
         ...(user.role === 'admin' ? [{ id: 'inventory' as const, label: 'Inventaris & BOM', icon: <Box size={18} />, badge: lowStockAlertCount }] : []),
@@ -545,7 +800,7 @@ export default function AdminPage() {
                                 }`}
                         >
                             {tab.label}
-                            {tab.badge && tab.badge > 0 && (
+                            {Boolean(tab.badge && tab.badge > 0) && (
                                 <span className="absolute -top-1 -right-1 flex h-4 w-4">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                     <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[10px] text-white font-bold items-center justify-center">
@@ -579,7 +834,7 @@ export default function AdminPage() {
                                     }`}
                             >
                                 <span>{tab.label}</span>
-                                {tab.badge && tab.badge > 0 && (
+                                {Boolean(tab.badge && tab.badge > 0) && (
                                     <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                                         {tab.badge}
                                     </span>
@@ -601,7 +856,7 @@ export default function AdminPage() {
                                 }`}
                         >
                             {tab.label}
-                            {tab.badge && tab.badge > 0 && (
+                            {Boolean(tab.badge && tab.badge > 0) && (
                                 <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                                     {tab.badge}
                                 </span>
@@ -653,21 +908,71 @@ export default function AdminPage() {
                         )}
 
 
-                        {/* KPI Cards */}
+                        {/* KPI Cards (Live Real-Time: Web / Menu & Manual POS) */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            {[
-                                { label: 'Total Order', value: orders.length, color: 'blue', suffix: '' },
-                                { label: 'Selesai', value: orders.filter(o => o.status === 'completed').length, color: 'green', suffix: '' },
-                                { label: 'Pending', value: pendingCount, color: 'yellow', suffix: '' },
-                                { label: 'Omset Hari Ini', value: orders.filter(o => new Date(o.date).toDateString() === new Date().toDateString()).reduce((s, o) => s + o.total, 0), color: 'amber', isRp: true, suffix: '' },
-                            ].map(({ label, value, color, isRp }) => (
-                                <div key={label} className={`bg-white rounded-xl p-4 border border-gray-100 shadow-sm`}>
-                                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">{label}</p>
-                                    <p className={`text-2xl font-black mt-1 ${color === 'green' ? 'text-green-600' : color === 'yellow' ? 'text-yellow-600' : color === 'amber' ? 'text-amber-600' : 'text-blue-600'}`}>
-                                        {isRp ? `Rp ${(value as number).toLocaleString('id-ID')}` : value}
+                            <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Order Hari Ini</p>
+                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                    </div>
+                                    <p className="text-2xl md:text-3xl font-black text-blue-600 mt-1 font-mono">
+                                        {todayOrders.length}
                                     </p>
                                 </div>
-                            ))}
+                                <p className="text-[11px] text-gray-400 mt-2 pt-2 border-t border-gray-50 flex items-center justify-between">
+                                    <span>Web &amp; POS Manual</span>
+                                    <span className="font-semibold text-gray-600 font-mono">{orders.length} total</span>
+                                </p>
+                            </div>
+
+                            <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Omset Hari Ini</p>
+                                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Live</span>
+                                    </div>
+                                    <p className="text-2xl md:text-3xl font-black text-amber-600 mt-1 font-mono">
+                                        Rp {todayGrossRevenue.toLocaleString('id-ID')}
+                                    </p>
+                                </div>
+                                <p className="text-[11px] text-gray-400 mt-2 pt-2 border-t border-gray-50 flex items-center justify-between">
+                                    <span>{todayValidOrders.length} pesanan valid</span>
+                                    <span className="font-semibold text-forest font-mono">Rp {grossRevenue.toLocaleString('id-ID')} all</span>
+                                </p>
+                            </div>
+
+                            <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Perlu Tindakan</p>
+                                        {pendingCount > 0 && <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />}
+                                    </div>
+                                    <p className="text-2xl md:text-3xl font-black text-orange-600 mt-1 font-mono">
+                                        {pendingCount}
+                                    </p>
+                                </div>
+                                <p className="text-[11px] text-gray-400 mt-2 pt-2 border-t border-gray-50 flex items-center justify-between">
+                                    <span>Pesan &amp; Bayar</span>
+                                    <span className="font-bold text-blue-600 font-mono">{orderStageCounts.processing} diracik</span>
+                                </p>
+                            </div>
+
+                            <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Selesai Hari Ini</p>
+                                        <CheckCircle size={14} className="text-green-500" />
+                                    </div>
+                                    <p className="text-2xl md:text-3xl font-black text-green-600 mt-1 font-mono">
+                                        {todayCompletedOrders.length}
+                                    </p>
+                                </div>
+                                <p className="text-[11px] text-gray-400 mt-2 pt-2 border-t border-gray-50 flex items-center justify-between">
+                                    <span>Sukses saji</span>
+                                    <span className="font-semibold text-green-700 font-mono">{orders.filter(o => o.status === 'completed').length} total</span>
+                                </p>
+                            </div>
                         </div>
 
                         {/* Charts */}
@@ -768,6 +1073,174 @@ export default function AdminPage() {
                                 </button>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* === KEUNANGAN & LABA RUGI (P&L) TAB === */}
+                {activeTab === 'keuangan' && user.role === 'admin' && (
+                    <div className="animate-fade-in space-y-6">
+                        {/* Header Banner */}
+                        <div className="bg-gradient-to-br from-[#0D2B20] to-[#1a4433] rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-amber-400 rounded-xl text-[#0D2B20]">
+                                    <Wallet size={28} />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-black text-amber-400">Laporan Laba Rugi (P&L) & Arus Kas</h2>
+                                    <p className="text-white/70 text-sm mt-0.5">Analisis profitabilitas riil, margin laba bersih, dan pengeluaran kas kecil (petty cash) kedai.</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                                <button
+                                    onClick={() => setExpenseModalOpen(true)}
+                                    className="flex items-center gap-2 bg-amber-400 text-[#0D2B20] px-4 py-2.5 rounded-xl font-black text-xs hover:bg-amber-300 transition shadow-lg">
+                                    <Plus size={15} /> Catat Biaya Operasional
+                                </button>
+                                <button
+                                    onClick={handleExportPNL}
+                                    className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2.5 rounded-xl font-bold text-xs transition">
+                                    <FileSpreadsheet size={15} /> Export P&L (.xlsx)
+                                </button>
+                                <button
+                                    onClick={handleExportBackup}
+                                    className="flex items-center gap-2 bg-blue-600/80 hover:bg-blue-600 text-white px-3.5 py-2.5 rounded-xl font-bold text-xs transition">
+                                    <Database size={15} /> Backup Data
+                                </button>
+                                <button
+                                    onClick={() => backupFileRef.current?.click()}
+                                    className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3.5 py-2.5 rounded-xl font-bold text-xs transition">
+                                    <Upload size={15} /> Restore Data
+                                </button>
+                                <input
+                                    type="file"
+                                    ref={backupFileRef}
+                                    onChange={handleRestoreBackup}
+                                    accept=".json"
+                                    className="hidden"
+                                />
+                            </div>
+                        </div>
+
+                        {/* 4 Primary Financial Cards */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                                <div>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">1. Omzet Kotor (Gross Sales)</span>
+                                    <p className="text-2xl font-black text-[#0D2B20] mt-1">Rp {grossRevenue.toLocaleString('id-ID')}</p>
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100 flex items-center gap-1">
+                                    <span className="font-bold text-green-600">{validOrders.length}</span> transaksi berhasil
+                                </p>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                                <div>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">2. Estimasi HPP (COGS 30%)</span>
+                                    <p className="text-2xl font-black text-orange-600 mt-1">-Rp {estimatedCOGS.toLocaleString('id-ID')}</p>
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100">
+                                    Laba Kotor: <span className="font-bold text-gray-800">Rp {grossProfit.toLocaleString('id-ID')}</span>
+                                </p>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                                <div>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">3. Biaya Operasional (Petty Cash)</span>
+                                    <p className="text-2xl font-black text-red-600 mt-1">-Rp {totalExpenses.toLocaleString('id-ID')}</p>
+                                </div>
+                                <div className="text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100 flex justify-between">
+                                    <span>Laci: Rp {drawerExpenses.toLocaleString('id-ID')}</span>
+                                    <span>Bank: Rp {transferExpenses.toLocaleString('id-ID')}</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-gradient-to-br from-amber-400 to-yellow-500 p-5 rounded-2xl shadow-lg text-[#0D2B20] flex flex-col justify-between">
+                                <div>
+                                    <span className="text-xs font-black uppercase tracking-wider opacity-80">4. Laba Bersih Riil (Net Profit)</span>
+                                    <p className="text-3xl font-black mt-1">Rp {netProfit.toLocaleString('id-ID')}</p>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-[#0D2B20]/20 flex justify-between items-center text-xs font-black">
+                                    <span>Net Profit Margin:</span>
+                                    <span className="bg-[#0D2B20] text-amber-300 px-2.5 py-0.5 rounded-full">{netMargin}%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Petty Cash Table */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+                                <div>
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                        <DollarSign size={18} className="text-amber-500" /> Rincian Pengeluaran Operasional & Kas Kecil (Petty Cash)
+                                    </h3>
+                                    <p className="text-xs text-gray-400 mt-0.5">Catatan uang keluar untuk es batu kristal, galon, token listrik, dan keperluan darurat kedai.</p>
+                                </div>
+                                <button
+                                    onClick={() => setExpenseModalOpen(true)}
+                                    className="bg-amber-100 hover:bg-amber-200 text-[#0D2B20] font-bold text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                                    <Plus size={14} /> Tambah Biaya
+                                </button>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <thead className="bg-gray-50 uppercase text-gray-500 font-bold tracking-wider">
+                                        <tr>
+                                            <th className="p-3.5">Tanggal</th>
+                                            <th className="p-3.5">Kategori</th>
+                                            <th className="p-3.5">Keperluan / Keterangan</th>
+                                            <th className="p-3.5">Sumber Dana</th>
+                                            <th className="p-3.5 text-right">Nominal (Rp)</th>
+                                            <th className="p-3.5">Dicatat Oleh</th>
+                                            <th className="p-3.5 text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {expenses.map(e => (
+                                            <tr key={e.id} className="hover:bg-gray-50 transition">
+                                                <td className="p-3.5 text-gray-500 font-mono">
+                                                    {new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                <td className="p-3.5">
+                                                    <span className="font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                                                        {EXPENSE_CATEGORIES.find(c => c.id === e.category)?.label.split(' ')[0] || e.category}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3.5 font-bold text-gray-800">{e.description}</td>
+                                                <td className="p-3.5">
+                                                    <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${e.paidVia === 'kas_laci' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                                                        {e.paidVia === 'kas_laci' ? '💵 Kas Laci Kasir' : '🏦 Rekening Toko'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3.5 text-right font-black text-red-600 font-mono text-sm">
+                                                    -Rp {e.amount.toLocaleString('id-ID')}
+                                                </td>
+                                                <td className="p-3.5 text-gray-500">{e.cashierName || 'Admin'}</td>
+                                                <td className="p-3.5 text-center">
+                                                    <button
+                                                        onClick={() => {
+                                                            if (confirm(`Hapus pengeluaran "${e.description}"?`)) {
+                                                                deleteExpense(e.id);
+                                                                toast.success("Pengeluaran dihapus.");
+                                                            }
+                                                        }}
+                                                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition">
+                                                        <Trash size={14} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {expenses.length === 0 && (
+                                            <tr>
+                                                <td colSpan={7} className="p-8 text-center text-gray-400">
+                                                    Belum ada pengeluaran yang dicatat. Klik "Catat Biaya Operasional".
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -908,103 +1381,268 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* === ORDERS TAB === */}
+                {/* === ORDERS TAB (PIPELINE: 1. PESAN -> 2. BAYAR -> 3. RACIK -> 4. SELESAI) === */}
                 {activeTab === 'orders' && (
-                    <div className="animate-fade-in">
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                            <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50">
-                                <h2 className="text-lg md:text-xl font-bold font-serif">Daftar Pesanan Masuk</h2>
-                                <p className="text-sm text-gray-400 mt-0.5">Pantau dan kelola pesanan pelanggan.</p>
+                    <div className="animate-fade-in space-y-4">
+                        {/* Header & Status Workflow Banner */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="p-4 md:p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-lg md:text-xl font-bold font-serif text-forest">Manajemen Pesanan &amp; Alur Transaksi</h2>
+                                        <span className="bg-gold/20 text-[#0D2B20] text-[10px] font-bold px-2 py-0.5 rounded-full border border-gold/40">Real-Time Sync</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Tahapan Alur: <strong className="text-amber-600">1. Pesan Masuk</strong> ➔ <strong className="text-orange-600">2. Pembayaran</strong> ➔ <strong className="text-blue-600">3. Sedang Diracik (Dapur KDS)</strong> ➔ <strong className="text-green-600">4. Selesai</strong>. Pesanan baru selalu diurutkan paling atas.
+                                    </p>
+                                </div>
+                                
+                                {/* Action Counter Summary */}
+                                <div className="flex items-center gap-2 text-xs">
+                                    <div className="bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-xs">
+                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                                        <span>Perlu Tindakan: {orderStageCounts.pending + orderStageCounts.awaiting_payment}</span>
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* Filter Bar */}
-                            <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3">
+                            {/* Workflow Pipeline Filter Tabs */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 p-3 bg-gray-50 border-b border-gray-100 text-xs">
+                                <button
+                                    onClick={() => setOrderStatusFilter('all')}
+                                    className={`px-3 py-2.5 rounded-xl font-bold transition flex items-center justify-between border ${
+                                        orderStatusFilter === 'all'
+                                            ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20] shadow-sm'
+                                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    <span>Semua Order</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${orderStatusFilter === 'all' ? 'bg-amber-400/20 text-amber-300' : 'bg-gray-100 text-gray-600'}`}>
+                                        {orderStageCounts.all}
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={() => setOrderStatusFilter('pending')}
+                                    className={`px-3 py-2.5 rounded-xl font-bold transition flex items-center justify-between border ${
+                                        orderStatusFilter === 'pending'
+                                            ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
+                                            : 'bg-white text-gray-800 border-amber-200 hover:bg-amber-50'
+                                    }`}
+                                >
+                                    <span className="flex items-center gap-1.5">
+                                        <span className={`w-2 h-2 rounded-full bg-amber-400 ${orderStageCounts.pending > 0 ? 'animate-ping' : ''}`} />
+                                        1. Pesan Masuk
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black font-mono ${orderStatusFilter === 'pending' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                                        {orderStageCounts.pending}
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={() => setOrderStatusFilter('awaiting_payment')}
+                                    className={`px-3 py-2.5 rounded-xl font-bold transition flex items-center justify-between border ${
+                                        orderStatusFilter === 'awaiting_payment'
+                                            ? 'bg-orange-500 text-white border-orange-600 shadow-sm'
+                                            : 'bg-white text-gray-800 border-orange-200 hover:bg-orange-50'
+                                    }`}
+                                >
+                                    <span className="flex items-center gap-1.5">
+                                        <Clock size={12} className={orderStageCounts.awaiting_payment > 0 ? "animate-pulse" : ""} />
+                                        2. Pembayaran
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black font-mono ${orderStatusFilter === 'awaiting_payment' ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-800'}`}>
+                                        {orderStageCounts.awaiting_payment}
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={() => setOrderStatusFilter('processing')}
+                                    className={`px-3 py-2.5 rounded-xl font-bold transition flex items-center justify-between border ${
+                                        orderStatusFilter === 'processing'
+                                            ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                                            : 'bg-white text-gray-800 border-blue-200 hover:bg-blue-50'
+                                    }`}
+                                >
+                                    <span className="flex items-center gap-1.5">
+                                        <Loader size={12} className={orderStageCounts.processing > 0 ? "animate-spin" : ""} />
+                                        3. Sedang Diracik
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black font-mono ${orderStatusFilter === 'processing' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-800'}`}>
+                                        {orderStageCounts.processing}
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={() => setOrderStatusFilter('completed')}
+                                    className={`px-3 py-2.5 rounded-xl font-bold transition flex items-center justify-between border ${
+                                        orderStatusFilter === 'completed'
+                                            ? 'bg-green-600 text-white border-green-700 shadow-sm'
+                                            : 'bg-white text-gray-800 border-green-200 hover:bg-green-50'
+                                    }`}
+                                >
+                                    <span className="flex items-center gap-1.5">
+                                        <CheckCircle size={12} />
+                                        4. Selesai
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black font-mono ${orderStatusFilter === 'completed' ? 'bg-white/20 text-white' : 'bg-green-100 text-green-800'}`}>
+                                        {orderStageCounts.completed}
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={() => setOrderStatusFilter('cancelled')}
+                                    className={`px-3 py-2.5 rounded-xl font-bold transition flex items-center justify-between border ${
+                                        orderStatusFilter === 'cancelled'
+                                            ? 'bg-gray-600 text-white border-gray-700 shadow-sm'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    <span>Dibatalkan</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${orderStatusFilter === 'cancelled' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                                        {orderStageCounts.cancelled}
+                                    </span>
+                                </button>
+                            </div>
+
+                            {/* Filter, Search & Sorting Bar */}
+                            <div className="p-3 md:p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-white">
                                 <div className="relative flex-1">
                                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                     <input
                                         type="text"
-                                        placeholder="Cari nama pelanggan, ID order, atau menu..."
+                                        placeholder="Cari nama pelanggan, ID order (#...), nomor meja, atau menu..."
                                         value={orderSearch}
                                         onChange={e => setOrderSearch(e.target.value)}
-                                        className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800 focus:outline-none focus:border-forest transition bg-gray-50"
+                                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs md:text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] transition bg-gray-50/70"
                                     />
                                 </div>
+
                                 <div className="flex items-center gap-2">
-                                    <Filter size={14} className="text-gray-400 flex-shrink-0" />
+                                    <span className="text-xs text-gray-500 whitespace-nowrap font-medium hidden sm:inline">Urutan:</span>
                                     <select
-                                        value={orderStatusFilter}
-                                        onChange={e => setOrderStatusFilter(e.target.value as typeof orderStatusFilter)}
-                                        className="border border-gray-200 rounded-lg text-sm text-gray-700 px-3 py-2 focus:outline-none focus:border-forest bg-gray-50 transition"
+                                        value={orderSortMode}
+                                        onChange={e => setOrderSortMode(e.target.value as any)}
+                                        className="border border-gray-200 rounded-xl text-xs font-bold text-gray-700 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] bg-gray-50 transition"
                                     >
-                                        <option value="all">Semua Status</option>
-                                        <option value="pending">Pending</option>
-                                        <option value="processing">Processing</option>
-                                        <option value="completed">Selesai</option>
-                                        <option value="cancelled">Dibatalkan</option>
+                                        <option value="newest">⚡ Pesanan Baru Paling Atas (Waktu Terbaru)</option>
+                                        <option value="pipeline">🔄 Urut Sesuai Alur (Pesan ➔ Bayar ➔ Racik)</option>
+                                        <option value="oldest">⏳ Pesanan Terlama Dahulu</option>
                                     </select>
                                 </div>
                             </div>
 
-                            <p className="px-4 py-2 text-xs text-gray-400">{filteredOrders.length} order ditemukan</p>
+                            {/* Order Count Information */}
+                            <div className="px-4 py-2 bg-gray-50/60 border-b border-gray-100 flex justify-between items-center text-xs text-gray-500">
+                                <span>Menampilkan <strong>{filteredOrders.length}</strong> pesanan</span>
+                                {orderSortMode === 'newest' && (
+                                    <span className="text-forest font-semibold flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                        Urutan: Pesanan baru otomatis muncul di posisi paling atas
+                                    </span>
+                                )}
+                            </div>
 
-                            {/* Desktop Table */}
+                            {/* Desktop Table View */}
                             <div className="hidden md:block overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider border-b border-gray-100">
                                         <tr>
-                                            <th className="p-4">Order ID</th>
-                                            <th className="p-4">Waktu</th>
+                                            <th className="p-4 rounded-tl-lg">Order ID &amp; Tipe</th>
+                                            <th className="p-4">Waktu Masuk</th>
                                             <th className="p-4">Pelanggan</th>
-                                            <th className="p-4">Menu</th>
-                                            <th className="p-4">Total</th>
-                                            <th className="p-4">Status</th>
-                                            <th className="p-4 text-right">Aksi</th>
+                                            <th className="p-4">Item Menu &amp; Catatan</th>
+                                            <th className="p-4">Total Bayar</th>
+                                            <th className="p-4">Status Alur</th>
+                                            <th className="p-4 text-right rounded-tr-lg">Aksi Proses</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {filteredOrders.map(order => (
-                                            <tr key={order.id} className="hover:bg-blue-50/50 transition bg-white">
-                                                <td className="p-4 font-mono text-xs text-gray-500">#{order.id.slice(0, 6)}</td>
-                                                <td className="p-4 text-sm">
-                                                    {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                                                </td>
-                                                <td className="p-4 font-bold text-gray-800">{order.customerName || "Guest"}</td>
-                                                <td className="p-4 text-sm text-gray-600 max-w-xs">
-                                                    {order.items.map((i, idx) => (
-                                                        <div key={idx} className="mb-1 border-b border-gray-50 last:border-0 pb-1">
-                                                            <span className="font-bold text-gray-700">{i.quantity}x {i.name}</span>
-                                                            {i.note && (
-                                                                <div className="text-xs text-blue-600 italic flex items-center gap-1">
-                                                                    📝 {i.note}
-                                                                </div>
+                                        {filteredOrders.map(order => {
+                                            const orderTime = new Date(order.date);
+                                            const diffMins = Math.floor((Date.now() - orderTime.getTime()) / 60000);
+                                            const isVeryRecent = diffMins < 5;
+
+                                            return (
+                                                <tr key={order.id} className="hover:bg-amber-50/30 transition bg-white">
+                                                    <td className="p-4">
+                                                        <div className="font-mono font-bold text-gray-800 text-xs">#{order.id.slice(0, 6).toUpperCase()}</div>
+                                                        <div className="flex items-center gap-1 mt-1">
+                                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${order.orderType === 'take-away' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                                                {order.orderType === 'take-away' ? 'Bawa Pulang' : 'Makan di Tempat'}
+                                                            </span>
+                                                            {order.tableNumber && (
+                                                                <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-mono">
+                                                                    Meja {order.tableNumber}
+                                                                </span>
                                                             )}
                                                         </div>
-                                                    ))}
-                                                </td>
-                                                <td className="p-4 font-bold text-forest">
-                                                    Rp {order.total.toLocaleString('id-ID')}
-                                                    {order.discount && order.discount > 0 && (
-                                                        <div className="text-xs text-red-500 font-normal">-Rp {order.discount.toLocaleString('id-ID')}</div>
-                                                    )}
-                                                </td>
-                                                <td className="p-4">
-                                                    <OrderStatusBadge status={order.status} />
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    <OrderActions
-                                                        order={order}
-                                                        updateOrderStatus={updateOrderStatus}
-                                                        addLog={addLog}
-                                                        userName={user?.name || "Admin"}
-                                                        onCancel={() => setConfirmCancelOrder(order.id)}
-                                                    />
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    </td>
+                                                    <td className="p-4 whitespace-nowrap">
+                                                        <div className="font-mono font-bold text-gray-800">
+                                                            {orderTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                        </div>
+                                                        <div className="text-[10px] text-gray-400 mt-0.5">
+                                                            {orderTime.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
+                                                            {isVeryRecent && (
+                                                                <span className="ml-1 text-red-600 font-bold animate-pulse">🔥 Baru!</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="font-bold text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</div>
+                                                        {order.customerPhone && (
+                                                            <div className="text-[11px] text-gray-500 font-mono mt-0.5">📞 {order.customerPhone}</div>
+                                                        )}
+                                                        <div className="text-[10px] text-gray-400 mt-0.5">Kasir: {order.cashierName || 'Web Store'}</div>
+                                                    </td>
+                                                    <td className="p-4 max-w-xs">
+                                                        <div className="space-y-1">
+                                                            {order.items.map((i, idx) => (
+                                                                <div key={idx} className="border-b border-gray-50 last:border-0 pb-1">
+                                                                    <span className="font-bold text-gray-800">{i.quantity}x {i.name}</span>
+                                                                    {i.note && (
+                                                                        <div className="text-[11px] text-blue-600 italic flex items-center gap-1 mt-0.5">
+                                                                            📝 "{i.note}"
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 whitespace-nowrap">
+                                                        <div className="font-black text-forest text-sm">
+                                                            Rp {order.total.toLocaleString('id-ID')}
+                                                        </div>
+                                                        <div className="text-[10px] uppercase font-bold text-gray-500 mt-0.5">
+                                                            {order.paymentMethod || 'TUNAI'}
+                                                        </div>
+                                                        {order.discount && order.discount > 0 && (
+                                                            <div className="text-[10px] text-red-500 font-semibold">-Rp {order.discount.toLocaleString('id-ID')}</div>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4 whitespace-nowrap">
+                                                        <OrderStatusBadge status={order.status} />
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <OrderActions
+                                                            order={order}
+                                                            updateOrderStatus={updateOrderStatus}
+                                                            addLog={addLog}
+                                                            userName={user?.name || "Admin"}
+                                                            onCancel={() => setConfirmCancelOrder(order.id)}
+                                                            onViewReceipt={() => setViewReceiptOrder(order)}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                         {filteredOrders.length === 0 && (
                                             <tr>
-                                                <td colSpan={7} className="p-8 text-center text-gray-400 italic">
-                                                    {orderSearch || orderStatusFilter !== 'all' ? 'Tidak ada order yang sesuai filter.' : 'Belum ada pesanan masuk.'}
+                                                <td colSpan={7} className="p-12 text-center text-gray-400 italic">
+                                                    {orderSearch || orderStatusFilter !== 'all'
+                                                        ? 'Tidak ada pesanan yang sesuai dengan filter pencarian.'
+                                                        : 'Belum ada pesanan masuk.'}
                                                 </td>
                                             </tr>
                                         )}
@@ -1012,49 +1650,62 @@ export default function AdminPage() {
                                 </table>
                             </div>
 
-                            {/* Mobile Cards */}
+                            {/* Mobile Card List View */}
                             <div className="md:hidden divide-y divide-gray-100">
                                 {filteredOrders.length === 0 && (
-                                    <p className="p-8 text-center text-gray-400 italic text-sm">
-                                        {orderSearch || orderStatusFilter !== 'all' ? 'Tidak ada order yang sesuai filter.' : 'Belum ada pesanan masuk.'}
+                                    <p className="p-8 text-center text-gray-400 italic text-xs">
+                                        {orderSearch || orderStatusFilter !== 'all' ? 'Tidak ada pesanan yang sesuai filter.' : 'Belum ada pesanan masuk.'}
                                     </p>
                                 )}
-                                {filteredOrders.map(order => (
-                                    <div key={order.id} className="p-4 space-y-3">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-bold text-gray-800">{order.customerName || "Guest"}</p>
-                                                <p className="text-xs text-gray-400 font-mono mt-0.5">
-                                                    #{order.id.slice(0, 6)} · {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                                                </p>
-                                            </div>
-                                            <OrderStatusBadge status={order.status} />
-                                        </div>
-                                        <div className="bg-gray-50 rounded-lg p-3 space-y-1">
-                                            {order.items.map((i, idx) => (
-                                                <div key={idx}>
-                                                    <span className="text-sm font-medium text-gray-700">{i.quantity}x {i.name}</span>
-                                                    {i.note && <div className="text-xs text-blue-600 italic">📝 {i.note}</div>}
+                                {filteredOrders.map(order => {
+                                    const orderTime = new Date(order.date);
+                                    const diffMins = Math.floor((Date.now() - orderTime.getTime()) / 60000);
+                                    const isVeryRecent = diffMins < 5;
+
+                                    return (
+                                        <div key={order.id} className="p-4 space-y-3 bg-white">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-bold text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</span>
+                                                        {isVeryRecent && (
+                                                            <span className="text-[9px] bg-red-100 text-red-600 font-black px-1.5 py-0.2 rounded-full animate-pulse">BARU</span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                                                        #{order.id.slice(0, 6).toUpperCase()} · {orderTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                                        {order.tableNumber ? ` · Meja ${order.tableNumber}` : ''}
+                                                    </p>
                                                 </div>
-                                            ))}
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <span className="font-bold text-forest">Rp {order.total.toLocaleString('id-ID')}</span>
-                                                {order.discount && order.discount > 0 && (
-                                                    <span className="text-xs text-red-500 ml-1">(-Rp {order.discount.toLocaleString('id-ID')})</span>
-                                                )}
+                                                <OrderStatusBadge status={order.status} />
                                             </div>
-                                            <OrderActions
-                                                order={order}
-                                                updateOrderStatus={updateOrderStatus}
-                                                addLog={addLog}
-                                                userName={user?.name || "Admin"}
-                                                onCancel={() => setConfirmCancelOrder(order.id)}
-                                            />
+
+                                            <div className="bg-gray-50 rounded-xl p-2.5 space-y-1 border border-gray-100 text-xs">
+                                                {order.items.map((i, idx) => (
+                                                    <div key={idx} className="flex justify-between items-start">
+                                                        <span className="font-semibold text-gray-800">{i.quantity}x {i.name}</span>
+                                                        {i.note && <span className="text-[10px] text-blue-600 italic">"{i.note}"</span>}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            <div className="flex justify-between items-center pt-1 border-t border-gray-50">
+                                                <div>
+                                                    <span className="text-xs text-gray-400 block font-mono uppercase">{order.paymentMethod || 'TUNAI'}</span>
+                                                    <span className="font-black text-forest text-sm">Rp {order.total.toLocaleString('id-ID')}</span>
+                                                </div>
+                                                <OrderActions
+                                                    order={order}
+                                                    updateOrderStatus={updateOrderStatus}
+                                                    addLog={addLog}
+                                                    userName={user?.name || "Admin"}
+                                                    onCancel={() => setConfirmCancelOrder(order.id)}
+                                                    onViewReceipt={() => setViewReceiptOrder(order)}
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -1291,11 +1942,19 @@ export default function AdminPage() {
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
                             <div>
                                 <h2 className="text-lg md:text-xl font-bold font-serif">Inventaris & Bill of Materials</h2>
-                                <p className="text-sm text-gray-500">Kelola stok bahan baku dan pantau peringatan stok menipis.</p>
+                                <p className="text-sm text-gray-500">Kelola stok bahan baku, lakukan stock opname berkala, dan lacak pemborosan.</p>
                             </div>
-                            <button onClick={openAddIng} className="bg-[#0D2B20] text-amber-400 px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#1a3d2e] transition flex items-center gap-2">
-                                <Plus size={16} /> Tambah Bahan
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setOpnameModalOpen(true)}
+                                    className="bg-amber-600 text-white px-3.5 py-2 rounded-lg font-bold text-sm hover:bg-amber-700 transition flex items-center gap-2 shadow-sm"
+                                >
+                                    <ClipboardCheck size={16} /> Stock Opname Fisik
+                                </button>
+                                <button onClick={openAddIng} className="bg-[#0D2B20] text-amber-400 px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#1a3d2e] transition flex items-center gap-2">
+                                    <Plus size={16} /> Tambah Bahan
+                                </button>
+                            </div>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
@@ -1340,6 +1999,85 @@ export default function AdminPage() {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Riwayat Stock Opname & Penyesuaian Selisih (Waste & Shrinkage Tracker) */}
+                        <div className="pt-6 border-t border-gray-100 mt-6">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+                                <div>
+                                    <h3 className="font-bold text-lg font-serif flex items-center gap-2 text-forest">
+                                        <ClipboardCheck size={20} className="text-amber-500" />
+                                        Log Stock Opname &amp; Waste Management
+                                    </h3>
+                                    <p className="text-xs text-gray-500">Rekap audit fisik bahan, pelacakan selisih bahan tumpah, basi, rusak, atau salah hitung.</p>
+                                </div>
+                                <button
+                                    onClick={() => setOpnameModalOpen(true)}
+                                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm"
+                                >
+                                    <Plus size={14} /> Catat Opname Fisik
+                                </button>
+                            </div>
+
+                            <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider">
+                                        <tr>
+                                            <th className="p-3">Waktu &amp; Tanggal</th>
+                                            <th className="p-3">Bahan Baku</th>
+                                            <th className="p-3 text-right">Stok Sistem</th>
+                                            <th className="p-3 text-right">Fisik Nyata</th>
+                                            <th className="p-3 text-right">Selisih</th>
+                                            <th className="p-3 text-center">Alasan</th>
+                                            <th className="p-3">Keterangan / Auditor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {(opnameLogs || []).map(log => {
+                                            const isNegative = log.difference < 0;
+                                            const isZero = log.difference === 0;
+                                            const reasonLabels: Record<string, { label: string; badge: string }> = {
+                                                tumpah: { label: 'Tumpah / Spillage', badge: 'bg-amber-100 text-amber-800' },
+                                                basi: { label: 'Basi / Kedaluwarsa', badge: 'bg-red-100 text-red-800' },
+                                                rusak: { label: 'Kemasan Rusak', badge: 'bg-rose-100 text-rose-800' },
+                                                koreksi_hitung: { label: 'Koreksi Hitung', badge: 'bg-blue-100 text-blue-800' },
+                                                lainnya: { label: 'Lainnya', badge: 'bg-gray-100 text-gray-700' },
+                                            };
+                                            const rInfo = reasonLabels[log.reason] || reasonLabels.lainnya;
+                                            return (
+                                                <tr key={log.id} className="hover:bg-gray-50 transition">
+                                                    <td className="p-3 text-gray-500 whitespace-nowrap">
+                                                        {new Date(log.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}{' '}
+                                                        <span className="font-mono text-gray-400">({new Date(log.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })})</span>
+                                                    </td>
+                                                    <td className="p-3 font-bold text-gray-800">{log.ingredientName}</td>
+                                                    <td className="p-3 text-right font-mono text-gray-500">{log.systemStock.toLocaleString('id-ID')} {log.unit}</td>
+                                                    <td className="p-3 text-right font-mono font-bold text-gray-800">{log.actualStock.toLocaleString('id-ID')} {log.unit}</td>
+                                                    <td className={`p-3 text-right font-mono font-black ${isZero ? 'text-gray-400' : isNegative ? 'text-red-600' : 'text-green-600'}`}>
+                                                        {log.difference > 0 ? `+${log.difference}` : log.difference} {log.unit}
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-[10px] ${rInfo.badge}`}>
+                                                            {rInfo.label}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3 text-gray-600 max-w-xs truncate">
+                                                        {log.notes ? <span>"{log.notes}" &bull; </span> : null}
+                                                        <span className="text-gray-400 font-medium">Oleh: {log.recordedBy}</span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {(!opnameLogs || opnameLogs.length === 0) && (
+                                            <tr>
+                                                <td colSpan={7} className="p-6 text-center text-gray-400 italic">
+                                                    Belum ada riwayat stock opname fisik. Tekan "Catat Opname Fisik" untuk mencocokkan stok nyata kedai.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
                         {/* Suppliers */}
@@ -1884,6 +2622,285 @@ export default function AdminPage() {
                     </div>
                 </div>
             )}
+
+            {/* ============ MODAL: PENGELUARAN TOKO (PETTY CASH) ============ */}
+            {expenseModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100 animate-scale-up">
+                        <div className="bg-[#0D2B20] text-cream px-6 py-4 flex justify-between items-center border-b border-gold/20">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-gold/20 rounded-lg text-gold">
+                                    <Wallet size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="font-serif font-bold text-gold text-base">Catat Pengeluaran Toko</h3>
+                                    <p className="text-xs text-cream/70">Petty Cash &amp; Operasional Kedai</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setExpenseModalOpen(false)}
+                                className="text-cream/70 hover:text-white p-1 hover:bg-white/10 rounded-lg transition"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveExpense} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                    Nominal Pengeluaran (Rp) <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-gray-500 text-sm">Rp</span>
+                                    <input
+                                        type="number"
+                                        required
+                                        min="1"
+                                        placeholder="0"
+                                        value={expenseForm.amount}
+                                        onChange={e => setExpenseForm(f => ({ ...f, amount: e.target.value }))}
+                                        className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] font-bold text-lg text-forest"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                    Keperluan / Deskripsi <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="Contoh: Beli es kristal 2 karung, gas elpiji..."
+                                    value={expenseForm.description}
+                                    onChange={e => setExpenseForm(f => ({ ...f, description: e.target.value }))}
+                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] text-sm"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                        Kategori
+                                    </label>
+                                    <select
+                                        value={expenseForm.category}
+                                        onChange={e => setExpenseForm(f => ({ ...f, category: e.target.value as ExpenseCategory }))}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] text-xs font-medium bg-white"
+                                    >
+                                        {EXPENSE_CATEGORIES.map(cat => (
+                                            <option key={cat.id} value={cat.id}>{cat.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                        Sumber Kas
+                                    </label>
+                                    <select
+                                        value={expenseForm.paidVia}
+                                        onChange={e => setExpenseForm(f => ({ ...f, paidVia: e.target.value as 'kas_laci' | 'rekening_toko' }))}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] text-xs font-medium bg-white"
+                                    >
+                                        <option value="kas_laci">💵 Kas Laci (Potong Laci)</option>
+                                        <option value="rekening_toko">🏦 Rekening Toko / Transfer</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-800 flex items-start gap-2">
+                                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-amber-600" />
+                                <div>
+                                    {expenseForm.paidVia === 'kas_laci'
+                                        ? <span><strong>Kas Laci:</strong> Pengeluaran ini otomatis memotong total uang tunai yang wajib disetor kasir saat tutup shift.</span>
+                                        : <span><strong>Rekening Toko:</strong> Pengeluaran dicatat ke Laporan Laba Rugi tanpa mengurangi saldo fisik kas laci kasir.</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                    Catatan / Keterangan Tambahan
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Catatan tambahan (opsional)..."
+                                    value={expenseForm.notes}
+                                    onChange={e => setExpenseForm(f => ({ ...f, notes: e.target.value }))}
+                                    className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] text-xs"
+                                />
+                            </div>
+
+                            <div className="flex gap-2 pt-2 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setExpenseModalOpen(false)}
+                                    className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 py-2.5 bg-[#0D2B20] text-amber-400 rounded-xl font-bold text-sm hover:bg-[#1a3d2e] transition flex items-center justify-center gap-2 shadow-md"
+                                >
+                                    <Save size={15} /> Simpan
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ============ MODAL: STOCK OPNAME FISIK ============ */}
+            {opnameModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100 animate-scale-up">
+                        <div className="bg-amber-600 text-white px-6 py-4 flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-white/20 rounded-lg">
+                                    <ClipboardCheck size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="font-serif font-bold text-base">Input Stock Opname Fisik</h3>
+                                    <p className="text-xs text-amber-100">Penghitungan fisik riil bahan &amp; penyesuaian selisih</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setOpnameModalOpen(false)}
+                                className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveOpname} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                    Pilih Bahan Baku <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    required
+                                    value={opnameForm.ingredientId}
+                                    onChange={e => {
+                                        const ing = ingredients.find(i => i.id === e.target.value);
+                                        setOpnameForm(f => ({
+                                            ...f,
+                                            ingredientId: e.target.value,
+                                            actualStock: ing ? String(ing.stock) : ''
+                                        }));
+                                    }}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm font-semibold bg-white"
+                                >
+                                    <option value="">-- Pilih Bahan --</option>
+                                    {ingredients.map(ing => (
+                                        <option key={ing.id} value={ing.id}>
+                                            {ing.name} (Stok Sistem: {ing.stock.toLocaleString('id-ID')} {ing.unit})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {(() => {
+                                const selectedIng = ingredients.find(i => i.id === opnameForm.ingredientId);
+                                if (!selectedIng) return null;
+                                const actual = parseFloat(opnameForm.actualStock) || 0;
+                                const diff = actual - selectedIng.stock;
+                                const isZero = diff === 0;
+                                const isNegative = diff < 0;
+
+                                return (
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs">
+                                            <div>
+                                                <span className="text-gray-500 block">Stok Tercatat Sistem:</span>
+                                                <span className="font-mono font-bold text-gray-800 text-base">{selectedIng.stock.toLocaleString('id-ID')} {selectedIng.unit}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-500 block">Selisih (Variance):</span>
+                                                <span className={`font-mono font-black text-base ${isZero ? 'text-gray-500' : isNegative ? 'text-red-600' : 'text-green-600'}`}>
+                                                    {diff > 0 ? `+${diff}` : diff} {selectedIng.unit}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                                Stok Fisik Nyata ({selectedIng.unit}) <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="any"
+                                                required
+                                                min="0"
+                                                placeholder="0"
+                                                value={opnameForm.actualStock}
+                                                onChange={e => setOpnameForm(f => ({ ...f, actualStock: e.target.value }))}
+                                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 font-bold text-lg text-forest"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                                Alasan Penyesuaian / Selisih <span className="text-red-500">*</span>
+                                            </label>
+                                            <select
+                                                value={opnameForm.reason}
+                                                onChange={e => setOpnameForm(f => ({ ...f, reason: e.target.value as any }))}
+                                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 text-xs font-medium bg-white"
+                                            >
+                                                <option value="koreksi_hitung">🔍 Koreksi Hitung / Kesalahan Input Kasir</option>
+                                                <option value="tumpah">💧 Bahan Tumpah / Spillage Saat Operasional</option>
+                                                <option value="basi">🍂 Bahan Basi / Melewati Batas Kadaluwarsa</option>
+                                                <option value="rusak">📦 Kemasan Bocor / Rusak Pengiriman</option>
+                                                <option value="lainnya">⚙️ Alasan Lainnya</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                                Catatan Detail Auditor
+                                            </label>
+                                            <textarea
+                                                rows={2}
+                                                placeholder="Contoh: Susu basi 200ml karena kulkas sempat mati 2 jam..."
+                                                value={opnameForm.notes}
+                                                onChange={e => setOpnameForm(f => ({ ...f, notes: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 text-xs"
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            <div className="flex gap-2 pt-2 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setOpnameModalOpen(false)}
+                                    className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={!opnameForm.ingredientId}
+                                    className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700 disabled:opacity-50 transition flex items-center justify-center gap-2 shadow-md"
+                                >
+                                    <Save size={15} /> Simpan Opname
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Detail & Cetak Struk Pesanan */}
+            {viewReceiptOrder && (
+                <ReceiptModal
+                    order={viewReceiptOrder}
+                    onClose={() => setViewReceiptOrder(null)}
+                />
+            )}
         </div>
     );
 }
@@ -1892,16 +2909,36 @@ export default function AdminPage() {
 
 function OrderStatusBadge({ status }: { status?: string }) {
     const map: Record<string, { cls: string; icon: React.ReactNode; label: string }> = {
-        completed: { cls: 'bg-green-100 text-green-700', icon: <CheckCircle size={11} />, label: 'selesai' },
-        processing: { cls: 'bg-blue-100 text-blue-700', icon: <Loader size={11} className="animate-spin" />, label: 'diproses' },
-        cancelled: { cls: 'bg-red-100 text-red-700', icon: <XCircle size={11} />, label: 'batal' },
-        pending: { cls: 'bg-yellow-100 text-yellow-700', icon: <Clock size={11} />, label: 'pending' },
-        awaiting_payment: { cls: 'bg-orange-100 text-orange-700', icon: <Clock size={11} className="animate-pulse" />, label: 'menunggu bayar' },
+        pending: {
+            cls: 'bg-amber-50 text-amber-900 border border-amber-300 shadow-xs',
+            icon: <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping inline-block" />,
+            label: '1. Pesan Masuk',
+        },
+        awaiting_payment: {
+            cls: 'bg-orange-50 text-orange-900 border border-orange-300 shadow-xs',
+            icon: <Clock size={11} className="animate-pulse text-orange-600" />,
+            label: '2. Menunggu Bayar',
+        },
+        processing: {
+            cls: 'bg-blue-50 text-blue-900 border border-blue-300 shadow-xs',
+            icon: <Loader size={11} className="animate-spin text-blue-600" />,
+            label: '3. Sedang Diracik',
+        },
+        completed: {
+            cls: 'bg-emerald-50 text-emerald-900 border border-emerald-300 shadow-xs',
+            icon: <CheckCircle size={11} className="text-emerald-600" />,
+            label: '4. Selesai',
+        },
+        cancelled: {
+            cls: 'bg-red-50 text-red-700 border border-red-200',
+            icon: <XCircle size={11} className="text-red-500" />,
+            label: 'Dibatalkan',
+        },
     };
     const s = status || 'pending';
     const { cls, icon, label } = map[s] || map.pending;
     return (
-        <span className={`px-2 py-1 text-xs rounded-full font-bold uppercase tracking-wide inline-flex items-center gap-1 ${cls}`}>
+        <span className={`px-2.5 py-1 text-[11px] rounded-full font-bold tracking-wide inline-flex items-center gap-1.5 ${cls}`}>
             {icon} {label}
         </span>
     );
@@ -1913,31 +2950,46 @@ function OrderActions({
     addLog,
     userName,
     onCancel,
+    onViewReceipt,
 }: {
     order: Order;
     updateOrderStatus: (id: string, status: Order['status']) => void;
     addLog: (action: string, detail: string, user: string) => void;
     userName: string;
     onCancel: () => void;
+    onViewReceipt?: () => void;
 }) {
+    const shortId = order.id.slice(0, 6).toUpperCase();
     return (
-        <div className="flex gap-1.5 flex-wrap justify-end">
+        <div className="flex gap-1.5 flex-wrap justify-end items-center">
             {(!order.status || order.status === 'pending') && (
                 <>
                     <button
                         onClick={() => {
                             updateOrderStatus(order.id, 'processing');
-                            addLog("PROCESS_ORDER", `Processing order #${order.id.slice(0, 6)}`, userName);
+                            addLog("PROCESS_ORDER", `Terima & mulai racik pesanan #${shortId}`, userName);
                         }}
-                        className="px-2.5 py-1 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 transition"
+                        className="px-2.5 py-1.5 bg-[#0D2B20] text-amber-300 border border-amber-400/40 rounded-xl text-xs font-bold hover:bg-[#1a4433] transition flex items-center gap-1 shadow-xs"
+                        title="Terima pesanan dan teruskan ke barista/dapur"
                     >
-                        Proses
+                        ✓ Terima &amp; Racik
+                    </button>
+                    <button
+                        onClick={() => {
+                            updateOrderStatus(order.id, 'awaiting_payment');
+                            addLog("AWAIT_PAYMENT", `Pindahkan pesanan #${shortId} ke status menunggu bayar`, userName);
+                        }}
+                        className="px-2 py-1.5 bg-orange-50 text-orange-800 border border-orange-200 rounded-xl text-xs font-bold hover:bg-orange-100 transition flex items-center gap-1"
+                        title="Tandai pesanan menunggu pelunasan (QRIS / Transfer)"
+                    >
+                        <Clock size={11} /> Tagih Bayar
                     </button>
                     <button
                         onClick={onCancel}
-                        className="px-2.5 py-1 bg-gray-200 text-gray-600 rounded text-xs font-bold hover:bg-gray-300 transition"
+                        className="px-2 py-1.5 bg-gray-100 text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-xl text-xs font-bold transition"
+                        title="Tolak atau batalkan pesanan ini"
                     >
-                        Batal
+                        ✕ Tolak
                     </button>
                 </>
             )}
@@ -1946,17 +2998,17 @@ function OrderActions({
                     <button
                         onClick={() => {
                             updateOrderStatus(order.id, 'processing');
-                            addLog("CONFIRM_PAYMENT", `Konfirmasi bayar & mulai racik order #${order.id.slice(0, 6)}`, userName);
+                            addLog("CONFIRM_PAYMENT", `Konfirmasi bayar lunas & mulai racik pesanan #${shortId}`, userName);
                         }}
-                        className="px-2.5 py-1 bg-orange-500 text-white rounded text-xs font-bold hover:bg-orange-600 transition flex items-center gap-1"
+                        className="px-2.5 py-1.5 bg-orange-600 text-white rounded-xl text-xs font-bold hover:bg-orange-700 transition flex items-center gap-1 shadow-xs"
                     >
-                        ✓ Konfirmasi Bayar &amp; Racik
+                        💵 Lunas &amp; Racik
                     </button>
                     <button
                         onClick={onCancel}
-                        className="px-2.5 py-1 bg-gray-200 text-gray-600 rounded text-xs font-bold hover:bg-gray-300 transition"
+                        className="px-2 py-1.5 bg-gray-100 text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-xl text-xs font-bold transition"
                     >
-                        Tolak
+                        ✕ Batal
                     </button>
                 </>
             )}
@@ -1964,11 +3016,19 @@ function OrderActions({
                 <button
                     onClick={() => {
                         updateOrderStatus(order.id, 'completed');
-                        addLog("COMPLETE_ORDER", `Completed order #${order.id.slice(0, 6)}`, userName);
+                        addLog("COMPLETE_ORDER", `Pesanan #${shortId} selesai diracik & diserahkan`, userName);
                     }}
-                    className="px-2.5 py-1 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700 transition"
+                    className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition flex items-center gap-1 shadow-xs"
                 >
-                    Selesai
+                    <CheckCircle size={12} /> Selesai Diracik
+                </button>
+            )}
+            {order.status === 'completed' && onViewReceipt && (
+                <button
+                    onClick={onViewReceipt}
+                    className="px-2.5 py-1.5 bg-gray-50 text-forest hover:bg-amber-50 border border-gray-200 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-2xs"
+                >
+                    🧾 Cetak Struk
                 </button>
             )}
         </div>
