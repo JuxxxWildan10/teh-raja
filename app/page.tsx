@@ -6,10 +6,24 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import {
-    Leaf, Star, ChevronRight, ShoppingCart, LayoutDashboard,
-    Sparkles, Clock, Award, Coffee, ChefHat, Presentation, ShieldCheck
+    Leaf,
+    Star,
+    ChevronRight,
+    ShoppingCart,
+    LayoutDashboard,
+    Sparkles,
+    Clock,
+    Award,
+    Coffee,
+    ChefHat,
+    Presentation,
+    ShieldCheck,
+    Receipt,
+    QrCode,
 } from "lucide-react";
-import { useAuthStore } from "@/lib/store";
+import { useAuthStore, useCartStore, useSalesStore } from "@/lib/store";
+import SecretStaffModal, { useSecretLogoTap } from "@/components/SecretStaffModal";
+import CustomerOrderTrackerModal from "@/components/CustomerOrderTrackerModal";
 
 const FEATURED_TEAS = [
     {
@@ -38,11 +52,27 @@ const FEATURED_TEAS = [
     },
 ];
 
-const FEATURES = [
-    { icon: Sparkles, title: "AI Tea Sommelier & Forecasting", desc: "Rekomendasi minuman cerdas untuk pelanggan & prediksi stok berbasis AI Gemini + WMA untuk admin" },
-    { icon: Clock, title: "Realtime Order & KDS", desc: "Pesanan dari meja pelanggan langsung terhubung ke Kasir POS dan layar Kitchen Display System (KDS)" },
-    { icon: Award, title: "Inventory BOM & Loyalty CRM", desc: "Pemotongan bahan baku otomatis sesuai resep (BOM), poin member otomatis, dan AI CRM Upsell" },
-    { icon: Coffee, title: "Offline-First PWA & QRIS", desc: "Tetap berjalan lancar saat internet terputus dengan IndexedDB queue dan pembayaran QRIS instan" },
+const CUSTOMER_FEATURES = [
+    {
+        icon: Sparkles,
+        title: "AI Tea Sommelier",
+        desc: "Bingung memilih varian teh? Jawab kuis singkat dan temukan racikan minuman yang paling pas dengan mood Anda hari ini.",
+    },
+    {
+        icon: Coffee,
+        title: "Kustomisasi Rasa & Topping",
+        desc: "Atur ukuran cup, tingkat kemanisan, es batu, hingga pilihan topping favorit sesuai selera Anda.",
+    },
+    {
+        icon: QrCode,
+        title: "Pembayaran QRIS & Tunai Mudah",
+        desc: "Bayar praktis langsung dari ponsel Anda menggunakan QRIS semua e-wallet/m-banking atau bayar tunai di kasir.",
+    },
+    {
+        icon: Receipt,
+        title: "Lacak Pesanan & Struk Digital",
+        desc: "Pantau status racikan minuman Anda secara real-time dari meja dan unduh struk digital kapan saja.",
+    },
 ];
 
 const PORTAL_MODULES = [
@@ -86,14 +116,24 @@ const PORTAL_MODULES = [
 
 export default function LandingPage() {
     const router = useRouter();
-    const { user } = useAuthStore();
+    const { user, logout } = useAuthStore();
+    const activeOrderId = useCartStore((state) => state.activeOrderId);
+    const orders = useSalesStore((state) => state.orders);
+    const activeOrder = activeOrderId ? orders.find((o) => o.id === activeOrderId) : null;
+
     const [currentTea, setCurrentTea] = useState(0);
     const [mounted, setMounted] = useState(false);
+    const [isSecretModalOpen, setIsSecretModalOpen] = useState(false);
+    const [isTrackerModalOpen, setIsTrackerModalOpen] = useState(false);
+
+    const handleLogoTap = useSecretLogoTap(() => {
+        setIsSecretModalOpen(true);
+    });
 
     useEffect(() => {
         setMounted(true);
         const interval = setInterval(() => {
-            setCurrentTea(v => (v + 1) % FEATURED_TEAS.length);
+            setCurrentTea((v) => (v + 1) % FEATURED_TEAS.length);
         }, 3500);
         return () => clearInterval(interval);
     }, []);
@@ -102,41 +142,55 @@ export default function LandingPage() {
 
     return (
         <div className="min-h-screen bg-[#07221B] text-white overflow-x-hidden">
-
             {/* ── NAVBAR ─────────────────────────────────── */}
             <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 glass">
-                <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => router.push('/')}>
-                    <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center transition-transform active:scale-90">
+                {/* Logo: Tap 5x to open Secret Admin Login / Portal */}
+                <button
+                    type="button"
+                    onClick={handleLogoTap}
+                    className="flex items-center gap-2.5 cursor-pointer select-none focus:outline-none group"
+                    title="Teh Raja"
+                >
+                    <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center transition-transform group-active:scale-90">
                         <Leaf size={16} className="text-[#07221B]" />
                     </div>
-                    <span className="font-bold text-amber-400 tracking-widest text-sm uppercase font-sans select-none">Teh Raja</span>
-                </div>
+                    <span className="font-bold text-amber-400 tracking-widest text-sm uppercase font-sans select-none">
+                        Teh Raja
+                    </span>
+                </button>
+
                 <div className="flex items-center gap-2 sm:gap-3">
                     {user && (
-                        <span className="text-white/60 text-xs hidden md:block">
-                            Halo, {user.name} ({user.role}) 👋
-                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setIsSecretModalOpen(true)}
+                            className="flex items-center gap-1.5 text-xs font-bold bg-emerald-500/20 text-emerald-300 px-3.5 py-2 rounded-full hover:bg-emerald-500/30 transition border border-emerald-500/40"
+                        >
+                            <ShieldCheck size={13} />
+                            <span className="hidden sm:inline">Portal Admin ({user.name})</span>
+                            <span className="sm:hidden">Admin</span>
+                        </button>
                     )}
-                    <Link
-                        href="/pos"
-                        className="hidden sm:flex items-center gap-1.5 text-xs font-bold bg-white/10 text-white px-3.5 py-2 rounded-full hover:bg-white/20 transition border border-white/10"
-                    >
-                        <ShoppingCart size={13} /> Kasir POS
-                    </Link>
-                    <Link
-                        href="/kds"
-                        className="hidden md:flex items-center gap-1.5 text-xs font-bold bg-white/10 text-white px-3.5 py-2 rounded-full hover:bg-white/20 transition border border-white/10"
-                    >
-                        <ChefHat size={13} /> Dapur KDS
-                    </Link>
-                    <Link
-                        href="/admin"
-                        className="flex items-center gap-1.5 text-xs font-bold bg-white/10 text-amber-300 px-3.5 py-2 rounded-full hover:bg-white/20 transition border border-amber-400/30"
-                    >
-                        <LayoutDashboard size={13} /> Admin
-                    </Link>
+
                     <button
-                        onClick={() => router.push('/menu')}
+                        type="button"
+                        onClick={() => setIsTrackerModalOpen(true)}
+                        className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-full transition border ${
+                            activeOrder
+                                ? "bg-amber-400/20 text-amber-300 border-amber-400/50 animate-pulse"
+                                : "bg-white/10 text-white border-white/15 hover:bg-white/20"
+                        }`}
+                    >
+                        {activeOrder ? <Clock size={13} /> : <Receipt size={13} className="text-amber-400" />}
+                        <span>
+                            {activeOrder
+                                ? `Pesanan #${activeOrder.id.slice(0, 5).toUpperCase()}`
+                                : "Lacak Pesanan & Struk"}
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={() => router.push("/menu")}
                         className="flex items-center gap-1.5 text-xs font-bold bg-amber-400 text-[#07221B] px-4 py-2 rounded-full hover:bg-amber-300 transition hover:scale-105 active:scale-95 shadow-lg shadow-amber-400/20"
                     >
                         <Coffee size={13} /> Pesan Menu
@@ -158,39 +212,41 @@ export default function LandingPage() {
                 >
                     {/* Badge */}
                     <div className="inline-flex items-center gap-2 bg-amber-400/10 border border-amber-400/30 text-amber-400 text-xs font-bold px-4 py-2 rounded-full mb-6">
-                        <Star size={12} className="fill-current" />
-                        Smart Web POS &amp; AI ERP Ecosystem
+                        <Award size={13} />
+                        Authentic Tea &amp; Signature Blends
                     </div>
 
                     <h1 className="text-5xl sm:text-6xl md:text-7xl font-serif font-bold leading-tight mb-6">
                         <span className="text-gradient-gold">Teh Raja</span>
                         <br />
-                        <span className="text-white/80 text-3xl sm:text-4xl md:text-5xl">Authentic Tea &amp; Blends</span>
+                        <span className="text-white/80 text-3xl sm:text-4xl md:text-5xl">
+                            Kemewahan dalam Setiap Tegukan
+                        </span>
                     </h1>
 
                     <p className="text-white/60 text-base sm:text-lg leading-relaxed mb-10 max-w-xl mx-auto">
-                        Sistem Point of Sale (POS) terintegrasi dari hulu ke hilir: Self-Order Pelanggan, Kasir Cerdas AI, Kitchen Display System (KDS), Manajemen BOM Inventori, hingga AI Demand Forecasting.
+                        Nikmati racikan teh melati autentik, matcha pilihan, dan teh buah segar. Pesan langsung dari meja Anda, pantau proses peracikan secara live, dan unduh struk digital dengan mudah.
                     </p>
 
                     <div className="flex flex-wrap gap-3 justify-center">
                         <motion.button
                             whileHover={{ scale: 1.04 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={() => router.push('/menu')}
+                            onClick={() => router.push("/menu")}
                             className="flex items-center justify-center gap-2 bg-amber-400 text-[#07221B] font-black text-base px-8 py-4 rounded-2xl shadow-2xl shadow-amber-400/30 hover:bg-amber-300 transition"
                         >
                             <Coffee size={20} />
-                            Pesan Sekarang (Pelanggan)
+                            Lihat Menu &amp; Pesan Sekarang
                             <ChevronRight size={18} />
                         </motion.button>
                         <motion.button
                             whileHover={{ scale: 1.04 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={() => router.push('/pos')}
+                            onClick={() => setIsTrackerModalOpen(true)}
                             className="flex items-center justify-center gap-2 bg-white/10 text-white border border-white/20 font-bold text-base px-6 py-4 rounded-2xl hover:bg-white/15 transition"
                         >
-                            <ShoppingCart size={18} className="text-amber-400" />
-                            Buka Kasir POS
+                            <Receipt size={18} className="text-amber-400" />
+                            Lacak Pesanan &amp; Struk
                         </motion.button>
                     </div>
                 </motion.div>
@@ -219,14 +275,22 @@ export default function LandingPage() {
                                     className="object-cover"
                                     unoptimized
                                 />
-                                <div className={`absolute inset-0 bg-gradient-to-t ${FEATURED_TEAS[currentTea].color} opacity-60`} />
+                                <div
+                                    className={`absolute inset-0 bg-gradient-to-t ${FEATURED_TEAS[currentTea].color} opacity-60`}
+                                />
                                 <div className="absolute bottom-0 left-0 right-0 p-5">
                                     <span className="bg-amber-400 text-[#07221B] text-[10px] font-black px-2 py-0.5 rounded-full mb-2 inline-block">
                                         {FEATURED_TEAS[currentTea].badge}
                                     </span>
-                                    <h3 className="text-xl font-serif font-bold text-white">{FEATURED_TEAS[currentTea].name}</h3>
-                                    <p className="text-white/70 text-xs mt-1">{FEATURED_TEAS[currentTea].desc}</p>
-                                    <p className="text-amber-400 font-black text-lg mt-2">{FEATURED_TEAS[currentTea].price}</p>
+                                    <h3 className="text-xl font-serif font-bold text-white">
+                                        {FEATURED_TEAS[currentTea].name}
+                                    </h3>
+                                    <p className="text-white/70 text-xs mt-1">
+                                        {FEATURED_TEAS[currentTea].desc}
+                                    </p>
+                                    <p className="text-amber-400 font-black text-lg mt-2">
+                                        {FEATURED_TEAS[currentTea].price}
+                                    </p>
                                 </div>
                             </motion.div>
                         </AnimatePresence>
@@ -237,7 +301,9 @@ export default function LandingPage() {
                                 <button
                                     key={i}
                                     onClick={() => setCurrentTea(i)}
-                                    className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentTea ? 'bg-amber-400 w-4' : 'bg-white/40'}`}
+                                    className={`w-1.5 h-1.5 rounded-full transition-all ${
+                                        i === currentTea ? "bg-amber-400 w-4" : "bg-white/40"
+                                    }`}
                                 />
                             ))}
                         </div>
@@ -245,86 +311,99 @@ export default function LandingPage() {
                 </motion.div>
             </section>
 
-            {/* ── PORTAL MODUL TERINTEGRASI ─────────────── */}
-            <section className="px-6 py-16 bg-black/30 border-y border-white/10">
-                <div className="max-w-5xl mx-auto">
-                    <div className="text-center mb-10">
-                        <span className="text-xs font-bold uppercase tracking-widest text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
-                            Ekosistem Terhubung Real-Time
-                        </span>
-                        <h2 className="text-3xl font-serif font-bold text-white mt-3">Portal Akses Cepat Sistem</h2>
-                        <p className="text-white/50 text-sm mt-1">
-                            Semua modul saling terhubung secara instan melalui Firebase Realtime Database &amp; Offline-First IndexedDB
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {PORTAL_MODULES.map((mod) => {
-                            const Icon = mod.icon;
-                            return (
-                                <Link
-                                    key={mod.href}
-                                    href={mod.href}
-                                    className={`group p-5 rounded-2xl border transition flex items-start gap-4 ${mod.color}`}
-                                >
-                                    <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition">
-                                        <Icon size={22} className="text-amber-400" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-amber-300">
-                                                {mod.badge}
-                                            </span>
-                                            <span className="text-xs font-mono text-white/40">{mod.subtitle}</span>
-                                        </div>
-                                        <h3 className="font-bold text-white text-base group-hover:text-amber-400 transition flex items-center justify-between">
-                                            {mod.title}
-                                            <ChevronRight size={16} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition" />
-                                        </h3>
-                                        <p className="text-white/60 text-xs leading-relaxed mt-1">{mod.desc}</p>
-                                    </div>
-                                </Link>
-                            );
-                        })}
-                    </div>
-
-                    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 bg-white/5 border border-white/10 rounded-2xl p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-amber-400/20 flex items-center justify-center text-amber-400">
-                                <ShieldCheck size={20} />
-                            </div>
+            {/* ── PORTAL MODUL TERINTEGRASI (HANYA TAMPIL JIKA ADMIN LOGIN VIA 5x TAP) ── */}
+            {user && (
+                <section className="px-6 py-16 bg-black/30 border-y border-amber-400/20">
+                    <div className="max-w-5xl mx-auto">
+                        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
                             <div>
-                                <p className="text-xs font-bold text-white">Akun Demo Akses Staf &amp; Admin</p>
-                                <p className="text-[11px] text-white/60">
-                                    Admin: <code className="text-amber-300">admin</code> / <code className="text-amber-300">123</code> &nbsp;·&nbsp;
-                                    Kasir: <code className="text-amber-300">kasir</code> / <code className="text-amber-300">123</code> &nbsp;·&nbsp;
-                                    Member Demo: <code className="text-amber-300">081234567890</code>
+                                <span className="text-xs font-bold uppercase tracking-widest text-emerald-300 bg-emerald-500/15 px-3 py-1 rounded-full border border-emerald-500/30">
+                                    Mode Staf &amp; Administrator Aktif ({user.name})
+                                </span>
+                                <h2 className="text-3xl font-serif font-bold text-white mt-3">
+                                    Portal Akses Cepat Sistem
+                                </h2>
+                                <p className="text-white/50 text-sm mt-1">
+                                    Panel ini disembunyikan dari pelanggan dan hanya terlihat karena Anda telah login
                                 </p>
                             </div>
+                            <button
+                                onClick={() => logout()}
+                                className="px-4 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-xs font-bold transition"
+                            >
+                                Kunci &amp; Sembunyikan Portal
+                            </button>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                            <a
-                                href="/presentasi_sempro_tehraja.html"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 px-4 py-2 bg-amber-400 text-[#07221B] hover:bg-amber-300 rounded-xl text-xs font-black transition shadow-lg shadow-amber-400/20"
-                            >
-                                <Sparkles size={14} /> Slide Seminar Proposal (Sempro)
-                            </a>
-                            <a
-                                href="/presentasi_pkl_tehraja.html"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 px-4 py-2 bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 rounded-xl text-xs font-bold transition"
-                            >
-                                <Presentation size={14} /> Slide Laporan Akhir (POS)
-                            </a>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {PORTAL_MODULES.map((mod) => {
+                                const Icon = mod.icon;
+                                return (
+                                    <Link
+                                        key={mod.href}
+                                        href={mod.href}
+                                        className={`group p-5 rounded-2xl border transition flex items-start gap-4 ${mod.color}`}
+                                    >
+                                        <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition">
+                                            <Icon size={22} className="text-amber-400" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-amber-300">
+                                                    {mod.badge}
+                                                </span>
+                                                <span className="text-xs font-mono text-white/40">{mod.subtitle}</span>
+                                            </div>
+                                            <h3 className="font-bold text-white text-base group-hover:text-amber-400 transition flex items-center justify-between">
+                                                {mod.title}
+                                                <ChevronRight
+                                                    size={16}
+                                                    className="opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition"
+                                                />
+                                            </h3>
+                                            <p className="text-white/60 text-xs leading-relaxed mt-1">{mod.desc}</p>
+                                        </div>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+
+                        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 bg-white/5 border border-white/10 rounded-2xl p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-amber-400/20 flex items-center justify-center text-amber-400">
+                                    <ShieldCheck size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-white">Dokumen Presentasi PKL &amp; Sempro</p>
+                                    <p className="text-[11px] text-white/60">
+                                        Akses khusus slide presentasi Seminar Proposal &amp; Laporan Akhir POS
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <a
+                                    href="/presentasi_sempro_tehraja.html"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-4 py-2 bg-amber-400 text-[#07221B] hover:bg-amber-300 rounded-xl text-xs font-black transition shadow-lg shadow-amber-400/20"
+                                >
+                                    <Sparkles size={14} /> Slide Seminar Proposal (Sempro)
+                                </a>
+                                <a
+                                    href="/presentasi_pkl_tehraja.html"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-4 py-2 bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 rounded-xl text-xs font-bold transition"
+                                >
+                                    <Presentation size={14} /> Slide Laporan Akhir (POS)
+                                </a>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
 
-            {/* ── FEATURES SECTION ──────────────────────── */}
+            {/* ── CUSTOMER FEATURES SECTION ──────────────── */}
             <section className="px-6 py-16 bg-black/20">
                 <div className="max-w-4xl mx-auto">
                     <motion.div
@@ -333,12 +412,16 @@ export default function LandingPage() {
                         viewport={{ once: true }}
                         className="text-center mb-12"
                     >
-                        <h2 className="text-3xl font-serif font-bold text-amber-400 mb-3">Keunggulan Arsitektur Teh Raja</h2>
-                        <p className="text-white/50 text-sm">Sistem POS modern yang dirancang khusus untuk operasional UMKM teh &amp; minuman</p>
+                        <h2 className="text-3xl font-serif font-bold text-amber-400 mb-3">
+                            Pengalaman Memesan Lebih Praktis
+                        </h2>
+                        <p className="text-white/50 text-sm">
+                            Pilih menu favorit, sesuaikan racikan, dan pantau status pesanan serta struk langsung dari ponsel Anda
+                        </p>
                     </motion.div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        {FEATURES.map(({ icon: Icon, title, desc }, i) => (
+                        {CUSTOMER_FEATURES.map(({ icon: Icon, title, desc }, i) => (
                             <motion.div
                                 key={title}
                                 initial={{ opacity: 0, y: 20 }}
@@ -368,23 +451,33 @@ export default function LandingPage() {
                     viewport={{ once: true }}
                     className="max-w-lg mx-auto bg-gradient-to-br from-amber-400/10 to-green-900/30 border border-amber-400/20 rounded-3xl p-10"
                 >
-                    <div className="w-14 h-14 mx-auto bg-amber-400 rounded-2xl flex items-center justify-center mb-5">
+                    <button
+                        type="button"
+                        onClick={handleLogoTap}
+                        className="w-14 h-14 mx-auto bg-amber-400 rounded-2xl flex items-center justify-center mb-5 cursor-pointer active:scale-90 transition-transform"
+                        title="Teh Raja"
+                    >
                         <Leaf size={28} className="text-[#07221B]" />
-                    </div>
-                    <h2 className="text-2xl font-serif font-bold text-white mb-3">Mulai Pengalaman Teh Raja</h2>
-                    <p className="text-white/50 text-sm mb-8">Pesan minuman teh otentik dengan resep signature kami atau kelola toko melalui dashboard terpadu.</p>
+                    </button>
+                    <h2 className="text-2xl font-serif font-bold text-white mb-3">
+                        Mulai Pengalaman Teh Raja
+                    </h2>
+                    <p className="text-white/50 text-sm mb-8">
+                        Pesan minuman teh otentik dengan resep signature kami atau lacak status pesanan dan struk pembelian Anda.
+                    </p>
                     <div className="flex flex-col sm:flex-row gap-3">
                         <button
-                            onClick={() => router.push('/menu')}
+                            onClick={() => router.push("/menu")}
                             className="flex-1 py-4 bg-amber-400 text-[#07221B] font-black rounded-xl hover:bg-amber-300 transition hover:scale-[1.02] active:scale-[0.98] shadow-lg"
                         >
-                            Katalog Pelanggan
+                            Buka Menu Pelanggan
                         </button>
                         <button
-                            onClick={() => router.push('/admin')}
-                            className="flex-1 py-4 bg-white/10 text-white border border-white/20 font-bold rounded-xl hover:bg-white/20 transition"
+                            onClick={() => setIsTrackerModalOpen(true)}
+                            className="flex-1 py-4 bg-white/10 text-white border border-white/20 font-bold rounded-xl hover:bg-white/20 transition flex items-center justify-center gap-2"
                         >
-                            Dashboard Admin
+                            <Receipt size={16} className="text-amber-400" />
+                            Lacak Pesanan &amp; Struk
                         </button>
                     </div>
                 </motion.div>
@@ -392,9 +485,18 @@ export default function LandingPage() {
 
             {/* ── FOOTER ────────────────────────────────── */}
             <footer className="px-6 py-6 border-t border-white/10 text-center text-white/40 text-xs">
-                <p>TEH RAJA &copy; 2026 · M. YARZUQ WILDANI [0402231058] · Project Praktik Kerja Lapangan (PKL)</p>
-                <p className="mt-1">Smart Web POS &amp; AI Forecasting v3.0 · Next.js + Firebase Realtime DB + Gemini AI</p>
+                <p>TEH RAJA &copy; 2026 · Authentic Tea &amp; Blends</p>
             </footer>
+
+            {/* Modals */}
+            <CustomerOrderTrackerModal
+                isOpen={isTrackerModalOpen}
+                onClose={() => setIsTrackerModalOpen(false)}
+            />
+            <SecretStaffModal
+                isOpen={isSecretModalOpen}
+                onClose={() => setIsSecretModalOpen(false)}
+            />
         </div>
     );
 }

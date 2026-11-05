@@ -181,7 +181,23 @@ export default function AdminPage() {
     const [newRecipeIngId, setNewRecipeIngId] = useState<string>('');
     const [newRecipeQty, setNewRecipeQty] = useState<string>('10');
 
-    useEffect(() => { setIsClient(true); }, []);
+    const [authHydrated, setAuthHydrated] = useState(false);
+    useEffect(() => {
+        setIsClient(true);
+        if (useAuthStore.persist.hasHydrated()) {
+            setAuthHydrated(true);
+        } else {
+            const unsub = useAuthStore.persist.onFinishHydration(() => setAuthHydrated(true));
+            const fallback = setTimeout(() => setAuthHydrated(true), 600);
+            return () => { unsub(); clearTimeout(fallback); };
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isClient && authHydrated && !user) {
+            router.replace('/menu');
+        }
+    }, [isClient, authHydrated, user, router]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -200,6 +216,7 @@ export default function AdminPage() {
     const handleLogout = async () => {
         addLog("LOGOUT", `${user?.name} logged out`, user?.name || "Unknown");
         await logout();
+        router.replace('/menu');
     };
 
     const openAddModal = () => {
@@ -892,61 +909,7 @@ export default function AdminPage() {
         ]
     };
 
-    if (!isClient) return null;
-
-    if (!user) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-forest relative overflow-hidden px-4">
-                <div className="absolute inset-0 z-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                <div className="p-6 sm:p-8 glass rounded-2xl w-full max-w-md text-center bg-black/40 backdrop-blur-md border border-white/10 shadow-2xl z-10">
-                    <div className="mb-6">
-                        <h1 className="text-3xl sm:text-4xl font-serif text-gold font-bold">TEH RAJA</h1>
-                        <p className="text-cream opacity-60 text-sm tracking-widest mt-2 uppercase">Official Staff &amp; Admin Portal</p>
-                    </div>
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <input
-                            type="text"
-                            className="w-full p-4 bg-white/10 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-gold transition"
-                            placeholder="Username (admin / kasir)"
-                            value={loginUsername}
-                            onChange={(e) => setLoginUsername(e.target.value)}
-                        />
-                        <input
-                            type="password"
-                            className="w-full p-4 bg-white/10 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-gold transition"
-                            placeholder="Password (default: 123)"
-                            value={loginPassword}
-                            onChange={(e) => setLoginPassword(e.target.value)}
-                        />
-                        {loginError && <p className="text-red-400 text-sm bg-red-400/10 p-2 rounded">{loginError}</p>}
-                        <button type="submit" className="w-full py-4 bg-gold text-forest font-bold rounded-lg hover:bg-gold-light transition hover:scale-[1.02] shadow-lg shadow-gold/20">
-                            Masuk Sistem
-                        </button>
-                    </form>
-                    <div className="mt-4 flex gap-2 justify-center">
-                        <button
-                            type="button"
-                            onClick={() => { setLoginUsername('admin'); setLoginPassword('123'); }}
-                            className="text-[11px] bg-white/10 hover:bg-white/20 text-gold px-3 py-1.5 rounded-lg transition"
-                        >
-                            Isi Demo Admin (admin/123)
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { setLoginUsername('kasir'); setLoginPassword('123'); }}
-                            className="text-[11px] bg-white/10 hover:bg-white/20 text-emerald-300 px-3 py-1.5 rounded-lg transition"
-                        >
-                            Isi Demo Kasir (kasir/123)
-                        </button>
-                    </div>
-                    <div className="mt-6 pt-6 border-t border-white/10 text-xs text-white/30 flex justify-between items-center">
-                        <Link href="/menu" className="text-gold hover:underline">← Kembali ke Menu Pelanggan</Link>
-                        <span>v3.0.0</span>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    if (!isClient || !authHydrated || !user) return null;
 
     const pendingCount = orders.filter(o => !o.status || o.status === 'pending' || o.status === 'awaiting_payment').length;
     const lowStockAlertCount = products.filter(p => p.stock <= (p.minStockThreshold ?? 5)).length + ingredients.filter(i => i.stock <= i.minStockThreshold).length;

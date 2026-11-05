@@ -199,9 +199,20 @@ export default function POSPage() {
 
     useEffect(() => { setIsClient(true); }, []);
 
+    const [authHydrated, setAuthHydrated] = useState(false);
     useEffect(() => {
-        if (isClient && !user) router.push('/admin');
-    }, [isClient, user, router]);
+        if (useAuthStore.persist.hasHydrated()) {
+            setAuthHydrated(true);
+        } else {
+            const unsub = useAuthStore.persist.onFinishHydration(() => setAuthHydrated(true));
+            const fallback = setTimeout(() => setAuthHydrated(true), 600);
+            return () => { unsub(); clearTimeout(fallback); };
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isClient && authHydrated && !user) router.replace('/menu');
+    }, [isClient, authHydrated, user, router]);
 
     const searchRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
@@ -1469,8 +1480,8 @@ export default function POSPage() {
             <ConfirmModal isOpen={confirmClearCart} title="Kosongkan Keranjang?" message="Semua item akan dihapus. Gunakan Hold untuk menyimpan pesanan." confirmLabel="Ya, Kosongkan" danger
                 onConfirm={() => { clearCart(); setConfirmClearCart(false); toast.info('Keranjang dikosongkan.'); }}
                 onCancel={() => setConfirmClearCart(false)} />
-            <ConfirmModal isOpen={confirmLogout} title="Keluar dari POS?" message={`Anda akan keluar sebagai ${user?.name}.`} confirmLabel="Ya, Keluar" danger
-                onConfirm={() => { setConfirmLogout(false); addLog('LOGOUT', `${user?.name} logged out`, user?.name || ''); logout(); router.push('/admin'); }}
+            <ConfirmModal isOpen={confirmLogout} title="Keluar dari POS?" message={`Anda akan keluar sebagai ${user?.name} dan kembali ke tampilan pelanggan.`} confirmLabel="Ya, Keluar" danger
+                onConfirm={() => { setConfirmLogout(false); addLog('LOGOUT', `${user?.name} logged out`, user?.name || ''); logout(); router.replace('/menu'); }}
                 onCancel={() => setConfirmLogout(false)} />
 
             {/* ── KAS KELUAR / PETTY CASH MODAL ──────────────── */}

@@ -9,6 +9,7 @@ import Navbar from "@/components/Navbar";
 import RecommendationQuiz from "@/components/RecommendationQuiz";
 import OrderStatusOverlay from "@/components/OrderStatusOverlay";
 import VariantModal from "@/components/VariantModal";
+import { useSecretLogoTap } from "@/components/SecretStaffModal";
 import {
   useCartStore,
   useProductStore,
@@ -18,7 +19,7 @@ import {
   ProductVariants,
 } from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, ArrowDown, AlertTriangle, Download, Search, ShoppingBag, Tag } from "lucide-react";
+import { Star, ArrowDown, AlertTriangle, Download, Search, ShoppingBag, Tag, Receipt } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -53,6 +54,10 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const activePromos = promos.filter(p => p.isActive);
+
+  const handleHeroLogoTap = useSecretLogoTap(() => {
+    window.dispatchEvent(new CustomEvent('tehraja:open-secret-modal'));
+  });
 
   const handleVariantConfirm = (variants: ProductVariants, finalPrice: number, qty: number) => {
     if (!variantProduct) return;
@@ -97,7 +102,8 @@ export default function Home() {
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8 }}
-            className="text-4xl md:text-6xl lg:text-8xl font-serif font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-b from-gold-light to-gold"
+            onClick={handleHeroLogoTap}
+            className="text-4xl md:text-6xl lg:text-8xl font-serif font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-b from-gold-light to-gold cursor-pointer select-none inline-block active:scale-95 transition-transform"
           >
             TEH RAJA
           </motion.h1>
@@ -113,14 +119,21 @@ export default function Home() {
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="flex gap-4 justify-center"
+            className="flex flex-wrap gap-3 justify-center"
           >
-            <a href="#recommendation" className="px-8 py-3 bg-gold text-forest font-bold rounded-full hover:scale-105 transition shadow-lg shadow-gold/20">
-              Cari Teh Favorit
+            <a href="#menu" className="px-8 py-3 bg-gold text-forest font-bold rounded-full hover:scale-105 transition shadow-lg shadow-gold/20">
+              Pesan Menu
             </a>
-            <a href="#menu" className="px-8 py-3 border border-white/20 rounded-full hover:bg-white/5 transition backdrop-blur-sm">
-              Lihat Menu
+            <a href="#recommendation" className="px-6 py-3 border border-white/20 rounded-full hover:bg-white/5 transition backdrop-blur-sm">
+              AI Tea Sommelier
             </a>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('tehraja:open-tracker-modal'))}
+              className="px-6 py-3 bg-white/10 border border-gold/40 text-gold font-bold rounded-full hover:bg-white/15 transition backdrop-blur-sm flex items-center gap-2"
+            >
+              <Receipt size={16} /> Lacak Pesanan &amp; Struk
+            </button>
           </motion.div>
 
           {deferredPrompt && (
@@ -306,7 +319,7 @@ export default function Home() {
 
       {/* FOOTER */}
       <footer className="bg-black/40 py-10 border-t border-white/5 text-center text-sm opacity-40">
-        <p>TEH RAJA &copy; 2026. M. YARZUQ WILDANI [0402231058]. Dibuat untuk Praktik Kerja Lapangan.</p>
+        <p>TEH RAJA &copy; 2026 · Authentic Tea &amp; Blends</p>
       </footer>
 
       {/* Mobile sticky cart bar */}

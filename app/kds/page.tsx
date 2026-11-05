@@ -17,14 +17,25 @@ export default function KDSPage() {
     const { user } = useAuthStore();
     const { orders, updateOrderStatus, addLog } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
+    const [authHydrated, setAuthHydrated] = useState(false);
     const [kdsTab, setKdsTab] = useState<'active' | 'incoming'>('active');
 
     useEffect(() => {
         setIsClient(true);
-        if (!user) {
-            router.push('/admin');
+        if (useAuthStore.persist.hasHydrated()) {
+            setAuthHydrated(true);
+        } else {
+            const unsub = useAuthStore.persist.onFinishHydration(() => setAuthHydrated(true));
+            const fallback = setTimeout(() => setAuthHydrated(true), 600);
+            return () => { unsub(); clearTimeout(fallback); };
         }
-    }, [user, router]);
+    }, []);
+
+    useEffect(() => {
+        if (isClient && authHydrated && !user) {
+            router.replace('/menu');
+        }
+    }, [isClient, authHydrated, user, router]);
 
     // 1. Sedang Diracik (processing) - FIFO (oldest first so longest waiting gets served)
     const activeOrders = useMemo(() => {
