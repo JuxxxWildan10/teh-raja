@@ -13,41 +13,45 @@ export default function ReportGenerator({ orders }: ReportGeneratorProps) {
 
     const generatePDF = () => {
         const doc = new jsPDF();
+        const validOrders = orders.filter(o => o.status !== 'cancelled');
 
         // --- Header ---
-        doc.setFillColor(26, 77, 62); // Forest Green
-        doc.rect(0, 0, 210, 30, 'F');
+        doc.setFillColor(13, 43, 32); // Forest Green
+        doc.rect(0, 0, 210, 32, 'F');
 
-        doc.setTextColor(255, 255, 255);
-        // doc.setFont("times", "bold"); // Removing custom font for now to avoid issues
+        doc.setTextColor(212, 175, 55);
         doc.setFontSize(22);
         doc.text("TEH RAJA", 105, 15, { align: "center" });
 
+        doc.setTextColor(255, 255, 255);
         doc.setFontSize(10);
-        // doc.setFont("helvetica", "normal");
-        doc.text("Authentic Premium Tea | Est. 2024", 105, 22, { align: "center" });
+        doc.text("Authentic Premium Tea & Blends | Laporan Resmi POS", 105, 23, { align: "center" });
 
         // --- Info ---
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(14);
-        doc.text("Laporan Penjualan Harian", 14, 45);
+        doc.text("Laporan Penjualan & Transaksi", 14, 44);
+
+        const totalOmset = validOrders.reduce((acc, curr) => acc + curr.total, 0);
+        const totalDiscount = validOrders.reduce((acc, curr) => acc + (curr.discount || 0), 0);
 
         doc.setFontSize(10);
-        doc.text(`Tanggal Cetak: ${new Date().toLocaleString('id-ID')}`, 14, 52);
-
-        const total = orders.reduce((acc, curr) => acc + curr.total, 0);
-        doc.text(`Total Omset: Rp ${total.toLocaleString('id-ID')}`, 14, 58);
+        doc.text(`Tanggal Cetak : ${new Date().toLocaleString('id-ID')}`, 14, 52);
+        doc.text(`Transaksi Valid : ${validOrders.length} pesanan (Dibatalkan: ${orders.length - validOrders.length})`, 14, 58);
+        doc.text(`Total Diskon    : Rp ${totalDiscount.toLocaleString('id-ID')}`, 14, 64);
+        doc.text(`Total Omset     : Rp ${totalOmset.toLocaleString('id-ID')}`, 14, 70);
 
         // --- Table ---
-        const tableColumn = ["Order", "Waktu", "Kasir", "Detail", "Total"];
+        const tableColumn = ["Order ID", "Waktu", "Pelanggan", "Metode", "Rincian Menu", "Total"];
         const tableRows: string[][] = [];
 
-        orders.forEach(order => {
+        validOrders.forEach(order => {
             const itemsString = order.items.map(i => `${i.name} (x${i.quantity})`).join(', ');
             const orderData = [
-                order.id.substring(0, 6),
-                new Date(order.date).toLocaleTimeString('id-ID'),
+                `#${order.id.substring(0, 6).toUpperCase()}`,
+                new Date(order.date).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }),
                 order.customerName || "Guest",
+                (order.paymentMethod || 'cash').toUpperCase(),
                 itemsString,
                 `Rp ${order.total.toLocaleString('id-ID')}`
             ];
@@ -57,9 +61,10 @@ export default function ReportGenerator({ orders }: ReportGeneratorProps) {
         autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
-            startY: 65,
+            startY: 76,
             theme: 'grid',
-            headStyles: { fillColor: [212, 175, 55], textColor: [26, 77, 62] },
+            headStyles: { fillColor: [212, 175, 55], textColor: [13, 43, 32] },
+            styles: { fontSize: 8.5 },
         });
 
         // --- Footer ---
@@ -68,14 +73,14 @@ export default function ReportGenerator({ orders }: ReportGeneratorProps) {
 
         doc.setFontSize(10);
         doc.text("Mengetahui,", 160, finalY + 20, { align: 'center' });
-        doc.text("( Manajer )", 160, finalY + 40, { align: 'center' });
+        doc.text("( Manajer Operasional Teh Raja )", 160, finalY + 40, { align: 'center' });
 
-        doc.save(`Laporan_Harian_${new Date().toISOString().split('T')[0]}.pdf`);
+        doc.save(`Laporan_Penjualan_TehRaja_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     return (
-        <button onClick={generatePDF} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700 transition">
-            <FileText size={16} /> Export PDF (Resmi)
+        <button onClick={generatePDF} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700 transition text-sm font-bold">
+            <FileText size={16} /> Export PDF
         </button>
     );
 }

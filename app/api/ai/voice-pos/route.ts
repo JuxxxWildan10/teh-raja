@@ -1,6 +1,87 @@
 import { NextResponse } from 'next/server';
 import { generate, hasGeminiKey } from '@/lib/gemini';
 
+const WORD_TO_NUM: Record<string, number> = {
+    satu: 1, se: 1, dua: 2, tiga: 3, empat: 4, lima: 5,
+    enam: 6, tujuh: 7, delapan: 8, sembilan: 9, sepuluh: 10,
+};
+
+function parseVoiceTranscriptFallback(text: string, menu: any[]) {
+    const lower = text.toLowerCase();
+    const segments = lower.split(/\b(?:dan|sama|tambah|plus|terus|lalu|,)\b/).map(s => s.trim()).filter(Boolean);
+    const results: any[] = [];
+
+    const extractFromText = (chunk: string) => {
+        let bestProduct: any = null;
+        let bestScore = 0;
+
+        for (const item of menu) {
+            const itemName = String(item.name || '').toLowerCase();
+            const tokens = itemName.split(/\s+/).filter((t: string) => t.length > 2);
+            let score = 0;
+            if (chunk.includes(itemName)) {
+                score = 100 + itemName.length;
+            } else {
+                for (const tok of tokens) {
+                    if (chunk.includes(tok)) score += 20;
+                }
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                bestProduct = item;
+            }
+        }
+
+        if (!bestProduct) return null;
+
+        let quantity = 1;
+        const digitMatch = chunk.match(/(\d+)/);
+        if (digitMatch) {
+            quantity = Math.max(1, parseInt(digitMatch[1], 10));
+        } else {
+            for (const [w, n] of Object.entries(WORD_TO_NUM)) {
+                if (new RegExp(`\\b${w}\\b`).test(chunk)) {
+                    quantity = n;
+                    break;
+                }
+            }
+        }
+
+        const isFoodOrSnack = bestProduct.category === 'snack' || bestProduct.category === 'food';
+        const size: 'M' | 'L' = /\b(large|besar|ukuran l|cup l)\b/.test(chunk) ? 'L' : 'M';
+        const temperature: 'panas' | 'es' = /\b(panas|hangat|hot)\b/.test(chunk) ? 'panas' : 'es';
+        let sugar: '0%' | '25%' | '50%' | '75%' | '100%' = '100%';
+        if (/\b(tanpa gula|no sugar|0%|diet)\b/.test(chunk)) sugar = '0%';
+        else if (/\b(less sugar|sedikit gula|kurang manis|50%)\b/.test(chunk)) sugar = '50%';
+        else if (/\b(25%)\b/.test(chunk)) sugar = '25%';
+        else if (/\b(75%)\b/.test(chunk)) sugar = '75%';
+
+        let ice: 'no-ice' | 'less' | 'normal' | 'extra' = 'normal';
+        if (/\b(tanpa es|no ice)\b/.test(chunk)) ice = 'no-ice';
+        else if (/\b(sedikit es|less ice|es dikit)\b/.test(chunk)) ice = 'less';
+        else if (/\b(extra es|banyak es|extra ice)\b/.test(chunk)) ice = 'extra';
+
+        return {
+            productId: bestProduct.id,
+            quantity,
+            variants: isFoodOrSnack ? { size } : { size, sugar, ice, temperature },
+            note: '',
+        };
+    };
+
+    for (const seg of segments) {
+        const item = extractFromText(seg);
+        if (item) results.push(item);
+    }
+
+    if (results.length === 0) {
+        const single = extractFromText(lower);
+        if (single) results.push(single);
+    }
+
+    return results;
+}
+
 export async function POST(req: Request) {
     try {
         const body = await req.json();
@@ -11,7 +92,8 @@ export async function POST(req: Request) {
         }
 
         if (!hasGeminiKey()) {
-            return NextResponse.json({ error: 'GEMINI_API_KEY belum dikonfigurasi di server.' }, { status: 503 });
+            const fallbackItems = parseVoiceTranscriptFallback(text, menu);
+            return NextResponse.json({ items: fallbackItems, source: 'rule-based' });
         }
 
         const prompt = `Anda adalah asisten AI kasir Point of Sale (POS) untuk kedai teh "Teh Raja".
@@ -42,23 +124,32 @@ Format Output: HANYA JSON array tanpa pembuka markdown dan tanpa teks lain:
   }
 ]`;
 
-        const { text: rawText } = await generate({
-            prompt,
-            json: true,
-            temperature: 0.1,
-            timeoutMs: 15000,
-            thinkingLevel: 'low',
-        });
-
-        let parsed: any[] = [];
         try {
-            parsed = JSON.parse(rawText);
-        } catch {
-            const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-            if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+            const { text: rawText } = await generate({
+                prompt,
+                json: true,
+                temperature: 0.1,
+                timeoutMs: 15000,
+                thinkingLevel: 'low',
+            });
+
+            let parsed: any[] = [];
+            try {
+                parsed = JSON.parse(rawText);
+            } catch {
+                const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+                if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+            }
+
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return NextResponse.json({ items: parsed, source: 'gemini' });
+            }
+        } catch (aiErr) {
+            console.warn('[Voice POS] Gemini error, using local fallback:', aiErr);
         }
 
-        return NextResponse.json({ items: Array.isArray(parsed) ? parsed : [] });
+        const fallbackItems = parseVoiceTranscriptFallback(text, menu);
+        return NextResponse.json({ items: fallbackItems, source: 'rule-based' });
 
     } catch (error: any) {
         console.error('Voice POS AI Error:', error);

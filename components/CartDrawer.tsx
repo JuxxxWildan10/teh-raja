@@ -1,10 +1,19 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useCartStore, useSalesStore, useProductStore, Order, formatVariantLabel } from "@/lib/store";
-import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag } from "lucide-react";
+import {
+    useCartStore,
+    useSalesStore,
+    useProductStore,
+    usePromoStore,
+    useCustomerStore,
+    useInventoryStore,
+    Order,
+    formatVariantLabel,
+    POINTS_REDEEM_VALUE,
+} from "@/lib/store";
+import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag, Tag, Gift, Phone } from "lucide-react";
 import { useState, useEffect } from "react";
-import ReceiptModal from "./ReceiptModal";
 import { nanoid } from "nanoid";
 import NextImage from "next/image";
 import { useToast } from "./Toast";
@@ -18,15 +27,18 @@ type OrderType = 'dine-in' | 'take-away';
 
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     const { items, removeFromCart, updateQuantity, updateNote, total, clearCart, setActiveOrder } = useCartStore();
-    const { addOrder, addLog } = useSalesStore();
+    const { addOrder, addLog, branchId } = useSalesStore();
     const { products, decrementStock } = useProductStore();
+    const { ingredients, decrementIngredientsForOrder } = useInventoryStore();
+    const { getApplicablePromo } = usePromoStore();
+    const { findByPhone, addCustomer, addPoints, redeemPoints, getPointsForOrder } = useCustomerStore();
     const toast = useToast();
 
     const [name, setName] = useState("");
+    const [phone, setPhone] = useState("");
     const [table, setTable] = useState("");
     const [orderType, setOrderType] = useState<OrderType>('dine-in');
-    const [showReceipt, setShowReceipt] = useState(false);
-    const [lastOrder, setLastOrder] = useState<Order | null>(null);
+    const [usePoints, setUsePoints] = useState(false);
 
     // Auto-detect No. Meja from URL (?table= atau ?meja=)
     useEffect(() => {
@@ -40,10 +52,46 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         }
     }, [isOpen]);
 
+    // Auto-fill member name if phone matches
+    const member = phone.trim().length >= 8 ? findByPhone(phone.trim()) : undefined;
+    useEffect(() => {
+        if (member && !name.trim()) {
+            setName(member.name);
+        }
+        if (!member) {
+            setUsePoints(false);
+        }
+    }, [member, name]);
+
+    const subtotal = total();
+    const activePromoMatch = getApplicablePromo(subtotal);
+    const promoDiscount = activePromoMatch ? activePromoMatch.discountAmount : 0;
+    const afterPromo = Math.max(0, subtotal - promoDiscount);
+
+    const maxMemberPointDiscount = member ? member.points * POINTS_REDEEM_VALUE : 0;
+    const pointsDiscount = usePoints && member ? Math.min(maxMemberPointDiscount, afterPromo) : 0;
+    const pointsRedeemed = Math.ceil(pointsDiscount / POINTS_REDEEM_VALUE);
+    const totalDiscount = promoDiscount + pointsDiscount;
+    const grandTotal = Math.max(0, subtotal - totalDiscount);
+    const earnedPoints = getPointsForOrder(grandTotal);
+
     const checkStock = () => {
+        // Check direct product stock (aggregated across variants)
+        const qtyByProd = new Map<string, number>();
+        items.forEach(i => qtyByProd.set(i.id, (qtyByProd.get(i.id) || 0) + i.quantity));
         return items.filter(cartItem => {
             const product = products.find(p => p.id === cartItem.id);
-            return !product || product.stock < cartItem.quantity;
+            const needed = qtyByProd.get(cartItem.id) || cartItem.quantity;
+            if (!product || !product.isAvailable || product.stock < needed) return true;
+            // Check BOM ingredients
+            if (product.recipe && product.recipe.length > 0) {
+                const depleted = product.recipe.some(r => {
+                    const ing = ingredients.find(ig => ig.id === r.ingredientId);
+                    return !ing || ing.stock < r.quantity * needed;
+                });
+                if (depleted) return true;
+            }
+            return false;
         });
     };
 
@@ -54,48 +102,63 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         }
         const outOfStock = checkStock();
         if (outOfStock.length > 0) {
-            toast.error(`Stok tidak cukup: ${outOfStock.map(i => i.name).join(", ")}`);
+            toast.error(`Stok/bahan tidak cukup: ${Array.from(new Set(outOfStock.map(i => i.name))).join(", ")}`);
             return;
+        }
+
+        const cleanPhone = phone.trim();
+        if (cleanPhone.length >= 8) {
+            if (!member) {
+                addCustomer({
+                    id: nanoid(),
+                    name: name.trim(),
+                    phone: cleanPhone,
+                    points: earnedPoints,
+                    totalSpent: grandTotal,
+                    createdAt: new Date().toISOString(),
+                    lastVisit: new Date().toISOString(),
+                });
+            } else {
+                if (usePoints && pointsRedeemed > 0) {
+                    redeemPoints(cleanPhone, pointsRedeemed);
+                }
+                addPoints(cleanPhone, grandTotal);
+            }
         }
 
         const newOrder: Order = {
             id: nanoid(),
             date: new Date().toISOString(),
             items: items.map(item => ({ ...item })),
-            total: total(),
+            subtotal,
+            discount: totalDiscount > 0 ? totalDiscount : undefined,
+            discountType: 'amount',
+            discountValue: totalDiscount > 0 ? totalDiscount : undefined,
+            total: grandTotal,
             customerName: name.trim(),
+            customerPhone: cleanPhone || undefined,
             cashierName: "Web Store",
             status: 'pending',
             paymentMethod: 'qris',
             orderType,
-            tableNumber: table.trim() || undefined,
+            tableNumber: orderType === 'dine-in' ? (table.trim() || undefined) : undefined,
+            branchId: branchId || 'main',
         };
 
         addOrder(newOrder);
-        addLog("SALE", `Order ${newOrder.id.slice(0, 6)} by ${name}`, "Customer (Web)");
+        addLog("SALE", `Web Order #${newOrder.id.slice(0, 6).toUpperCase()} oleh ${name.trim()} (Rp ${grandTotal.toLocaleString('id-ID')})`, "Customer (Web)");
         decrementStock(items);
-        setLastOrder(newOrder);
-        setShowReceipt(true);
+        decrementIngredientsForOrder(items, products);
         setActiveOrder(newOrder.id);
         clearCart();
-        toast.success(`Pesanan dikirim! 🍵 Menunggu konfirmasi kasir.`);
+        setUsePoints(false);
+        onClose();
+        toast.success(`Pesanan dikirim! Silakan pilih metode pembayaran.`);
     };
 
     return (
         <AnimatePresence>
-            {showReceipt && lastOrder && (
-                <ReceiptModal
-                    order={lastOrder}
-                    onClose={() => {
-                        setShowReceipt(false);
-                        onClose();
-                        setName("");
-                        setTable("");
-                    }}
-                />
-            )}
-
-            {isOpen && !showReceipt && (
+            {isOpen && (
                 <>
                     <motion.div
                         initial={{ opacity: 0 }}
@@ -117,7 +180,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             <div>
                                 <h2 className="text-xl font-serif text-gold">Tray Pesanan</h2>
                                 {items.length > 0 && (
-                                    <p className="text-xs text-white/40 mt-0.5">{items.length} item · Rp {total().toLocaleString('id-ID')}</p>
+                                    <p className="text-xs text-white/40 mt-0.5">{items.reduce((s, i) => s + i.quantity, 0)} item · Rp {grandTotal.toLocaleString('id-ID')}</p>
                                 )}
                             </div>
                             <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition">
@@ -151,7 +214,6 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                                 <div className="flex-1 min-w-0">
                                                     <h4 className="font-bold text-gold-light text-sm truncate">{item.name}</h4>
 
-                                                    {/* Variant label */}
                                                     {variantLabel && (
                                                         <p className="text-[10px] text-amber-400/80 font-medium mt-0.5">{variantLabel}</p>
                                                     )}
@@ -162,7 +224,6 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                                         <p className="text-xs text-white/50 mt-0.5">Rp {unitPrice.toLocaleString('id-ID')} / pcs</p>
                                                     )}
 
-                                                    {/* Qty controls */}
                                                     <div className="flex items-center gap-3 mt-2">
                                                         <button
                                                             onClick={() => updateQuantity(itemKey, item.quantity - 1)}
@@ -196,7 +257,6 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                                 </button>
                                             </div>
 
-                                            {/* Note input */}
                                             <div className="flex items-center gap-2 bg-black/20 p-2 rounded-lg border border-white/5 focus-within:border-gold/50 transition mt-3">
                                                 <Edit3 size={12} className="opacity-50 flex-shrink-0" />
                                                 <input
@@ -216,10 +276,40 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         {/* Footer / Checkout */}
                         {items.length > 0 && (
                             <div className="p-4 bg-forest-light border-t border-gold/20 space-y-3">
-                                {/* Total */}
-                                <div className="flex justify-between text-lg font-serif text-gold">
-                                    <span>Total</span>
-                                    <span>Rp {total().toLocaleString('id-ID')}</span>
+                                {/* Promo & Loyalty Summary */}
+                                <div className="space-y-1 text-xs">
+                                    {activePromoMatch && (
+                                        <div className="flex justify-between items-center text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg">
+                                            <span className="flex items-center gap-1.5 font-bold">
+                                                <Tag size={12} /> {activePromoMatch.promo.name}
+                                            </span>
+                                            <span className="font-bold">-Rp {promoDiscount.toLocaleString('id-ID')}</span>
+                                        </div>
+                                    )}
+                                    {member && member.points > 0 && (
+                                        <div className="flex justify-between items-center bg-amber-400/10 border border-amber-400/25 px-2.5 py-1.5 rounded-lg text-amber-300">
+                                            <div className="flex items-center gap-1.5">
+                                                <Gift size={12} />
+                                                <span>Member <strong>{member.name}</strong> ({member.points} poin)</span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setUsePoints(!usePoints)}
+                                                className={`px-2 py-0.5 rounded font-bold text-[10px] transition ${usePoints ? 'bg-amber-400 text-forest' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                                            >
+                                                {usePoints ? `Dipakai (-Rp ${pointsDiscount.toLocaleString('id-ID')})` : 'Tukar Poin'}
+                                            </button>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between text-lg font-serif text-gold pt-1">
+                                        <span>Total Bayar</span>
+                                        <span>Rp {grandTotal.toLocaleString('id-ID')}</span>
+                                    </div>
+                                    {phone.trim().length >= 8 && earnedPoints > 0 && (
+                                        <p className="text-[10px] text-amber-300/80 text-right">
+                                            ✨ Dapat +{earnedPoints} Poin Member dari pesanan ini
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Customer Name + Table */}
@@ -229,14 +319,28 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                         placeholder="Nama Pemesan (Wajib)"
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
-                                        className="flex-1 p-3 bg-black/20 border border-white/10 rounded-lg focus:outline-none focus:border-gold text-white text-sm placeholder:text-white/30"
+                                        className="flex-1 p-2.5 bg-black/20 border border-white/10 rounded-lg focus:outline-none focus:border-gold text-white text-sm placeholder:text-white/30"
                                     />
+                                    {orderType === 'dine-in' && (
+                                        <input
+                                            type="text"
+                                            placeholder="Meja"
+                                            value={table}
+                                            onChange={(e) => setTable(e.target.value)}
+                                            className="w-20 p-2.5 bg-black/20 border border-white/10 rounded-lg focus:outline-none focus:border-gold text-white text-sm placeholder:text-white/30 text-center"
+                                        />
+                                    )}
+                                </div>
+
+                                {/* Optional WhatsApp / Member Phone */}
+                                <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-lg border border-white/10 focus-within:border-gold">
+                                    <Phone size={13} className="text-white/40 flex-shrink-0" />
                                     <input
-                                        type="text"
-                                        placeholder="Meja"
-                                        value={table}
-                                        onChange={(e) => setTable(e.target.value)}
-                                        className="w-20 p-3 bg-black/20 border border-white/10 rounded-lg focus:outline-none focus:border-gold text-white text-sm placeholder:text-white/30 text-center"
+                                        type="tel"
+                                        placeholder="No. WhatsApp / Member (Opsional - dapat poin)"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                        className="bg-transparent text-xs w-full focus:outline-none text-white placeholder:text-white/30"
                                     />
                                 </div>
 
@@ -263,10 +367,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                 <button
                                     onClick={handleCheckout}
                                     disabled={items.length === 0}
-                                    className="w-full py-4 bg-gold text-forest font-bold rounded-xl hover:bg-gold-light transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                    className="w-full py-3.5 bg-gold text-forest font-bold rounded-xl hover:bg-gold-light transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-lg"
                                 >
                                     <MessageCircle size={18} />
-                                    Kirim Pesanan
+                                    Kirim Pesanan Sekarang
                                 </button>
                             </div>
                         )}

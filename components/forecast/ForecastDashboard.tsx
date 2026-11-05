@@ -108,7 +108,7 @@ export default function ForecastDashboard() {
                     toast.error("Gagal melakukan perhitungan peramalan.");
                 }
             } catch (err: any) {
-                console.error("Forecast Error:", err);
+                console.warn("Forecast Error:", err);
                 toast.error("Error: " + err.message);
             } finally {
                 setIsComputing(false);
@@ -206,7 +206,7 @@ export default function ForecastDashboard() {
             setActiveSubTab("narrative");
             toast.success("Narasi akademik dan rekomendasi AI berhasil dibuat!");
         } catch (err: any) {
-            console.error("AI Narrative Error:", err);
+            console.warn("AI Narrative Error:", err);
             toast.error("Gagal mendapatkan narasi AI: " + err.message);
         } finally {
             setIsAiLoading(false);
@@ -260,7 +260,7 @@ export default function ForecastDashboard() {
                     toast.warning(`${parsed.unmatched.length} nama produk tidak cocok persis di menu, tetap tersimpan.`);
                 }
             } catch (err: any) {
-                console.error("Import Error:", err);
+                console.warn("Import Error:", err);
                 toast.error("Gagal membaca file: " + err.message);
             }
         };

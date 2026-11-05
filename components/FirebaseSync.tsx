@@ -2,14 +2,36 @@
 
 /**
  * @file Firebase Realtime Synchronizer
- * @description Komponen tersembunyi yang bertugas di latar belakang. Bertanggung jawab memantau koneksi internet, mengunggah data kasir yang tertunda, dan mendengarkan pembaruan pesanan live.
+ * @description Komponen tersembunyi yang bertugas di latar belakang. Bertanggung jawab memantau koneksi internet, mengunggah data kasir yang tertunda, dan mendengarkan pembaruan pesanan, stok, BOM, promo, member, dan kas secara live.
  */
-
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { rtdb } from "@/lib/firebase";
-import { ref, onValue, set as firebaseSet, query, limitToLast } from "firebase/database";
-import { useSalesStore, useInventoryStore, useCartStore, useProductStore, useForecastHistoryStore, useExpenseStore, Order, ActivityLog, ExtendedProduct, StoreSession } from "@/lib/store";
+import { ref, onValue, set as firebaseSet, update as firebaseUpdate, query, limitToLast } from "firebase/database";
+import {
+    useSalesStore,
+    useInventoryStore,
+    useCartStore,
+    useProductStore,
+    useForecastHistoryStore,
+    useExpenseStore,
+    usePromoStore,
+    useCustomerStore,
+    useSupplierStore,
+    useAuthStore,
+    DEFAULT_INGREDIENTS,
+    Order,
+    ActivityLog,
+    ExtendedProduct,
+    StoreSession,
+    Promo,
+    Customer,
+    Supplier,
+    OpnameLog,
+    User,
+    Ingredient,
+} from "@/lib/store";
+import { products as initialProducts } from "@/data/menu";
 import { Bell, BellOff } from "lucide-react";
 
 const SUCCESS_SOUND = "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3";
@@ -35,7 +57,6 @@ export default function FirebaseSync() {
         if (typeof window === 'undefined' || !('Notification' in window)) return;
         const perm = Notification.permission as NotifPerm;
         setNotifPerm(perm);
-        // Show banner only if permission is default (not yet asked)
         if (perm === 'default') {
             setTimeout(() => setShowNotifBanner(true), 3000);
         }
@@ -96,7 +117,7 @@ export default function FirebaseSync() {
                 }));
             }
         }, (error) => {
-            console.error("Firebase Sync Error:", error);
+            console.warn("Firebase Sync Error:", error);
             setIsConnected(false);
             setErrorMsg(error.message);
         });
@@ -105,13 +126,28 @@ export default function FirebaseSync() {
         const unsubProducts = onValue(productsRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const loadedProducts: ExtendedProduct[] = Object.values(data);
-                useProductStore.setState({ products: loadedProducts });
+                const rawProducts: ExtendedProduct[] = Object.values(data);
+                // Auto-hydrate missing BOM recipes from initialProducts
+                const hydratedProducts = rawProducts.map(p => {
+                    if (!p.recipe || p.recipe.length === 0) {
+                        const defaultProd = initialProducts.find(ip => ip.id === p.id);
+                        if (defaultProd?.recipe && defaultProd.recipe.length > 0) {
+                            firebaseUpdate(ref(rtdb, `products/${p.id}`), { recipe: defaultProd.recipe }).catch(() => {});
+                            return { ...p, recipe: defaultProd.recipe };
+                        }
+                    }
+                    return p;
+                });
+                useProductStore.setState({ products: hydratedProducts });
             } else {
                 const localProducts = useProductStore.getState().products;
                 if (localProducts.length > 0) {
                     localProducts.forEach(p => {
-                        firebaseSet(ref(rtdb, `products/${p.id}`), p).catch(console.error);
+                        const defaultProd = initialProducts.find(ip => ip.id === p.id);
+                        const withRecipe = (!p.recipe || p.recipe.length === 0) && defaultProd?.recipe
+                            ? { ...p, recipe: defaultProd.recipe }
+                            : p;
+                        firebaseSet(ref(rtdb, `products/${p.id}`), JSON.parse(JSON.stringify(withRecipe))).catch(console.warn);
                     });
                 }
             }
@@ -121,18 +157,106 @@ export default function FirebaseSync() {
         const unsubIngredients = onValue(ingredientsRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const loadedIngredients = Object.values(data) as any[];
-                useInventoryStore.setState({ ingredients: loadedIngredients as any });
-            } else {
-                const localIngredients = useInventoryStore.getState().ingredients;
-                if (localIngredients.length > 0) {
-                    localIngredients.forEach((i: any) => {
-                        firebaseSet(ref(rtdb, `ingredients/${i.id}`), i).catch(console.error);
+                const loadedIngredients = Object.values(data) as Ingredient[];
+                // Ensure any new default BOM ingredients exist
+                const existingIds = new Set(loadedIngredients.map(i => i.id));
+                const missingDefaults = DEFAULT_INGREDIENTS.filter(di => !existingIds.has(di.id));
+                if (missingDefaults.length > 0) {
+                    missingDefaults.forEach(mi => {
+                        firebaseSet(ref(rtdb, `ingredients/${mi.id}`), mi).catch(() => {});
                     });
                 }
+                useInventoryStore.setState({ ingredients: [...loadedIngredients, ...missingDefaults] });
+            } else {
+                const localIngredients = useInventoryStore.getState().ingredients;
+                const existingIds = new Set(localIngredients.map(i => i.id));
+                const merged = [...localIngredients, ...DEFAULT_INGREDIENTS.filter(di => !existingIds.has(di.id))];
+                useInventoryStore.setState({ ingredients: merged });
+                merged.forEach((i) => {
+                    firebaseSet(ref(rtdb, `ingredients/${i.id}`), i).catch(console.warn);
+                });
             }
         }, (err) => {
-            console.debug("[FirebaseSync] ingredients sync paused (auth required):", err.message);
+            console.debug("[FirebaseSync] ingredients sync paused:", err.message);
+        });
+
+        const opnameRef = query(ref(rtdb, 'opnameLogs'), limitToLast(50));
+        const unsubOpname = onValue(opnameRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedOpname = (Object.values(data) as OpnameLog[]).sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                );
+                useInventoryStore.setState({ opnameLogs: loadedOpname });
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] opnameLogs sync paused:", err.message);
+        });
+
+        const suppliersRef = ref(rtdb, 'suppliers');
+        const unsubSuppliers = onValue(suppliersRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedSuppliers = Object.values(data) as Supplier[];
+                useSupplierStore.setState({ suppliers: loadedSuppliers });
+            } else {
+                const localSuppliers = useSupplierStore.getState().suppliers;
+                localSuppliers.forEach(s => {
+                    firebaseSet(ref(rtdb, `suppliers/${s.id}`), s).catch(() => {});
+                });
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] suppliers sync paused:", err.message);
+        });
+
+        const promosRef = ref(rtdb, 'promos');
+        const unsubPromos = onValue(promosRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedPromos = Object.values(data) as Promo[];
+                usePromoStore.setState({ promos: loadedPromos });
+            } else {
+                const localPromos = usePromoStore.getState().promos;
+                localPromos.forEach(p => {
+                    firebaseSet(ref(rtdb, `promos/${p.id}`), JSON.parse(JSON.stringify(p))).catch(() => {});
+                });
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] promos sync paused:", err.message);
+        });
+
+        const customersRef = ref(rtdb, 'customers');
+        const unsubCustomers = onValue(customersRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedCustomers = Object.values(data) as Customer[];
+                useCustomerStore.setState({ customers: loadedCustomers });
+            } else {
+                const localCustomers = useCustomerStore.getState().customers;
+                localCustomers.forEach(c => {
+                    firebaseSet(ref(rtdb, `customers/${c.id}`), JSON.parse(JSON.stringify(c))).catch(() => {});
+                });
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] customers sync paused:", err.message);
+        });
+
+        const usersRef = ref(rtdb, 'users');
+        const unsubUsers = onValue(usersRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const loadedUsers = Object.values(data) as User[];
+                if (loadedUsers.length > 0) {
+                    useAuthStore.setState({ users: loadedUsers });
+                }
+            } else {
+                const localUsers = useAuthStore.getState().users;
+                localUsers.forEach(u => {
+                    firebaseSet(ref(rtdb, `users/${u.id}`), JSON.parse(JSON.stringify(u))).catch(() => {});
+                });
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] users sync paused:", err.message);
         });
 
         // Paginasi: Hanya ambil 100 log terakhir
@@ -152,7 +276,7 @@ export default function FirebaseSync() {
                 useSalesStore.setState((state) => ({ ...state, logs: [...state.offlineLogs] }));
             }
         }, (err) => {
-            console.debug("[FirebaseSync] logs sync paused (auth required):", err.message);
+            console.debug("[FirebaseSync] logs sync paused:", err.message);
         });
 
         const sessionsRef = ref(rtdb, 'sessions');
@@ -168,7 +292,7 @@ export default function FirebaseSync() {
                 });
             }
         }, (err) => {
-            console.debug("[FirebaseSync] sessions sync paused (auth required):", err.message);
+            console.debug("[FirebaseSync] sessions sync paused:", err.message);
         });
 
         const historyRef = ref(rtdb, 'salesHistory');
@@ -180,7 +304,7 @@ export default function FirebaseSync() {
                 useForecastHistoryStore.setState({ records: loadedHistory });
             }
         }, (err) => {
-            console.debug("[FirebaseSync] salesHistory sync paused (auth required):", err.message);
+            console.debug("[FirebaseSync] salesHistory sync paused:", err.message);
         });
 
         const expensesRef = ref(rtdb, 'expenses');
@@ -192,7 +316,7 @@ export default function FirebaseSync() {
                 useExpenseStore.setState({ expenses: loaded });
             }
         }, (err) => {
-            console.debug("[FirebaseSync] expenses sync paused (auth required):", err.message);
+            console.debug("[FirebaseSync] expenses sync paused:", err.message);
         });
 
         const connectedRef = ref(rtdb, ".info/connected");
@@ -201,14 +325,13 @@ export default function FirebaseSync() {
             setIsConnected(connected);
             
             if (connected) {
-                // Flush offline robust queue
                 const state = useSalesStore.getState();
                 if (state.offlineOrders && state.offlineOrders.length > 0) {
                     state.offlineOrders.forEach(order => {
                         const sanitizedOrder = JSON.parse(JSON.stringify(order));
                         firebaseSet(ref(rtdb, `orders/${order.id}`), sanitizedOrder)
                             .then(() => useSalesStore.getState().removeOfflineOrder(order.id))
-                            .catch(err => console.error("Flush Order Error:", err));
+                            .catch(err => console.warn("Flush Order Error:", err));
                     });
                 }
                 if (state.offlineLogs && state.offlineLogs.length > 0) {
@@ -216,7 +339,7 @@ export default function FirebaseSync() {
                         const sanitizedLog = JSON.parse(JSON.stringify(log));
                         firebaseSet(ref(rtdb, `logs/${log.id}`), sanitizedLog)
                             .then(() => useSalesStore.getState().removeOfflineLog(log.id))
-                            .catch(err => console.error("Flush Log Error:", err));
+                            .catch(err => console.warn("Flush Log Error:", err));
                     });
                 }
             }
@@ -226,6 +349,11 @@ export default function FirebaseSync() {
             unsubscribe();
             unsubProducts();
             unsubIngredients();
+            unsubOpname();
+            unsubSuppliers();
+            unsubPromos();
+            unsubCustomers();
+            unsubUsers();
             unsubLogs();
             unsubSessions();
             unsubHistory();
@@ -236,7 +364,6 @@ export default function FirebaseSync() {
 
     // ── 4. Audio + Push Notification: New Order ───────────────
     useEffect(() => {
-        // Skip on first load to avoid spamming
         if (isFirstLoad.current) {
             isFirstLoad.current = false;
             prevOrdersLength.current = orders.length;
@@ -244,16 +371,14 @@ export default function FirebaseSync() {
         }
 
         if (orders.length > prevOrdersLength.current) {
-            // Play alert sound
             new Audio(ALERT_SOUND).play().catch(() => {});
 
-            // Show push notification for each new pending order
             const newOrders = orders.slice().sort((a, b) =>
                 new Date(b.date).getTime() - new Date(a.date).getTime()
             ).slice(0, orders.length - prevOrdersLength.current);
 
             newOrders.forEach(order => {
-                if (order.status === 'pending' || order.status === 'completed') {
+                if (order.status === 'pending' || order.status === 'awaiting_payment' || order.status === 'completed') {
                     const itemList = order.items.slice(0, 2).map(i => `${i.quantity}x ${i.name}`).join(', ');
                     const suffix = order.items.length > 2 ? ` +${order.items.length - 2} lagi` : '';
                     showNotification(

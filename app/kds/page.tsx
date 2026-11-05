@@ -2,20 +2,20 @@
 
 /**
  * @file KDS (Kitchen Display System) Page
- * @description Layar khusus dapur untuk menerima pesanan secara Real-time dari kasir. Mendukung notifikasi suara (audio alert) dan perubahan status pesanan.
+ * @description Layar khusus dapur untuk menerima pesanan secara Real-time dari kasir dan menu pelanggan. Mendukung notifikasi suara dan perubahan status pesanan.
  */
-
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuthStore, useSalesStore, formatVariantLabel } from "@/lib/store";
-import { Clock, CheckCircle2, UtensilsCrossed, ShoppingBag, LayoutDashboard, AlertCircle } from "lucide-react";
+import { Clock, CheckCircle2, UtensilsCrossed, ShoppingBag, LayoutDashboard, AlertCircle, ShoppingCart, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function KDSPage() {
     const router = useRouter();
     const { user } = useAuthStore();
-    const { orders, updateOrderStatus } = useSalesStore();
+    const { orders, updateOrderStatus, addLog } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
     const [kdsTab, setKdsTab] = useState<'active' | 'incoming'>('active');
 
@@ -31,18 +31,20 @@ export default function KDSPage() {
         return orders.filter(o => o.status === 'processing').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [orders]);
 
-    // 2. Antrean Masuk (pending / awaiting_payment) - NEWEST ALWAYS AT THE TOP!
+    // 2. Antrean Masuk (pending / awaiting_payment) - NEWEST ALWAYS AT THE TOP
     const pendingOrders = useMemo(() => {
         return orders
             .filter(o => !o.status || o.status === 'pending' || o.status === 'awaiting_payment')
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [orders]);
 
-    // 3. Selesai (completed - last 10 mins)
+    // 3. Selesai Hari Ini
     const completedOrders = useMemo(() => {
-        const tenMinsAgo = new Date(Date.now() - 10 * 60000).getTime();
-        return orders.filter(o => o.status === 'completed' && new Date(o.date).getTime() > tenMinsAgo)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const todayStr = new Date().toDateString();
+        return orders
+            .filter(o => o.status === 'completed' && new Date(o.date).toDateString() === todayStr)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 20);
     }, [orders]);
 
     if (!isClient || !user) return null;
@@ -60,7 +62,7 @@ export default function KDSPage() {
                         <p className="text-gray-400 text-sm">Teh Raja Barista &amp; Dapur System</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     {pendingOrders.length > 0 && (
                         <button
                             onClick={() => setKdsTab('incoming')}
@@ -70,17 +72,21 @@ export default function KDSPage() {
                             <span>{pendingOrders.length} Order Masuk Menunggu</span>
                         </button>
                     )}
-                    <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl">
+                    <div className="hidden sm:flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl">
                         <span className="relative flex h-3 w-3">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                         </span>
                         <span className="text-green-400 font-bold text-sm">Live Sync Aktif</span>
                     </div>
-                    <a href="/admin" className="flex items-center gap-2 text-gray-300 hover:text-white bg-white/10 hover:bg-white/20 transition px-4 py-2 rounded-xl text-sm font-bold">
+                    <Link href="/pos" className="flex items-center gap-2 text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition px-4 py-2 rounded-xl text-sm font-bold">
+                        <ShoppingCart size={16} />
+                        Kasir POS
+                    </Link>
+                    <Link href="/admin" className="flex items-center gap-2 text-gray-300 hover:text-white bg-white/10 hover:bg-white/20 transition px-4 py-2 rounded-xl text-sm font-bold">
                         <LayoutDashboard size={16} />
-                        Dashboard
-                    </a>
+                        Admin
+                    </Link>
                 </div>
             </header>
 
@@ -100,7 +106,7 @@ export default function KDSPage() {
                                 }`}
                             >
                                 <Clock size={16} className={kdsTab === 'active' ? "animate-pulse" : ""} />
-                                3. Sedang Diracik ({activeOrders.length})
+                                Sedang Diracik ({activeOrders.length})
                             </button>
                             <button
                                 onClick={() => setKdsTab('incoming')}
@@ -111,7 +117,7 @@ export default function KDSPage() {
                                 }`}
                             >
                                 <span className={`w-2 h-2 rounded-full bg-orange-400 ${pendingOrders.length > 0 ? 'animate-ping' : ''}`} />
-                                1 &amp; 2. Antrean Masuk ({pendingOrders.length})
+                                Antrean Masuk ({pendingOrders.length})
                             </button>
                         </div>
                         <div className="text-xs text-gray-400 font-mono">
@@ -151,10 +157,9 @@ export default function KDSPage() {
                                                 exit={{ opacity: 0, scale: 0.8 }}
                                                 className={`flex-shrink-0 w-80 bg-gray-900 border-2 rounded-2xl overflow-hidden shadow-lg flex flex-col max-h-full ${isLate ? 'border-red-500 shadow-red-900/20' : 'border-amber-500/50'}`}
                                             >
-                                                {/* Order Card Header */}
                                                 <div className={`p-3 border-b flex justify-between items-center ${isLate ? 'bg-red-500/20 border-red-500/30' : 'bg-gray-800 border-gray-700'}`}>
                                                     <div>
-                                                        <p className="text-xs text-gray-400 font-mono">#{order.id.slice(0,6).toUpperCase()}</p>
+                                                        <p className="text-xs text-gray-400 font-mono">#{order.id.slice(0, 6).toUpperCase()}</p>
                                                         <p className="text-lg font-black truncate max-w-[150px]">{order.customerName || "Pelanggan"}</p>
                                                     </div>
                                                     <div className="text-right">
@@ -162,13 +167,12 @@ export default function KDSPage() {
                                                             {waitTime}m
                                                         </div>
                                                         <div className="flex items-center gap-1 text-[10px] text-gray-400 justify-end uppercase font-bold">
-                                                            {order.orderType === 'dine-in' ? <UtensilsCrossed size={10}/> : <ShoppingBag size={10}/>}
+                                                            {order.orderType === 'dine-in' ? <UtensilsCrossed size={10} /> : <ShoppingBag size={10} />}
                                                             {order.orderType === 'dine-in' ? (order.tableNumber ? `Meja ${order.tableNumber}` : 'Dine In') : 'Take Away'}
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Order Card Body */}
                                                 <div className="flex-1 overflow-y-auto p-3 space-y-3">
                                                     {order.items.map((item, idx) => (
                                                         <div key={idx} className="bg-gray-800 rounded-xl p-3 border border-gray-700">
@@ -195,10 +199,12 @@ export default function KDSPage() {
                                                     ))}
                                                 </div>
 
-                                                {/* Order Card Footer */}
                                                 <div className="p-3 bg-gray-800 border-t border-gray-700 mt-auto">
                                                     <button 
-                                                        onClick={() => updateOrderStatus(order.id, 'completed')}
+                                                        onClick={() => {
+                                                            updateOrderStatus(order.id, 'completed');
+                                                            addLog("KDS_COMPLETE", `Order #${order.id.slice(0, 6)} selesai diracik`, user?.name || 'Barista');
+                                                        }}
                                                         className="w-full py-4 rounded-xl font-black text-lg bg-green-500 hover:bg-green-400 text-black transition transform active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-green-500/20"
                                                     >
                                                         <CheckCircle2 /> Selesai Dibuat
@@ -211,7 +217,7 @@ export default function KDSPage() {
                             )
                         )}
 
-                        {/* TAB 2: ANTREAN MASUK (PENDING / AWAITING PAYMENT - NEWEST FIRST) */}
+                        {/* TAB 2: ANTREAN MASUK */}
                         {kdsTab === 'incoming' && (
                             pendingOrders.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center text-gray-500 h-full">
@@ -238,7 +244,7 @@ export default function KDSPage() {
                                                 <div className="p-3 border-b border-gray-700 bg-gray-800 flex justify-between items-center">
                                                     <div>
                                                         <div className="flex items-center gap-1.5">
-                                                            <p className="text-xs text-gray-400 font-mono">#{order.id.slice(0,6).toUpperCase()}</p>
+                                                            <p className="text-xs text-gray-400 font-mono">#{order.id.slice(0, 6).toUpperCase()}</p>
                                                             {diffMins < 5 && (
                                                                 <span className="text-[9px] bg-red-500/30 text-red-300 font-bold px-1.5 py-0.2 rounded-full animate-pulse">BARU</span>
                                                             )}
@@ -247,7 +253,7 @@ export default function KDSPage() {
                                                     </div>
                                                     <div className="text-right">
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAwaitingPayment ? 'bg-orange-500/30 text-orange-300 border border-orange-500/50' : 'bg-amber-500/30 text-amber-300 border border-amber-500/50'}`}>
-                                                            {isAwaitingPayment ? '2. Menunggu Bayar' : '1. Pesan Masuk'}
+                                                            {isAwaitingPayment ? 'Menunggu Bayar' : 'Order Masuk'}
                                                         </span>
                                                         <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold">
                                                             {order.tableNumber ? `Meja ${order.tableNumber}` : (order.orderType === 'take-away' ? 'Take Away' : 'Dine In')}
@@ -284,6 +290,7 @@ export default function KDSPage() {
                                                     <button 
                                                         onClick={() => {
                                                             updateOrderStatus(order.id, 'processing');
+                                                            addLog("KDS_START", `Barista mulai racik order #${order.id.slice(0, 6)}`, user?.name || 'Barista');
                                                             setKdsTab('active');
                                                         }}
                                                         className="flex-1 py-3 rounded-xl font-black text-sm bg-amber-500 hover:bg-amber-400 text-black transition transform active:scale-95 flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20"
@@ -300,17 +307,17 @@ export default function KDSPage() {
                     </div>
                 </div>
 
-                {/* COMPLETED ORDERS (SELESAI BARU-BARU INI) */}
+                {/* COMPLETED ORDERS (SELESAI HARI INI) */}
                 <div className="w-80 flex flex-col bg-gray-800/50 rounded-2xl border border-gray-700/50 overflow-hidden">
                     <div className="p-4 border-b border-gray-700/50">
                         <h2 className="text-lg font-bold text-gray-300 flex items-center gap-2">
-                            <CheckCircle2 size={20} className="text-green-500" /> Selesai (10m Terakhir)
+                            <CheckCircle2 size={20} className="text-green-500" /> Selesai Hari Ini ({completedOrders.length})
                         </h2>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                         {completedOrders.length === 0 ? (
                             <div className="text-center text-gray-500 py-10 text-sm">
-                                Belum ada order selesai
+                                Belum ada order selesai hari ini
                             </div>
                         ) : (
                             <AnimatePresence>
@@ -320,13 +327,22 @@ export default function KDSPage() {
                                         layout
                                         initial={{ opacity: 0, x: 20 }}
                                         animate={{ opacity: 1, x: 0 }}
-                                        className="bg-gray-900 p-3 rounded-xl border border-green-500/20 border-l-4 border-l-green-500 opacity-60 hover:opacity-100 transition"
+                                        className="bg-gray-900 p-3 rounded-xl border border-green-500/20 border-l-4 border-l-green-500 opacity-75 hover:opacity-100 transition"
                                     >
                                         <div className="flex justify-between items-center mb-1">
-                                            <p className="font-bold text-gray-200">{order.customerName}</p>
-                                            <p className="text-xs text-gray-500 font-mono">#{order.id.slice(0,5).toUpperCase()}</p>
+                                            <p className="font-bold text-gray-200 truncate">{order.customerName}</p>
+                                            <p className="text-xs text-gray-500 font-mono">#{order.id.slice(0, 5).toUpperCase()}</p>
                                         </div>
-                                        <p className="text-xs text-gray-400">{order.items.length} item • Selesai {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
+                                        <div className="flex justify-between items-center mt-1">
+                                            <p className="text-xs text-gray-400">{order.items.reduce((s, i) => s + i.quantity, 0)} cup • {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
+                                            <button
+                                                onClick={() => updateOrderStatus(order.id, 'processing')}
+                                                className="text-[10px] text-amber-400 hover:underline flex items-center gap-1"
+                                                title="Kembalikan ke sedang diracik"
+                                            >
+                                                <RotateCcw size={10} /> Racik Ulang
+                                            </button>
+                                        </div>
                                     </motion.div>
                                 ))}
                             </AnimatePresence>

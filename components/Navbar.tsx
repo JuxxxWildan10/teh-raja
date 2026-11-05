@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useCartStore } from "@/lib/store";
-import { ShoppingBag, Menu as MenuIcon, X } from "lucide-react";
+import { useCartStore, useSalesStore } from "@/lib/store";
+import { ShoppingBag, Menu as MenuIcon, X, Clock, LayoutDashboard, ShoppingCart } from "lucide-react";
 import CartDrawer from "./CartDrawer";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,9 +10,13 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function Navbar() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const cartCount = useCartStore((state) => state.items.length);
+    const cartCount = useCartStore((state) => state.items.reduce((s, i) => s + i.quantity, 0));
     const isCartOpen = useCartStore((state) => state.isCartDrawerOpen);
     const setCartOpen = useCartStore((state) => state.setCartDrawerOpen);
+    const activeOrderId = useCartStore((state) => state.activeOrderId);
+    const orders = useSalesStore((state) => state.orders);
+
+    const activeOrder = activeOrderId ? orders.find(o => o.id === activeOrderId) : null;
 
     useEffect(() => {
         const handleScroll = () => {
@@ -33,17 +37,38 @@ export default function Navbar() {
                         TEH RAJA
                     </Link>
 
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-4 md:gap-6">
                         {/* Desktop Menu */}
-                        <div className="hidden md:flex items-center gap-6">
+                        <div className="hidden md:flex items-center gap-6 text-sm">
                             <a href="#menu" className="hover:text-gold transition">Menu Kami</a>
-                            <a href="#recommendation" className="hover:text-gold transition">Cari Teh</a>
+                            <a href="#recommendation" className="hover:text-gold transition">AI Sommelier</a>
+                            <Link href="/pos" className="text-white/60 hover:text-gold transition flex items-center gap-1">
+                                <ShoppingCart size={14} /> Kasir POS
+                            </Link>
+                            <Link href="/admin" className="text-white/60 hover:text-gold transition flex items-center gap-1">
+                                <LayoutDashboard size={14} /> Admin
+                            </Link>
                         </div>
+
+                        {/* Active Order Indicator */}
+                        {activeOrder && (
+                            <button
+                                onClick={() => {
+                                    window.dispatchEvent(new CustomEvent('tehraja:open-order-overlay'));
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-400/20 border border-amber-400/50 text-amber-300 text-xs font-bold hover:bg-amber-400/30 transition animate-pulse"
+                                title="Lihat Status Pesanan Aktif"
+                            >
+                                <Clock size={13} />
+                                <span className="hidden sm:inline">Pesanan</span> #{activeOrder.id.slice(0, 5).toUpperCase()}
+                            </button>
+                        )}
 
                         {/* Cart Button */}
                         <button
                             onClick={() => setCartOpen(true)}
                             className="relative p-2 hover:bg-white/10 rounded-full transition"
+                            aria-label="Buka Keranjang"
                         >
                             <ShoppingBag className="text-gold" />
                             {cartCount > 0 && (
@@ -89,8 +114,31 @@ export default function Navbar() {
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="text-lg py-2 border-b border-white/5 hover:text-gold"
                                 >
-                                    Cari Teh Favorit
+                                    AI Tea Sommelier
                                 </a>
+                                <div className="flex gap-2 pt-2">
+                                    <Link
+                                        href="/pos"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="flex-1 py-2.5 bg-white/10 rounded-xl text-xs font-bold text-gold hover:bg-white/15"
+                                    >
+                                        Kasir POS
+                                    </Link>
+                                    <Link
+                                        href="/kds"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="flex-1 py-2.5 bg-white/10 rounded-xl text-xs font-bold text-gold hover:bg-white/15"
+                                    >
+                                        Dapur KDS
+                                    </Link>
+                                    <Link
+                                        href="/admin"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="flex-1 py-2.5 bg-white/10 rounded-xl text-xs font-bold text-gold hover:bg-white/15"
+                                    >
+                                        Admin
+                                    </Link>
+                                </div>
                             </div>
                         </motion.div>
                     )}

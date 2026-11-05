@@ -3,11 +3,14 @@ import { generate, hasGeminiKey } from '@/lib/gemini';
 
 export async function POST(req: Request) {
     try {
-        const { customer, orderHistory, currentCart, availableProducts } = await req.json();
-
-        if (!customer) {
-            return NextResponse.json({ error: 'Data pelanggan diperlukan.' }, { status: 400 });
-        }
+        const rawBody = await req.json();
+        const { orderHistory, currentCart, availableProducts } = rawBody;
+        const customer = rawBody.customer || {
+            name: 'Pelanggan',
+            phone: rawBody.phone || '-',
+            points: 0,
+            totalSpent: 0,
+        };
 
         const topProducts = availableProducts?.slice(0, 8).map((p: any) => p.name).join(', ') || '-';
         const historyText = orderHistory && orderHistory.length > 0

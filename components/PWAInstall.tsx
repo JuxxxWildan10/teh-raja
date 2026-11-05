@@ -18,7 +18,7 @@ export default function PWAInstall() {
                         console.log("Service Worker registered:", registration.scope);
                     })
                     .catch((error) => {
-                        console.error("Service Worker registration failed:", error);
+                        console.warn("Service Worker registration failed:", error);
                     });
             });
         }

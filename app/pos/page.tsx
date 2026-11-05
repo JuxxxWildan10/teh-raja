@@ -6,14 +6,14 @@
  * Menggunakan Zustand untuk state management lokal dan Firebase untuk sinkronisasi Realtime.
  */
 
-
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     useAuthStore, useCartStore, useProductStore, useSalesStore,
     usePromoStore, useCustomerStore, useInventoryStore, useExpenseStore,
-    Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES
+    Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES, POINTS_REDEEM_VALUE
 } from "@/lib/store";
 import { nanoid } from "nanoid";
 import Image from "next/image";
@@ -27,11 +27,10 @@ import {
     LayoutGrid, LayoutDashboard, Coffee, Leaf, Citrus, Star,
     Banknote, QrCode, Building2, ChevronRight,
     RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie,
-    Wand2, Sparkles, ChevronDown, Pause, Play, Trash, Tag, Percent, Mic, MicOff, Loader2,
-    CheckCircle, RefreshCw, Bell
-, Printer} from "lucide-react";
+    Wand2, Sparkles, ChevronDown, Pause, Play, Trash, Tag, Percent, Mic, Loader2,
+    CheckCircle, RefreshCw, Bell, Printer, ChefHat
+} from "lucide-react";
 
-// ── Category Tabs ─────────────────────────────────────────────
 const CATEGORIES = [
     { id: 'all', label: 'Semua', icon: LayoutGrid },
     { id: 'signature', label: 'Signature', icon: Star },
@@ -54,16 +53,15 @@ const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: React.ElementTy
 
 function formatRp(n: number) { return 'Rp ' + n.toLocaleString('id-ID'); }
 
-// ── Main Component ────────────────────────────────────────────
 export default function POSPage() {
     const router = useRouter();
     const { user, logout } = useAuthStore();
     const { items, addToCart, removeFromCart, updateQuantity, updateNote, clearCart, total } = useCartStore();
     const { products, decrementStock } = useProductStore();
-    const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders, updateOrderStatus } = useSalesStore();
-    const { getApplicablePromo } = usePromoStore(); // [NEW] Promo
-    const { findByPhone, addCustomer, addPoints, getPointsForOrder, redeemPoints } = useCustomerStore(); // [NEW] Loyalty
-    const { decrementIngredientsForOrder, ingredients } = useInventoryStore(); // [NEW] BOM
+    const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders, updateOrderStatus, branchId, branchName } = useSalesStore();
+    const { getApplicablePromo } = usePromoStore();
+    const { findByPhone, addCustomer, addPoints, redeemPoints } = useCustomerStore();
+    const { decrementIngredientsForOrder, ingredients } = useInventoryStore();
     const toast = useToast();
 
     const [isClient, setIsClient] = useState(false);
@@ -73,7 +71,7 @@ export default function POSPage() {
     const [customerPhone, setCustomerPhone] = useState('');
     const [customerName, setCustomerName] = useState('');
     const [usePoints, setUsePoints] = useState(false);
-    
+
     const [tableNumber, setTableNumber] = useState('');
     const [orderType, setOrderType] = useState<OrderType>('dine-in');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
@@ -83,7 +81,7 @@ export default function POSPage() {
     const [isCheckingQris, setIsCheckingQris] = useState(false);
     const [qrisSuccess, setQrisSuccess] = useState(false);
     const [qrisUrl, setQrisUrl] = useState<string | null>(null);
-    
+
     const [showReceipt, setShowReceipt] = useState(false);
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
     const [mobileCartOpen, setMobileCartOpen] = useState(false);
@@ -100,14 +98,11 @@ export default function POSPage() {
 
     // Discount
     const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
-
-    // AI Upsell CRM  
-    const [upsellHint, setUpsellHint] = useState<string | null>(null);
-    const [isLoadingUpsell, setIsLoadingUpsell] = useState(false);
-
-    // Bluetooth Print
-    const [isPrinting, setIsPrinting] = useState(false);
     const [discountValue, setDiscountValue] = useState('');
+
+    // AI Upsell CRM
+    const [upsellHint, setUpsellHint] = useState<string | null>(null);
+    const [, setIsLoadingUpsell] = useState(false);
 
     // Confirm Modals
     const [confirmClearCart, setConfirmClearCart] = useState(false);
@@ -120,15 +115,22 @@ export default function POSPage() {
     // Hold Order panel
     const [showHeldOrders, setShowHeldOrders] = useState(false);
 
-    // Incoming Orders panel (Web / Table QR - Always sorted newest first)
+    // Orders Drawer (Masuk, Sedang Diracik, Selesai Hari Ini)
     const [showIncomingOrders, setShowIncomingOrders] = useState(false);
+    const [orderDrawerTab, setOrderDrawerTab] = useState<'incoming' | 'processing' | 'completed'>('incoming');
+
     const incomingOrders = useMemo(() => {
         return orders
             .filter(o => !o.status || o.status === 'pending' || o.status === 'awaiting_payment')
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [orders]);
 
-    // Live Today's Orders & Revenue Counter (includes both web/menu and manual POS orders)
+    const processingOrders = useMemo(() => {
+        return orders
+            .filter(o => o.status === 'processing')
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [orders]);
+
     const todayOrders = useMemo(() => {
         const todayStr = new Date().toDateString();
         return orders.filter(o => {
@@ -136,6 +138,12 @@ export default function POSPage() {
             return !isNaN(d.getTime()) && d.toDateString() === todayStr && o.status !== 'cancelled';
         });
     }, [orders]);
+
+    const completedTodayOrders = useMemo(() => {
+        return todayOrders
+            .filter(o => o.status === 'completed')
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [todayOrders]);
 
     const todayRevenue = useMemo(() => {
         return todayOrders.reduce((sum, o) => sum + o.total, 0);
@@ -195,7 +203,6 @@ export default function POSPage() {
         if (isClient && !user) router.push('/admin');
     }, [isClient, user, router]);
 
-    // Keyboard shortcuts
     const searchRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -203,6 +210,7 @@ export default function POSPage() {
                 setMobileCartOpen(false);
                 setShowReceipt(false);
                 setShowHeldOrders(false);
+                setShowIncomingOrders(false);
                 setVariantProduct(null);
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -230,28 +238,36 @@ export default function POSPage() {
         return list;
     }, [products, activeCategory, search, showFlavorFinder, flavorRecommendations]);
 
-    // ── Cart Calculations ─────────────────────────────────────
+    // ── Cart & Loyalty Calculations ───────────────────────────
     const subtotal = total();
-    
-    // Auto-detect best promo
     const applicablePromo = getApplicablePromo(subtotal);
 
     const discountAmount = useMemo(() => {
-        // If there's an automatic promo, apply it unless manual discount is set
         if (discountMode === 'none' && applicablePromo) {
             return applicablePromo.discountAmount;
         }
-
         const v = parseFloat(discountValue) || 0;
         if (discountMode === 'amount') return Math.min(v, subtotal);
         if (discountMode === 'percent') return Math.min(Math.round(subtotal * v / 100), subtotal);
         return 0;
     }, [discountMode, discountValue, subtotal, applicablePromo]);
 
-    // Points Redemption Logic
     const customer = useMemo(() => findByPhone(customerPhone), [customerPhone, findByPhone]);
-    const maxRedeemablePoints = customer ? Math.floor(customer.points / 100) * 100 : 0; // Assuming 1 point = Rp100, and we only redeem points in hundreds for simplicity, but let's just use raw points. Actually, store logic says POINTS_REDEEM_VALUE = 100.
 
+    // Auto-fill customer name when phone matches a member
+    useEffect(() => {
+        if (customer && !customerName.trim()) {
+            setCustomerName(customer.name);
+        }
+        if (!customer) {
+            setUsePoints(false);
+        }
+    }, [customer, customerName]);
+
+    const maxPointsRpValue = customer ? customer.points * POINTS_REDEEM_VALUE : 0;
+    const afterDiscountSubtotal = Math.max(0, subtotal - discountAmount);
+    const pointsDiscount = (usePoints && customer) ? Math.min(maxPointsRpValue, afterDiscountSubtotal) : 0;
+    const pointsToRedeem = Math.ceil(pointsDiscount / POINTS_REDEEM_VALUE);
 
     // AI Smart Upsell: Triggered when a known customer + items in cart
     useEffect(() => {
@@ -260,7 +276,7 @@ export default function POSPage() {
         const timer = setTimeout(async () => {
             setIsLoadingUpsell(true);
             try {
-                const orderHistory = orders.filter(o => (o as any).customerPhone === customer.phone);
+                const orderHistory = orders.filter(o => o.customerPhone === customer.phone || o.customerName === customer.name);
                 const res = await fetch('/api/ai/crm-upsell', {
                     signal: controller.signal,
                     method: 'POST',
@@ -275,14 +291,14 @@ export default function POSPage() {
                 if (!res.ok) return;
                 const data = await res.json();
                 if (data.suggestion) setUpsellHint(data.suggestion);
-            } catch(e: any) {
+            } catch (e: any) {
                 if (e.name !== 'AbortError') console.warn('[Upsell]', e.message);
             } finally {
                 setIsLoadingUpsell(false);
             }
-        }, 900);
+        }, 700);
         return () => { clearTimeout(timer); controller.abort(); };
-    }, [customer?.phone, items.length]);    const pointsDiscount = (usePoints && customer) ? customer.points * 100 : 0; // POINTS_REDEEM_VALUE = 100
+    }, [customer, items, orders, products]);
 
     const orderTotal = Math.max(0, subtotal - discountAmount - pointsDiscount);
     const cashIn = parseFloat(cashReceived.replace(/\D/g, '')) || 0;
@@ -315,17 +331,19 @@ export default function POSPage() {
             discountType: discountMode !== 'none' ? discountMode : undefined,
             discountValue: discountMode !== 'none' ? parseFloat(discountValue) : undefined,
             customerName: customerName || '(hold)',
+            customerPhone: customerPhone.trim() || undefined,
             cashierName: user?.name || 'Kasir',
             status: 'pending', orderType,
             tableNumber: tableNumber || undefined,
+            branchId: branchId || 'main',
         };
         holdOrder(heldOrder);
         clearCart();
-        setCustomerName(''); setTableNumber(''); setCashReceived('');
+        setCustomerName(''); setCustomerPhone(''); setTableNumber(''); setCashReceived('');
         setDiscountMode('none'); setDiscountValue('');
         toast.info(`Pesanan "${heldOrder.customerName}" di-hold.`);
     }, [items, orderTotal, subtotal, discountAmount, discountMode, discountValue,
-        customerName, orderType, tableNumber, user, holdOrder, clearCart, toast]);
+        customerName, customerPhone, orderType, tableNumber, user, branchId, holdOrder, clearCart, toast]);
 
     const handleResumeOrder = useCallback((heldId: string) => {
         const held = resumeOrder(heldId);
@@ -334,16 +352,15 @@ export default function POSPage() {
         held.items.forEach(it => {
             const product = products.find(p => p.id === it.id);
             if (!product) return;
-            // Add `qty` times with same variants
             for (let i = 0; i < it.quantity; i++) {
                 addToCart(product, it.variants, it.finalPrice ?? it.price);
             }
-            // Restore note
             if (it.note && it.cartItemId) {
                 setTimeout(() => updateNote(it.cartItemId!, it.note!), 50);
             }
         });
         setCustomerName(held.customerName || '');
+        setCustomerPhone(held.customerPhone || '');
         setTableNumber(held.tableNumber || '');
         setOrderType((held.orderType as OrderType) || 'dine-in');
         if (held.discountType) {
@@ -358,7 +375,7 @@ export default function POSPage() {
     const handleVoiceCommand = useCallback(() => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            toast.error('Browser Anda tidak mendukung Voice Command (gunakan Chrome).');
+            toast.error('Browser Anda tidak mendukung Voice Command (gunakan Chrome/Edge).');
             return;
         }
 
@@ -385,29 +402,27 @@ export default function POSPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: transcript, menu: products.filter(p => p.stock > 0) })
                 });
-                
+
                 if (!res.ok) throw new Error('AI Error');
-                
+
                 const data = await res.json();
-                
+
                 if (data.items && data.items.length > 0) {
                     let addedCount = 0;
                     data.items.forEach((parsedItem: any) => {
                         const product = products.find(p => p.id === parsedItem.productId);
                         if (product) {
-                            // Hitung harga final berdasarkan size jika ada upcharge
                             let finalPrice = product.price;
                             if (parsedItem.variants && parsedItem.variants.size === 'L') {
-                                finalPrice += 2000; // Hardcode L size upcharge based on store.ts rules
+                                finalPrice += 2000;
                             }
-                            
                             for (let i = 0; i < (parsedItem.quantity || 1); i++) {
                                 addToCart(product, parsedItem.variants, finalPrice);
                             }
                             addedCount++;
                         }
                     });
-                    
+
                     if (addedCount > 0) {
                         toast.success(`Berhasil menambahkan ${addedCount} produk dari suara!`);
                     } else {
@@ -417,15 +432,15 @@ export default function POSPage() {
                     toast.warning('Tidak mengerti pesanan dari suara tersebut.');
                 }
             } catch (err) {
-                console.error(err);
-                toast.error('Gagal memproses suara dengan AI.');
+                console.warn(err);
+                toast.error('Gagal memproses suara.');
             } finally {
                 setIsProcessingVoice(false);
                 setIsListening(false);
             }
         };
 
-        recognition.onerror = (event: any) => {
+        recognition.onerror = () => {
             toast.error('Gagal mendengarkan suara.');
             setIsProcessingVoice(false);
             setIsListening(false);
@@ -453,44 +468,48 @@ export default function POSPage() {
         }
 
         // Process Loyalty Points
-        if (usePoints && customer) {
-            redeemPoints(customerPhone, customer.points);
+        const cleanPhone = customerPhone.trim();
+        if (usePoints && customer && pointsToRedeem > 0) {
+            redeemPoints(cleanPhone, pointsToRedeem);
         }
-        if (customerPhone.trim()) {
+        if (cleanPhone) {
             if (!customer) {
-                // Register new customer
                 addCustomer({
                     id: nanoid(),
                     name: customerName.trim(),
-                    phone: customerPhone.trim(),
+                    phone: cleanPhone,
                     points: 0,
                     totalSpent: 0,
                     createdAt: new Date().toISOString()
                 });
             }
-            // Give points for the final paid amount
-            addPoints(customerPhone.trim(), orderTotal);
+            addPoints(cleanPhone, orderTotal);
         }
 
         const newOrder: Order = {
             id: nanoid(),
             date: new Date().toISOString(),
             items: items.map(it => ({ ...it })),
-            subtotal, discount: discountAmount + pointsDiscount,
-            discountType: discountMode !== 'none' ? discountMode : (applicablePromo ? 'percent' : undefined), // Simplified type tracking for UI
+            subtotal,
+            discount: (discountAmount + pointsDiscount) > 0 ? (discountAmount + pointsDiscount) : undefined,
+            discountType: discountMode !== 'none' ? discountMode : (applicablePromo ? 'percent' : undefined),
             discountValue: discountMode !== 'none' ? parseFloat(discountValue) : (applicablePromo ? applicablePromo.promo.value : undefined),
             total: orderTotal,
             customerName: customerName.trim(),
+            customerPhone: cleanPhone || undefined,
             cashierName: user?.name || 'Kasir',
-            status: 'processing', paymentMethod,
+            status: 'processing',
+            paymentMethod,
             cashReceived: paymentMethod === 'cash' ? cashIn : undefined,
             changeAmount: paymentMethod === 'cash' ? change : undefined,
-            tableNumber: tableNumber.trim() || undefined, orderType,
+            tableNumber: tableNumber.trim() || undefined,
+            orderType,
+            branchId: branchId || 'main',
         };
         addOrder(newOrder);
         addLog('SALE', `Order #${newOrder.id.slice(0, 6)} - ${formatRp(orderTotal)} via ${paymentMethod}`, user?.name || 'Kasir');
         decrementStock(items);
-        decrementIngredientsForOrder(items, products); // BOM deduction
+        decrementIngredientsForOrder(items, products);
         setLastOrder(newOrder);
         setShowReceipt(true);
         clearCart();
@@ -498,11 +517,11 @@ export default function POSPage() {
         setDiscountMode('none'); setDiscountValue(''); setUsePoints(false);
         setQrisGenerated(false); setQrisSuccess(false); setUpsellHint(null); setQrisUrl(null);
         setMobileCartOpen(false);
-        toast.success(`Order #${newOrder.id.slice(0, 6)} berhasil! ${formatRp(orderTotal)}`);
+        toast.success(`Order #${newOrder.id.slice(0, 6)} berhasil! Dikirim ke KDS (${formatRp(orderTotal)})`);
     }, [isStoreOpen, items, customerName, paymentMethod, cashIn, orderTotal, subtotal,
-        discountAmount, pointsDiscount, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user,
-        usePoints, customer, customerPhone, redeemPoints, addPoints,
-        addOrder, addLog, decrementStock, clearCart, toast]);
+        discountAmount, pointsDiscount, pointsToRedeem, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user, branchId,
+        usePoints, customer, customerPhone, redeemPoints, addCustomer, addPoints,
+        addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, clearCart, toast]);
 
     const handleTutupToko = () => {
         const parsedActual = parseFloat(actualCash.replace(/[^0-9]/g, '')) || 0;
@@ -517,10 +536,10 @@ export default function POSPage() {
     };
 
     const checkoutDisabled = items.length === 0 || !customerName.trim()
-        || (paymentMethod === 'cash' && (cashIn < orderTotal || cashIn === 0));
+        || (paymentMethod === 'cash' && (cashIn < orderTotal || (orderTotal > 0 && cashIn === 0)));
     const checkoutDisabledReason = !customerName.trim()
         ? 'Isi nama pelanggan'
-        : paymentMethod === 'cash' && cashIn === 0
+        : paymentMethod === 'cash' && orderTotal > 0 && cashIn === 0
             ? 'Masukkan nominal uang diterima'
             : paymentMethod === 'cash' && cashIn < orderTotal
                 ? `Uang kurang ${formatRp(orderTotal - cashIn)}`
@@ -534,38 +553,56 @@ export default function POSPage() {
             {/* ── TOP BAR ───────────────────────────────────── */}
             <header className="h-12 bg-[#0D2B20] text-white flex items-center justify-between px-4 shadow-xl z-20 flex-shrink-0">
                 <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center">
-                        <Leaf size={14} className="text-[#0D2B20]" />
-                    </div>
-                    <span className="font-bold text-amber-400 tracking-widest text-sm uppercase">Teh Raja</span>
-                    <span className="hidden sm:block text-white/30 text-xs border-l border-white/20 pl-3 tracking-wider uppercase">Point of Sale</span>
+                    <Link href="/" className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center">
+                            <Leaf size={14} className="text-[#0D2B20]" />
+                        </div>
+                        <span className="font-bold text-amber-400 tracking-widest text-sm uppercase">Teh Raja</span>
+                    </Link>
+                    <span className="hidden sm:block text-white/40 text-xs border-l border-white/20 pl-3 tracking-wider uppercase">
+                        POS · {branchName || 'Cabang Utama'}
+                    </span>
                     <div className="hidden lg:flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg text-xs font-mono text-amber-300 border border-amber-400/20 ml-2">
                         <ShoppingBag size={12} className="text-amber-400" />
                         <span>Hari Ini: <strong>{todayOrders.length}</strong> Order · Rp {todayRevenue.toLocaleString('id-ID')}</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {incomingOrders.length > 0 && (
-                        <button onClick={() => setShowIncomingOrders(true)}
-                            className="relative flex items-center gap-1.5 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-400/50 px-2.5 py-1 rounded-lg hover:bg-amber-500/30 transition shadow-sm animate-pulse"
-                            title="Pesanan Online / Meja Baru Masuk">
-                            <Bell size={12} className="text-amber-400 animate-bounce" />
-                            <span className="hidden sm:inline">Order Masuk</span>
-                            <span className="bg-amber-400 text-[#0D2B20] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">{incomingOrders.length}</span>
-                        </button>
-                    )}
+                    {/* Always-visible Order Queue & History Drawer Button */}
+                    <button
+                        onClick={() => {
+                            if (incomingOrders.length > 0) setOrderDrawerTab('incoming');
+                            else if (processingOrders.length > 0) setOrderDrawerTab('processing');
+                            setShowIncomingOrders(true);
+                        }}
+                        className={`relative flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg transition shadow-sm border ${
+                            incomingOrders.length > 0
+                                ? 'bg-amber-500/25 text-amber-300 border-amber-400/60 animate-pulse'
+                                : 'bg-white/10 text-white/90 border-white/15 hover:bg-white/20'
+                        }`}
+                        title="Antrean Pesanan Online, Sedang Diracik, & Riwayat Struk"
+                    >
+                        <Bell size={12} className={incomingOrders.length > 0 ? "text-amber-400 animate-bounce" : "text-amber-400"} />
+                        <span className="hidden sm:inline">Antrean &amp; Struk</span>
+                        <span className="bg-amber-400 text-[#0D2B20] text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                            {incomingOrders.length + processingOrders.length}
+                        </span>
+                    </button>
+
                     {heldOrders.length > 0 && (
                         <button onClick={() => setShowHeldOrders(true)}
                             className="relative flex items-center gap-1.5 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg hover:bg-amber-500/30 transition">
                             <Pause size={12} />
                             <span className="hidden sm:inline">Hold</span>
-                            <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-[#0D2B20] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">{heldOrders.length}</span>
+                            <span className="bg-amber-400 text-[#0D2B20] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">{heldOrders.length}</span>
                         </button>
                     )}
-                    <div className="hidden sm:flex items-center gap-2 text-xs text-white/60">
+
+                    <div className="hidden md:flex items-center gap-2 text-xs text-white/60">
                         <div className={`w-2 h-2 rounded-full animate-pulse ${isStoreOpen ? 'bg-green-400' : 'bg-red-400'}`} />
                         <span>{user.name}</span>
                     </div>
+
                     {isStoreOpen && (
                         <>
                             <button onClick={() => setShowExpenseModal(true)}
@@ -574,17 +611,24 @@ export default function POSPage() {
                             </button>
                             <button onClick={() => setConfirmCloseStore(true)}
                                 className="text-[10px] sm:text-xs font-bold bg-amber-400 text-[#0D2B20] hover:bg-amber-300 transition px-2.5 py-1 rounded-md shadow-sm">
-                                Tutup Toko
+                                Tutup Shift
                             </button>
                         </>
                     )}
-                    <a href="/admin" className="flex items-center gap-1.5 text-[10px] sm:text-xs text-white/70 hover:text-white transition px-2 py-1 rounded hover:bg-white/10">
+
+                    <Link href="/kds" className="hidden sm:flex items-center gap-1 text-xs text-white/70 hover:text-amber-300 transition px-2 py-1 rounded hover:bg-white/10" title="Kitchen Display System">
+                        <ChefHat size={13} />
+                        <span className="hidden md:inline">KDS</span>
+                    </Link>
+
+                    <Link href="/admin" className="flex items-center gap-1.5 text-[10px] sm:text-xs text-white/70 hover:text-white transition px-2 py-1 rounded hover:bg-white/10">
                         <LayoutDashboard size={13} />
-                        <span className="hidden sm:inline">Dashboard</span>
-                    </a>
+                        <span className="hidden sm:inline">Admin</span>
+                    </Link>
+
                     <button onClick={() => setConfirmLogout(true)}
                         className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition px-2 py-1 rounded hover:bg-red-500/10">
-                        <LogOut size={13} /> Keluar
+                        <LogOut size={13} /> <span className="hidden sm:inline">Keluar</span>
                     </button>
                 </div>
             </header>
@@ -600,24 +644,24 @@ export default function POSPage() {
                                 <Building2 size={32} />
                             </div>
                             <h2 className="text-2xl font-black text-[#0D2B20] mb-2">Buka Shift Kasir</h2>
-                            <p className="text-sm text-gray-500 mb-4">Masukkan modal awal uang kembalian (Starting Cash).</p>
-                            
+                            <p className="text-sm text-gray-500 mb-4">Masukkan modal awal uang kembalian di laci (Starting Cash).</p>
+
                             <div className="w-full relative mb-6">
                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">Rp</span>
-                                <input type="tel" 
-                                    value={startingCash} 
+                                <input type="tel"
+                                    value={startingCash}
                                     onChange={e => setStartingCash(e.target.value.replace(/[^0-9]/g, ''))}
                                     placeholder="Contoh: 150000"
-                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#0D2B20] text-lg font-bold text-gray-800" 
+                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#0D2B20] text-lg font-bold text-gray-800"
                                 />
                             </div>
 
                             <button
-                                onClick={() => { 
+                                onClick={() => {
                                     const parsedCash = parseFloat(startingCash) || 0;
-                                    openStore(user.name, parsedCash); 
-                                    addLog('STORE_OPEN', `Store opened with starting cash: ${formatRp(parsedCash)}`, user.name); 
-                                    toast.success('Shift kasir dimulai! 🍵'); 
+                                    openStore(user.name, parsedCash);
+                                    addLog('STORE_OPEN', `Store opened with starting cash: ${formatRp(parsedCash)}`, user.name);
+                                    toast.success('Shift kasir dimulai! 🍵');
                                     setStartingCash('');
                                 }}
                                 className="w-full py-3 bg-[#0D2B20] text-amber-400 font-bold rounded-xl hover:bg-[#1a4433] hover:scale-105 active:scale-95 transition shadow-lg">
@@ -629,7 +673,6 @@ export default function POSPage() {
 
                 {/* ════ LEFT PANEL — Katalog Produk ════ */}
                 <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-                    {/* Search + Category Bar */}
                     <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex flex-col gap-2 flex-shrink-0 shadow-sm">
                         <div className="flex gap-2">
                             <div className="relative flex-1">
@@ -639,17 +682,16 @@ export default function POSPage() {
                                     value={search} onChange={e => setSearch(e.target.value)}
                                     className="w-full text-gray-900 pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0D2B20] transition" />
                             </div>
-                            
+
                             <button onClick={handleVoiceCommand}
                                 disabled={isListening || isProcessingVoice}
-                                title="Pesan dengan Suara (AI)"
+                                title="Pesan dengan Suara (AI Voice POS)"
                                 className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all flex-shrink-0 border ${
                                     isListening ? 'bg-red-500 text-white border-red-600 animate-pulse' :
                                     isProcessingVoice ? 'bg-amber-400 text-[#0D2B20] border-amber-500' :
                                     'bg-[#0D2B20] text-white border-[#0D2B20] shadow-md hover:bg-[#1a4433]'
                                 }`}>
-                                {isProcessingVoice ? <Loader2 size={14} className="animate-spin" /> : 
-                                 isListening ? <Mic size={14} /> : <Mic size={14} />}
+                                {isProcessingVoice ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />}
                             </button>
 
                             <button onClick={() => setShowFlavorFinder(v => !v)}
@@ -719,7 +761,6 @@ export default function POSPage() {
                         ) : (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
                                 {filteredProducts.map(product => {
-                                    // Total qty of this product across all variant combos
                                     const cartQty = items.filter(i => i.id === product.id).reduce((s, i) => s + i.quantity, 0);
                                     return (
                                         <ProductCard
@@ -728,6 +769,7 @@ export default function POSPage() {
                                             cartQty={cartQty}
                                             isRecommended={flavorRecommendations.has(product.id)}
                                             onAdd={() => setVariantProduct(product)}
+                                            ingredients={ingredients}
                                         />
                                     );
                                 })}
@@ -739,9 +781,9 @@ export default function POSPage() {
                     <div className="bg-white border-t border-gray-200 px-4 py-1.5 flex items-center gap-4 text-xs text-gray-400 flex-shrink-0">
                         <span>{filteredProducts.length} produk</span>
                         <span>•</span>
-                        <span className="text-green-600 font-medium">{products.filter(p => p.stock > 0).length} tersedia</span>
+                        <span className="text-green-600 font-medium">{products.filter(p => p.stock > 0 && p.isAvailable).length} tersedia</span>
                         <span>•</span>
-                        <span className="text-red-500">{products.filter(p => p.stock <= 0).length} habis</span>
+                        <span className="text-red-500">{products.filter(p => p.stock <= 0 || !p.isAvailable).length} habis</span>
                         <span className="ml-auto text-gray-300 hidden sm:block">ESC: tutup · Ctrl+F: cari</span>
                     </div>
                 </div>
@@ -749,7 +791,7 @@ export default function POSPage() {
                 {/* ════ RIGHT PANEL — Keranjang ════ */}
                 <AnimatePresence>
                     {mobileCartOpen && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} exit={{ opacity: 0 }}
                             onClick={() => setMobileCartOpen(false)}
                             className="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm" />
                     )}
@@ -763,7 +805,7 @@ export default function POSPage() {
                             <button onClick={() => setMobileCartOpen(false)} className="lg:hidden p-1 bg-gray-200 rounded-full hover:bg-gray-300 text-gray-700"><X size={14} /></button>
                             <ShoppingCart size={16} className="text-[#0D2B20] hidden lg:block" />
                             <span className="font-bold text-gray-800 text-sm">Pesanan</span>
-                            {items.length > 0 && <span className="bg-[#0D2B20] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{items.length}</span>}
+                            {items.length > 0 && <span className="bg-[#0D2B20] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{items.reduce((s, i) => s + i.quantity, 0)}</span>}
                         </div>
                         <div className="flex items-center gap-2">
                             {items.length > 0 && (
@@ -806,18 +848,15 @@ export default function POSPage() {
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-xs font-bold text-gray-800 truncate">{item.name}</p>
-                                                    {/* Variant label */}
                                                     {variantLabel && (
                                                         <p className="text-[9px] text-amber-600 font-medium leading-tight truncate">{variantLabel}</p>
                                                     )}
                                                     <p className="text-[10px] text-gray-500 font-medium mt-0.5">{formatRp(item.finalPrice ?? item.price)}</p>
-                                                    {/* Note input */}
                                                     <input type="text" placeholder="Catatan (opsional)"
                                                         value={item.note || ''}
                                                         onChange={e => updateNote(itemKey, e.target.value)}
                                                         className="w-full text-gray-900 text-[10px] bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 mt-1 focus:outline-none focus:border-gray-400" />
                                                 </div>
-                                                {/* Qty Controls */}
                                                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                                                     <button onClick={() => removeFromCart(itemKey)} className="text-red-400 hover:text-red-500 transition">
                                                         <Trash2 size={12} />
@@ -847,19 +886,24 @@ export default function POSPage() {
 
                     {/* ── CHECKOUT PANEL ─────────────────────── */}
                     <div className="border-t border-gray-200 flex-shrink-0 bg-gray-50">
-                        {/* Total */}
                         <div className="px-4 pt-2.5 pb-1 space-y-1 border-b border-gray-200">
+                            {(discountAmount > 0 || pointsDiscount > 0) && (
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-500">Subtotal</span>
+                                    <span className="text-gray-600">{formatRp(subtotal)}</span>
+                                </div>
+                            )}
                             {discountAmount > 0 && (
-                                <>
-                                    <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-500">Subtotal</span>
-                                        <span className="text-gray-600">{formatRp(subtotal)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-xs">
-                                        <span className="text-red-500 font-medium">Diskon{discountMode === 'percent' ? ` (${discountValue}%)` : ''}</span>
-                                        <span className="text-red-500 font-bold">-{formatRp(discountAmount)}</span>
-                                    </div>
-                                </>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-red-500 font-medium">Diskon{discountMode === 'percent' ? ` (${discountValue}%)` : ''}</span>
+                                    <span className="text-red-500 font-bold">-{formatRp(discountAmount)}</span>
+                                </div>
+                            )}
+                            {pointsDiscount > 0 && (
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-amber-600 font-medium">Tukar {pointsToRedeem} Poin</span>
+                                    <span className="text-amber-600 font-bold">-{formatRp(pointsDiscount)}</span>
+                                </div>
                             )}
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-bold text-gray-700">Total</span>
@@ -869,13 +913,11 @@ export default function POSPage() {
 
                         {/* Form */}
                         <div className="px-3 py-2.5 space-y-2">
-                            {/* Customer + Table */}
-                            {/* Customer + Phone + Table */}
                             <div className="flex flex-col gap-2">
                                 <div className="flex gap-2">
                                     <div className="relative flex-1">
                                         <Users size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                                        <input type="text" placeholder="No. HP / Telepon" value={customerPhone}
+                                        <input type="text" placeholder="No. HP Member (misal: 081234567890)" value={customerPhone}
                                             onChange={e => setCustomerPhone(e.target.value)}
                                             className="w-full text-gray-900 pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
                                     </div>
@@ -888,7 +930,7 @@ export default function POSPage() {
                                     className="w-full text-gray-900 px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
                             </div>
 
-                            {/* Loyalty Points */}
+                            {/* Loyalty Points & AI Upsell */}
                             <AnimatePresence>
                                 {upsellHint && (
                                     <div className="flex items-start gap-1.5 p-2 bg-violet-50 border border-violet-200 rounded-lg mb-1 animate-fade-in">
@@ -901,9 +943,9 @@ export default function POSPage() {
                                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex justify-between items-center text-xs">
                                             <div>
                                                 <p className="font-bold text-amber-900">Member: {customer.name}</p>
-                                                <p className="text-amber-700 text-[10px]">Poin: {customer.points} ({formatRp(maxRedeemablePoints)})</p>
+                                                <p className="text-amber-700 text-[10px]">Poin: <strong>{customer.points}</strong> (Senilai {formatRp(maxPointsRpValue)})</p>
                                             </div>
-                                            {maxRedeemablePoints > 0 && (
+                                            {customer.points > 0 && (
                                                 <label className="flex items-center gap-1.5 cursor-pointer">
                                                     <input type="checkbox" checked={usePoints} onChange={e => setUsePoints(e.target.checked)} className="accent-amber-600" />
                                                     <span className="font-bold text-amber-800 text-[10px]">Gunakan Poin</span>
@@ -918,7 +960,7 @@ export default function POSPage() {
                             {applicablePromo && discountMode === 'none' && (
                                 <div className="bg-green-50 border border-green-200 rounded-lg px-2 py-1.5 text-[10px] text-green-800 flex justify-between items-center">
                                     <span className="font-bold">🎉 {applicablePromo.promo.name}</span>
-                                    <span>Otomatis aktif</span>
+                                    <span>-{formatRp(applicablePromo.discountAmount)}</span>
                                 </div>
                             )}
 
@@ -939,7 +981,7 @@ export default function POSPage() {
                                         className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold transition border ${discountMode === mode
                                             ? mode === 'none' ? 'bg-gray-200 text-gray-700 border-gray-300' : 'bg-red-600 text-white border-red-600'
                                             : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'}`}>
-                                        {mode === 'none' ? 'No Diskon' : mode === 'amount' ? <><Tag size={10} /> Nominal</> : <><Percent size={10} /> Persen</>}
+                                        {mode === 'none' ? 'Promo Otomatis' : mode === 'amount' ? <><Tag size={10} /> Nominal</> : <><Percent size={10} /> Persen</>}
                                     </button>
                                 ))}
                             </div>
@@ -991,7 +1033,7 @@ export default function POSPage() {
                                                             const data = await res.json();
                                                             if (data.qrCodeUrl) setQrisUrl(data.qrCodeUrl);
                                                         } catch (e) {
-                                                            console.error("Gagal buat QRIS", e);
+                                                            console.warn("Gagal buat QRIS", e);
                                                         }
                                                     }}
                                                     className="w-full bg-[#0D2B20] text-amber-400 font-bold py-2 rounded-lg text-xs"
@@ -1034,12 +1076,12 @@ export default function POSPage() {
                                                                     setIsCheckingQris(false);
                                                                     setQrisSuccess(true);
                                                                     toast.success('Pembayaran QRIS berhasil diterima!');
-                                                                }, 1500);
+                                                                }, 800);
                                                             }}
                                                             disabled={isCheckingQris}
                                                             className="w-full bg-amber-100 text-amber-700 font-bold py-2 rounded-lg text-xs hover:bg-amber-200 transition flex items-center justify-center gap-1 mt-1"
                                                         >
-                                                            {isCheckingQris ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Cek Status Pembayaran
+                                                            {isCheckingQris ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Konfirmasi Pembayaran QRIS
                                                         </button>
                                                     )}
                                                 </>
@@ -1127,9 +1169,9 @@ export default function POSPage() {
                             <div className="flex items-center gap-3">
                                 <div className="relative">
                                     <ShoppingCart size={20} />
-                                    <span className="absolute -top-2 -right-3 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{items.length}</span>
+                                    <span className="absolute -top-2 -right-3 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{items.reduce((s, i) => s + i.quantity, 0)}</span>
                                 </div>
-                                <span className="font-bold text-sm ml-2">Lihat Tray ({items.length} item)</span>
+                                <span className="font-bold text-sm ml-2">Lihat Tray ({items.reduce((s, i) => s + i.quantity, 0)} item)</span>
                             </div>
                             <span className="font-black text-amber-400 text-sm">{formatRp(orderTotal)}</span>
                         </button>
@@ -1151,7 +1193,7 @@ export default function POSPage() {
             {/* ── RECEIPT MODAL ─────────────────────────────── */}
             <AnimatePresence>
                 {showReceipt && lastOrder && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
                         <ReceiptModal order={lastOrder} onClose={() => { setShowReceipt(false); setLastOrder(null); }} />
                     </div>
                 )}
@@ -1205,117 +1247,214 @@ export default function POSPage() {
                 )}
             </AnimatePresence>
 
-            {/* ── INCOMING ONLINE / TABLE ORDERS PANEL ─────── */}
+            {/* ── ORDERS & RECEIPT HISTORY PANEL ───────────── */}
             <AnimatePresence>
                 {showIncomingOrders && (
                     <>
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} exit={{ opacity: 0 }} onClick={() => setShowIncomingOrders(false)} className="fixed inset-0 bg-black z-40" />
                         <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="fixed right-0 top-0 h-full w-96 max-w-full bg-white z-50 shadow-2xl flex flex-col">
+                            className="fixed right-0 top-0 h-full w-[400px] max-w-full bg-white z-50 shadow-2xl flex flex-col">
                             <div className="px-4 py-3 border-b border-gray-100 bg-[#0D2B20] text-white flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <Bell size={16} className="text-amber-400 animate-bounce" />
+                                    <Bell size={16} className="text-amber-400" />
                                     <div>
-                                        <span className="font-bold text-amber-300 text-sm">Pesanan Masuk Online ({incomingOrders.length})</span>
-                                        <p className="text-[10px] text-white/60">Pesanan baru otomatis paling atas</p>
+                                        <span className="font-bold text-amber-300 text-sm">Manajemen Antrean &amp; Struk</span>
+                                        <p className="text-[10px] text-white/60">Sinkronisasi real-time dengan Web Menu &amp; KDS</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setShowIncomingOrders(false)} className="p-1 hover:bg-white/20 text-white rounded-full transition"><X size={16} /></button>
                             </div>
+
+                            {/* Tabs */}
+                            <div className="flex border-b border-gray-200 bg-gray-100 p-1 gap-1">
+                                <button
+                                    onClick={() => setOrderDrawerTab('incoming')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
+                                        orderDrawerTab === 'incoming' ? 'bg-[#0D2B20] text-amber-400 shadow' : 'text-gray-600 hover:bg-white'
+                                    }`}
+                                >
+                                    Masuk ({incomingOrders.length})
+                                </button>
+                                <button
+                                    onClick={() => setOrderDrawerTab('processing')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
+                                        orderDrawerTab === 'processing' ? 'bg-blue-600 text-white shadow' : 'text-gray-600 hover:bg-white'
+                                    }`}
+                                >
+                                    Diracik ({processingOrders.length})
+                                </button>
+                                <button
+                                    onClick={() => setOrderDrawerTab('completed')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
+                                        orderDrawerTab === 'completed' ? 'bg-green-600 text-white shadow' : 'text-gray-600 hover:bg-white'
+                                    }`}
+                                >
+                                    Selesai ({completedTodayOrders.length})
+                                </button>
+                            </div>
+
                             <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50/50">
-                                {incomingOrders.length === 0 && (
+                                {orderDrawerTab === 'incoming' && incomingOrders.length === 0 && (
                                     <div className="text-center text-gray-400 py-16 text-sm">
                                         <CheckCircle size={36} className="mx-auto text-green-500 mb-2 opacity-50" />
-                                        <p className="font-bold text-gray-700">Semua pesanan sudah diproses</p>
-                                        <p className="text-xs text-gray-400 mt-1">Tidak ada pesanan online/meja baru saat ini.</p>
+                                        <p className="font-bold text-gray-700">Tidak ada pesanan baru menunggu</p>
+                                        <p className="text-xs text-gray-400 mt-1">Pesanan dari halaman /menu akan otomatis muncul di sini.</p>
                                     </div>
                                 )}
-                                {incomingOrders.map(order => {
+
+                                {orderDrawerTab === 'processing' && processingOrders.length === 0 && (
+                                    <div className="text-center text-gray-400 py-16 text-sm">
+                                        <ChefHat size={36} className="mx-auto text-blue-500 mb-2 opacity-50" />
+                                        <p className="font-bold text-gray-700">Tidak ada pesanan sedang diracik</p>
+                                        <p className="text-xs text-gray-400 mt-1">Semua pesanan sedang diracik sudah diselesaikan.</p>
+                                    </div>
+                                )}
+
+                                {orderDrawerTab === 'completed' && completedTodayOrders.length === 0 && (
+                                    <div className="text-center text-gray-400 py-16 text-sm">
+                                        <Printer size={36} className="mx-auto text-gray-400 mb-2 opacity-50" />
+                                        <p className="font-bold text-gray-700">Belum ada pesanan selesai hari ini</p>
+                                    </div>
+                                )}
+
+                                {(orderDrawerTab === 'incoming' ? incomingOrders : orderDrawerTab === 'processing' ? processingOrders : completedTodayOrders).map(order => {
                                     const orderTime = new Date(order.date);
                                     const diffMins = Math.floor((Date.now() - orderTime.getTime()) / 60000);
                                     const isAwaitingPayment = order.status === 'awaiting_payment';
+                                    const isProcessing = order.status === 'processing';
+                                    const isCompleted = order.status === 'completed';
+
                                     return (
-                                        <div key={order.id} className="bg-white border-2 border-amber-300/80 rounded-2xl p-3.5 shadow-sm space-y-2.5">
+                                        <div key={order.id} className={`bg-white border-2 rounded-2xl p-3.5 shadow-sm space-y-2.5 ${
+                                            isProcessing ? 'border-blue-300' : isCompleted ? 'border-green-200' : 'border-amber-300/80'
+                                        }`}>
                                             <div className="flex items-start justify-between">
                                                 <div>
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="font-black text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</span>
-                                                        {diffMins < 5 && (
+                                                        {diffMins < 5 && !isCompleted && (
                                                             <span className="text-[9px] bg-red-100 text-red-600 font-bold px-1.5 py-0.2 rounded-full animate-pulse">BARU</span>
                                                         )}
                                                     </div>
                                                     <p className="text-[10px] text-gray-400 font-mono mt-0.5">
                                                         #{order.id.slice(0, 6).toUpperCase()} · {orderTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                                                        {order.tableNumber ? ` · Meja ${order.tableNumber}` : ' · Bawa Pulang'}
+                                                        {order.tableNumber ? ` · Meja ${order.tableNumber}` : ' · Take Away'}
                                                     </p>
                                                 </div>
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAwaitingPayment ? 'bg-orange-100 text-orange-800 border border-orange-200' : 'bg-amber-100 text-amber-900 border border-amber-300'}`}>
-                                                    {isAwaitingPayment ? '2. Menunggu Bayar' : '1. Pesan Masuk'}
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                                    isCompleted ? 'bg-green-100 text-green-800' :
+                                                    isProcessing ? 'bg-blue-100 text-blue-800' :
+                                                    isAwaitingPayment ? 'bg-orange-100 text-orange-800 border border-orange-200' :
+                                                    'bg-amber-100 text-amber-900 border border-amber-300'
+                                                }`}>
+                                                    {isCompleted ? 'Selesai' : isProcessing ? 'Sedang Diracik' : isAwaitingPayment ? 'Verifikasi Bayar' : 'Order Baru'}
                                                 </span>
                                             </div>
 
-                                            <div className="bg-gray-50 rounded-xl p-2.5 text-xs text-gray-700 space-y-1.5 border border-gray-100">
+                                            <div className="bg-gray-50 rounded-xl p-2.5 text-xs text-gray-700 space-y-1 border border-gray-100">
                                                 {order.items.map((it, idx) => (
-                                                    <div key={idx} className="flex justify-between items-start">
-                                                        <span className="font-medium"><strong>{it.quantity}x</strong> {it.name}</span>
-                                                        {it.note && <span className="text-[10px] text-blue-600 italic">"{it.note}"</span>}
+                                                    <div key={idx}>
+                                                        <div className="flex justify-between items-start">
+                                                            <span className="font-medium"><strong>{it.quantity}x</strong> {it.name}</span>
+                                                            {it.note && <span className="text-[10px] text-blue-600 italic">&ldquo;{it.note}&rdquo;</span>}
+                                                        </div>
+                                                        {it.variants && (
+                                                            <p className="text-[10px] text-amber-600 pl-4">{formatVariantLabel(it.variants)}</p>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
 
                                             <div className="flex justify-between items-center pt-1 border-t border-gray-100 text-xs">
-                                                <span className="text-gray-400 uppercase text-[10px] font-mono">{order.paymentMethod || 'TUNAI'}</span>
-                                                <span className="font-black text-forest text-sm">Rp {order.total.toLocaleString('id-ID')}</span>
+                                                <span className="text-gray-500 uppercase text-[10px] font-mono font-bold">
+                                                    {order.paymentMethod || 'TUNAI'}
+                                                </span>
+                                                <span className="font-black text-[#0D2B20] text-sm">Rp {order.total.toLocaleString('id-ID')}</span>
                                             </div>
 
-                                            <div className="flex gap-2 pt-1">
-                                                {isAwaitingPayment ? (
-                                                    <button
-                                                        onClick={() => {
-                                                            updateOrderStatus(order.id, 'processing');
-                                                            addLog("CONFIRM_PAYMENT", `Konfirmasi bayar order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
-                                                            toast.success(`Pembayaran #${order.id.slice(0, 6)} lunas! Order dikirim ke dapur.`);
-                                                        }}
-                                                        className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm"
-                                                    >
-                                                        <CheckCircle size={12} /> Lunas &amp; Racik
-                                                    </button>
-                                                ) : (
+                                            <div className="flex gap-1.5 pt-1">
+                                                {orderDrawerTab === 'incoming' && (
                                                     <>
                                                         <button
                                                             onClick={() => {
                                                                 updateOrderStatus(order.id, 'processing');
-                                                                addLog("PROCESS_ORDER", `Terima order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
-                                                                toast.success(`Order #${order.id.slice(0, 6)} diterima & diteruskan ke dapur!`);
+                                                                addLog("PROCESS_ORDER", `Terima & racik order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                                                toast.success(`Order #${order.id.slice(0, 6)} diterima & dikirim ke KDS!`);
                                                             }}
                                                             className="flex-1 py-2 bg-[#0D2B20] hover:bg-[#1a4433] text-amber-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm"
                                                         >
-                                                            <CheckCircle size={12} /> Terima &amp; Racik
+                                                            <CheckCircle size={12} /> {isAwaitingPayment ? 'Lunas & Racik' : 'Terima & Racik'}
                                                         </button>
                                                         <button
                                                             onClick={() => {
-                                                                updateOrderStatus(order.id, 'awaiting_payment');
-                                                                addLog("AWAIT_PAYMENT", `Tagih bayar order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
-                                                                toast.info(`Order #${order.id.slice(0, 6)} ditandai menunggu pembayaran.`);
+                                                                setLastOrder(order);
+                                                                setShowReceipt(true);
                                                             }}
-                                                            className="px-2.5 py-2 bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200 rounded-xl text-xs font-bold transition"
-                                                            title="Tandai menunggu pembayaran QRIS/Transfer"
+                                                            className="px-2.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                                                            title="Lihat / Cetak Struk"
                                                         >
-                                                            Tagih
+                                                            <Printer size={12} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                updateOrderStatus(order.id, 'cancelled');
+                                                                addLog("CANCEL_ORDER", `Batalkan order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                                                toast.info(`Order #${order.id.slice(0, 6)} dibatalkan & stok dikembalikan.`);
+                                                            }}
+                                                            className="px-2.5 py-2 bg-gray-100 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition"
+                                                            title="Tolak / Batalkan"
+                                                        >
+                                                            ✕
                                                         </button>
                                                     </>
                                                 )}
-                                                <button
-                                                    onClick={() => {
-                                                        updateOrderStatus(order.id, 'cancelled');
-                                                        addLog("CANCEL_ORDER", `Tolak order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
-                                                        toast.info(`Order #${order.id.slice(0, 6)} ditolak.`);
-                                                    }}
-                                                    className="px-3 py-2 bg-gray-100 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition"
-                                                    title="Tolak / Batalkan"
-                                                >
-                                                    ✕
-                                                </button>
+
+                                                {orderDrawerTab === 'processing' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => {
+                                                                updateOrderStatus(order.id, 'completed');
+                                                                addLog("COMPLETE_ORDER", `Selesaikan order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                                                toast.success(`Order #${order.id.slice(0, 6)} selesai & siap diambil!`);
+                                                            }}
+                                                            className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm"
+                                                        >
+                                                            <CheckCircle size={12} /> Tandai Selesai
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setLastOrder(order);
+                                                                setShowReceipt(true);
+                                                            }}
+                                                            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                                                        >
+                                                            <Printer size={12} /> Struk
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                updateOrderStatus(order.id, 'cancelled');
+                                                                addLog("CANCEL_ORDER", `Batalkan order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                                                toast.info(`Order #${order.id.slice(0, 6)} dibatalkan & stok dikembalikan.`);
+                                                            }}
+                                                            className="px-2.5 py-2 bg-gray-100 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition"
+                                                            title="Batalkan"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                {orderDrawerTab === 'completed' && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setLastOrder(order);
+                                                            setShowReceipt(true);
+                                                        }}
+                                                        className="w-full py-2 bg-[#0D2B20] hover:bg-[#1a4433] text-amber-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <Printer size={13} /> Lihat / Cetak Ulang Struk
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -1333,7 +1472,7 @@ export default function POSPage() {
             <ConfirmModal isOpen={confirmLogout} title="Keluar dari POS?" message={`Anda akan keluar sebagai ${user?.name}.`} confirmLabel="Ya, Keluar" danger
                 onConfirm={() => { setConfirmLogout(false); addLog('LOGOUT', `${user?.name} logged out`, user?.name || ''); logout(); router.push('/admin'); }}
                 onCancel={() => setConfirmLogout(false)} />
-                
+
             {/* ── KAS KELUAR / PETTY CASH MODAL ──────────────── */}
             <AnimatePresence>
                 {showExpenseModal && (
@@ -1419,35 +1558,35 @@ export default function POSPage() {
             <AnimatePresence>
                 {confirmCloseStore && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} 
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                             className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
                             <h3 className="text-xl font-black text-[#0D2B20] mb-2">Tutup Shift Kasir</h3>
                             <p className="text-sm text-gray-500 mb-4">Silakan hitung uang fisik di laci kasir dan masukkan totalnya untuk pencocokan.</p>
-                            
+
                             <div className="space-y-3 mb-6">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Uang Fisik Aktual (Actual Cash)</label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">Rp</span>
-                                        <input type="tel" 
-                                            value={actualCash} 
+                                        <input type="tel"
+                                            value={actualCash}
                                             onChange={e => setActualCash(e.target.value.replace(/[^0-9]/g, ''))}
                                             placeholder="Total uang di laci"
-                                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] font-bold text-gray-900 placeholder-gray-400" 
+                                            className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] font-bold text-gray-900 placeholder-gray-400"
                                         />
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Catatan Tambahan (Opsional)</label>
-                                    <input type="text" 
-                                        value={closeNotes} 
+                                    <input type="text"
+                                        value={closeNotes}
                                         onChange={e => setCloseNotes(e.target.value)}
                                         placeholder="Alasan selisih uang, pengeluaran darurat, dll."
-                                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] text-sm text-gray-900 placeholder-gray-400" 
+                                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D2B20] text-sm text-gray-900 placeholder-gray-400"
                                     />
                                 </div>
                             </div>
-                            
+
                             <div className="flex gap-2 justify-end">
                                 <button onClick={() => setConfirmCloseStore(false)}
                                     className="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
@@ -1478,14 +1617,13 @@ function ProductCard({ product, cartQty, isRecommended, onAdd, ingredients }: {
     onAdd: () => void;
     ingredients?: import('@/lib/store').Ingredient[];
 }) {
-    let isOutOfStock = product.stock <= 0;
-    if (product.recipe && product.recipe.length > 0 && ingredients) {
-        // If it has a recipe, check if all ingredients have enough stock for at least 1 qty
+    let isOutOfStock = !product.isAvailable || product.stock <= 0;
+    if (!isOutOfStock && product.recipe && product.recipe.length > 0 && ingredients) {
         const canMake = product.recipe.every(req => {
             const ing = ingredients.find(i => i.id === req.ingredientId);
             return ing && ing.stock >= req.quantity;
         });
-        isOutOfStock = !canMake;
+        if (!canMake) isOutOfStock = true;
     }
     const isLimited = !isOutOfStock && product.stock <= (product.minStockThreshold || 5);
 

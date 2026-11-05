@@ -19,14 +19,31 @@ const idbStorage: StateStorage = {
   },
 };
 import { Product, products as initialProducts } from '@/data/menu';
-import { rtdb } from '@/lib/firebase'; // [NEW]
-import { ref, set as firebaseSet, update as firebaseUpdate } from 'firebase/database'; // [NEW]
+import { rtdb } from '@/lib/firebase';
+import { ref, set as firebaseSet, update as firebaseUpdate } from 'firebase/database';
 import { nanoid } from 'nanoid';
-import { auth } from '@/lib/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+
+const logRtdbWarn = (...args: unknown[]) => {
+    if (typeof window !== 'undefined') {
+        console.warn('[RTDB Sync]', ...args);
+    }
+};
 
 // --- Types ---
 export type Role = 'admin' | 'cashier';
+
+export interface BranchInfo {
+    id: string;
+    name: string;
+    address: string;
+    phone: string;
+}
+
+export const DEFAULT_BRANCHES: BranchInfo[] = [
+    { id: 'main', name: 'Cabang Utama', address: 'Jl. Merdeka No. 10, Pusat Kota', phone: '0812-3456-7890' },
+    { id: 'b2', name: 'Cabang Sudirman', address: 'Jl. Jend. Sudirman No. 45, Kav. B', phone: '0812-8888-2222' },
+    { id: 'b3', name: 'Cabang Kampus Dago', address: 'Jl. Ir. H. Juanda No. 88', phone: '0812-9999-3333' },
+];
 
 // Product Variants — pilihan kustomisasi minuman
 export interface ProductVariants {
@@ -165,6 +182,18 @@ export interface Ingredient {
     minStockThreshold: number;
 }
 
+export const DEFAULT_INGREDIENTS: Ingredient[] = [
+    { id: 'ing-tea', name: 'Daun Teh Hitam', stock: 5000, unit: 'gram', minStockThreshold: 1000 },
+    { id: 'ing-matcha', name: 'Bubuk Matcha Jepang', stock: 2000, unit: 'gram', minStockThreshold: 400 },
+    { id: 'ing-sugar', name: 'Gula Cair', stock: 10000, unit: 'ml', minStockThreshold: 2000 },
+    { id: 'ing-milk', name: 'Susu Segar', stock: 5000, unit: 'ml', minStockThreshold: 1000 },
+    { id: 'ing-syrup', name: 'Sirup Buah Mangga/Leci', stock: 3000, unit: 'ml', minStockThreshold: 500 },
+    { id: 'ing-ice', name: 'Es Batu', stock: 500, unit: 'pcs', minStockThreshold: 100 },
+    { id: 'ing-cup', name: 'Cup Plastik M/L', stock: 500, unit: 'pcs', minStockThreshold: 100 },
+    { id: 'ing-snack', name: 'Kentang Beku / Snack', stock: 5000, unit: 'gram', minStockThreshold: 1000 },
+    { id: 'ing-bread', name: 'Roti Gandum & Topping', stock: 100, unit: 'pcs', minStockThreshold: 20 },
+];
+
 // ── Supplier Management ──────────────────────────────────────
 export interface Supplier {
     id: string;
@@ -214,10 +243,10 @@ interface SalesState {
     branchName: string;
     setBranch: (id: string, name: string) => void;
     orders: Order[];
-    offlineOrders: Order[]; // [NEW] Robust Offline Queue
+    offlineOrders: Order[]; // Robust Offline Queue
     heldOrders: Order[]; // Hold order feature
     logs: ActivityLog[];
-    offlineLogs: ActivityLog[]; // [NEW] Robust Offline Queue
+    offlineLogs: ActivityLog[]; // Robust Offline Queue
     isStoreOpen: boolean;
     currentSessionId: string | null;
     sessions: StoreSession[];
@@ -225,23 +254,24 @@ interface SalesState {
     closeStore: (actualCash?: number, notes?: string) => StoreSession | null;
 
     addOrder: (order: Order) => void;
-    removeOfflineOrder: (id: string) => void; // [NEW]
+    updateOrder: (orderId: string, updated: Partial<Order>) => void;
+    removeOfflineOrder: (id: string) => void;
     updateOrderStatus: (orderId: string, status: Order['status']) => void;
     holdOrder: (order: Order) => void; // Save current order to hold
     resumeOrder: (heldOrderId: string) => Order | null; // Get held order back
     deleteHeldOrder: (heldOrderId: string) => void;
     addLog: (action: string, details: string, user: string) => void;
-    removeOfflineLog: (id: string) => void; // [NEW]
+    removeOfflineLog: (id: string) => void;
     getDailySales: () => { date: string; total: number; count: number }[];
     getProductPopularity: () => { name: string; count: number }[];
-    getPeakHours: () => { hour: string; count: number }[]; // [NEW] Analytics
+    getPeakHours: () => { hour: string; count: number }[];
     resetData: () => void;
 }
 
 interface AuthState {
     user: User | null;
-    users: User[]; // [NEW] Staff accounts
-    login: (username: string, role: Role) => User | null; // Mengembalikan user
+    users: User[]; // Staff accounts
+    login: (username: string, role: Role) => User | null;
     loginWithPassword: (username: string, password: string) => Promise<User | null>;
     logout: () => Promise<void>;
     addUser: (user: User) => void;
@@ -259,7 +289,6 @@ export const useAuthStore = create<AuthState>()(
                 { id: '1', username: 'admin', password: '123', role: 'admin', name: 'Administrator' },
                 { id: '2', username: 'kasir', password: '123', role: 'cashier', name: 'Kasir Default' },
             ],
-            // Kompatibilitas mundur. Idealnya panggil loginWithPassword
             login: (username, role) => {
                 const found = get().users.find(u => u.username === username);
                 const u = found || { id: nanoid(), username, role, name: username === 'admin' ? 'Administrator' : 'Staff Kasir' };
@@ -267,36 +296,32 @@ export const useAuthStore = create<AuthState>()(
                 return u;
             },
             loginWithPassword: async (username, password) => {
-                const found = get().users.find(u => u.username === username && u.password === password);
+                const cleanUsername = username.trim().toLowerCase();
+                const found = get().users.find(
+                    u => u.username.toLowerCase() === cleanUsername && u.password === password
+                );
                 if (found) {
-                    // Firebase Auth integration
-                    const safePassword = password.length < 6 ? password + '123456' : password;
-                    const email = `${username}@tehraja.local`;
-                    try {
-                        await signInWithEmailAndPassword(auth, email, safePassword);
-                    } catch (err: any) {
-                        try {
-                            await createUserWithEmailAndPassword(auth, email, safePassword);
-                        } catch (e) {
-                            console.error("Firebase Auth Error:", e);
-                        }
-                    }
                     set({ user: found });
+                    firebaseSet(ref(rtdb, `users/${found.id}`), JSON.parse(JSON.stringify(found))).catch(logRtdbWarn);
                     return found;
                 }
                 return null;
             },
             logout: async () => {
-                try {
-                    await signOut(auth);
-                } catch (e) {
-                    console.error("SignOut Error", e);
-                }
                 set({ user: null });
             },
-            addUser: (u) => set((s) => ({ users: [...s.users, u] })),
-            removeUser: (id) => set((s) => ({ users: s.users.filter(u => u.id !== id) })),
-            updateUser: (id, updated) => set((s) => ({ users: s.users.map(u => u.id === id ? { ...u, ...updated } : u) })),
+            addUser: (u) => {
+                set((s) => ({ users: [...s.users, u] }));
+                firebaseSet(ref(rtdb, `users/${u.id}`), JSON.parse(JSON.stringify(u))).catch(logRtdbWarn);
+            },
+            removeUser: (id) => {
+                set((s) => ({ users: s.users.filter(u => u.id !== id) }));
+                firebaseSet(ref(rtdb, `users/${id}`), null).catch(logRtdbWarn);
+            },
+            updateUser: (id, updated) => {
+                set((s) => ({ users: s.users.map(u => u.id === id ? { ...u, ...updated } : u) }));
+                firebaseUpdate(ref(rtdb, `users/${id}`), JSON.parse(JSON.stringify(updated))).catch(logRtdbWarn);
+            },
         }),
         { name: 'teh-raja-auth', storage: createJSONStorage(() => idbStorage) }
     )
@@ -314,13 +339,11 @@ export const useCartStore = create<CartState>()(
             addToCart: (product, variants, finalPrice) => {
                 set((state) => {
                     if (product.stock <= 0) return state;
-                    // Build a cartItemId that is unique per product+variant combo
                     const variantSig = variants ? JSON.stringify(variants) : 'default';
                     const cartItemId = `${product.id}__${variantSig}`;
                     const vFinalPrice = finalPrice ?? product.price;
 
                     const existing = state.items.find(i => i.cartItemId === cartItemId);
-                    // Count total qty of this product across all variants to check stock
                     const totalProductQty = state.items
                         .filter(i => i.id === product.id)
                         .reduce((sum, i) => sum + i.quantity, 0);
@@ -368,7 +391,7 @@ export const useCartStore = create<CartState>()(
             clearCart: () => set({ items: [] }),
             total: () => get().items.reduce((acc, item) => acc + (item.finalPrice ?? item.price) * item.quantity, 0),
         }),
-        { name: 'teh-raja-cart-v2', storage: createJSONStorage(() => idbStorage) }  // Bumped version to clear old incompatible cache
+        { name: 'teh-raja-cart-v2', storage: createJSONStorage(() => idbStorage) }
     )
 );
 
@@ -379,31 +402,31 @@ export const useProductStore = create<ProductState>()(
                 ...p,
                 isAvailable: true,
                 stock: 50,
-                minStockThreshold: 10
+                minStockThreshold: 10,
+                recipe: p.recipe || [],
             })),
             addProduct: (product) => {
                 set((state) => ({ products: [...state.products, product] }));
-                firebaseSet(ref(rtdb, `products/${product.id}`), product).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, `products/${product.id}`), JSON.parse(JSON.stringify(product))).catch(err => console.warn(err));
             },
             updateProduct: (id, updated) => {
                 set((state) => ({
                     products: state.products.map((p) => (p.id === id ? { ...p, ...updated } : p))
                 }));
-                // Only update the specific fields
-                firebaseUpdate(ref(rtdb, `products/${id}`), updated).catch(err => console.error(err));
+                firebaseUpdate(ref(rtdb, `products/${id}`), JSON.parse(JSON.stringify(updated))).catch(err => console.warn(err));
             },
             deleteProduct: (id) => {
                 set((state) => ({
                     products: state.products.filter((p) => p.id !== id)
                 }));
-                firebaseSet(ref(rtdb, `products/${id}`), null).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, `products/${id}`), null).catch(err => console.warn(err));
             },
             toggleAvailability: (id) => {
                 set((state) => {
                     const newProducts = state.products.map((p) => {
                         if (p.id === id) {
                             const updated = { ...p, isAvailable: !p.isAvailable };
-                            firebaseUpdate(ref(rtdb, `products/${id}`), { isAvailable: updated.isAvailable }).catch(err => console.error(err));
+                            firebaseUpdate(ref(rtdb, `products/${id}`), { isAvailable: updated.isAvailable }).catch(err => console.warn(err));
                             return updated;
                         }
                         return p;
@@ -414,10 +437,15 @@ export const useProductStore = create<ProductState>()(
             decrementStock: (items) => {
                 set((state) => {
                     const updates: Record<string, any> = {};
+                    // Aggregate total quantity per product ID across variants
+                    const qtyByProductId = new Map<string, number>();
+                    items.forEach(i => {
+                        qtyByProductId.set(i.id, (qtyByProductId.get(i.id) || 0) + i.quantity);
+                    });
                     const newProducts = state.products.map(p => {
-                        const found = items.find(i => i.id === p.id);
-                        if (found) {
-                            const newStock = Math.max(0, p.stock - found.quantity);
+                        const qty = qtyByProductId.get(p.id);
+                        if (qty) {
+                            const newStock = Math.max(0, p.stock - qty);
                             const updated = { ...p, stock: newStock, isAvailable: newStock > 0 };
                             updates[`products/${p.id}/stock`] = newStock;
                             updates[`products/${p.id}/isAvailable`] = newStock > 0;
@@ -426,7 +454,7 @@ export const useProductStore = create<ProductState>()(
                         return p;
                     });
                     if (Object.keys(updates).length > 0) {
-                        firebaseUpdate(ref(rtdb), updates).catch(err => console.error("Firebase Stock Update Error:", err));
+                        firebaseUpdate(ref(rtdb), updates).catch(err => console.warn("Firebase Stock Update Error:", err));
                     }
                     return { products: newProducts };
                 })
@@ -435,10 +463,14 @@ export const useProductStore = create<ProductState>()(
             restoreStock: (items) => {
                 set((state) => {
                     const updates: Record<string, any> = {};
+                    const qtyByProductId = new Map<string, number>();
+                    items.forEach(i => {
+                        qtyByProductId.set(i.id, (qtyByProductId.get(i.id) || 0) + i.quantity);
+                    });
                     const newProducts = state.products.map(p => {
-                        const found = items.find(i => i.id === p.id);
-                        if (found) {
-                            const newStock = p.stock + found.quantity;
+                        const qty = qtyByProductId.get(p.id);
+                        if (qty) {
+                            const newStock = p.stock + qty;
                             const updated = { ...p, stock: newStock, isAvailable: newStock > 0 };
                             updates[`products/${p.id}/stock`] = newStock;
                             updates[`products/${p.id}/isAvailable`] = true;
@@ -447,7 +479,7 @@ export const useProductStore = create<ProductState>()(
                         return p;
                     });
                     if (Object.keys(updates).length > 0) {
-                        firebaseUpdate(ref(rtdb), updates).catch(err => console.error("Firebase Stock Restore Error:", err));
+                        firebaseUpdate(ref(rtdb), updates).catch(err => console.warn("Firebase Stock Restore Error:", err));
                     }
                     return { products: newProducts };
                 })
@@ -460,13 +492,13 @@ export const useProductStore = create<ProductState>()(
 export const useSalesStore = create<SalesState>()(
     persist(
         (set, get) => ({
-            branchId: 'main', // [MULTI-BRANCH] ID cabang aktif
-            branchName: 'Cabang Utama', // [MULTI-BRANCH]
+            branchId: 'main',
+            branchName: 'Cabang Utama',
             orders: [],
-            offlineOrders: [], // [NEW]
+            offlineOrders: [],
             heldOrders: [],
             logs: [],
-            offlineLogs: [], // [NEW]
+            offlineLogs: [],
             isStoreOpen: false,
             currentSessionId: null,
             sessions: [],
@@ -489,7 +521,7 @@ export const useSalesStore = create<SalesState>()(
                     sessions: [...state.sessions, newSession]
                 }));
                 const sessionRef = ref(rtdb, `sessions/${newSession.id}`);
-                firebaseSet(sessionRef, newSession).catch(err => console.error(err));
+                firebaseSet(sessionRef, newSession).catch(err => console.warn(err));
             },
 
             closeStore: (actualCash, notes) => {
@@ -501,8 +533,6 @@ export const useSalesStore = create<SalesState>()(
 
                 const session = state.sessions[sessionIndex];
 
-                // Calculate total sales that occurred during this session time
-                // Filter out cancelled orders
                 const sessionOrders = state.orders.filter(o => {
                     const oTime = new Date(o.date).getTime();
                     const sTime = new Date(session.startTime).getTime();
@@ -511,7 +541,6 @@ export const useSalesStore = create<SalesState>()(
                 const totalSales = sessionOrders.reduce((sum, order) => sum + order.total, 0);
                 const totalOrders = sessionOrders.length;
                 
-                // Calculate expected cash: starting cash + total cash sales - cash expenses paid from drawer
                 const cashSales = sessionOrders.filter(o => o.paymentMethod === 'cash' || !o.paymentMethod).reduce((sum, order) => sum + order.total, 0);
                 const sessionCashExpenses = (useExpenseStore.getState()?.expenses || [])
                     .filter(e => {
@@ -543,43 +572,54 @@ export const useSalesStore = create<SalesState>()(
                     sessions: updatedSessions
                 });
 
-                // Sync to Firebase
                 const sessionRef = ref(rtdb, `sessions/${closedSession.id}`);
-                firebaseUpdate(sessionRef, closedSession).catch(err => console.error(err));
+                firebaseUpdate(sessionRef, JSON.parse(JSON.stringify(closedSession))).catch(err => console.warn(err));
 
                 return closedSession;
             },
 
             addOrder: (order) => {
+                const orderWithBranch: Order = {
+                    ...order,
+                    branchId: order.branchId || get().branchId || 'main',
+                };
                 set((state) => ({ 
-                    orders: [order, ...state.orders.filter(o => o.id !== order.id)],
-                    offlineOrders: [order, ...state.offlineOrders.filter(o => o.id !== order.id)]
+                    orders: [orderWithBranch, ...state.orders.filter(o => o.id !== orderWithBranch.id)],
+                    offlineOrders: [orderWithBranch, ...state.offlineOrders.filter(o => o.id !== orderWithBranch.id)]
                 }));
-                // Sync to Firebase
-                // Sanitize undefined fields which Firebase Realtime Database Rejects
-                const sanitizedOrder = JSON.parse(JSON.stringify(order));
-                const orderRef = ref(rtdb, `orders/${order.id}`);
+                const sanitizedOrder = JSON.parse(JSON.stringify(orderWithBranch));
+                const orderRef = ref(rtdb, `orders/${orderWithBranch.id}`);
                 firebaseSet(orderRef, sanitizedOrder)
-                    .then(() => get().removeOfflineOrder(order.id))
-                    .catch(err => console.error("Firebase Add Error:", err));
+                    .then(() => get().removeOfflineOrder(orderWithBranch.id))
+                    .catch(err => console.warn("Firebase Add Error:", err));
+            },
+            updateOrder: (orderId, updated) => {
+                set((state) => ({
+                    orders: state.orders.map(o => o.id === orderId ? { ...o, ...updated } : o)
+                }));
+                const sanitized = JSON.parse(JSON.stringify(updated));
+                const orderRef = ref(rtdb, `orders/${orderId}`);
+                firebaseUpdate(orderRef, sanitized).catch(err => console.warn("Firebase Update Order Error:", err));
             },
             removeOfflineOrder: (id) => {
                 set((state) => ({ offlineOrders: state.offlineOrders.filter(o => o.id !== id) }));
             },
             updateOrderStatus: (orderId, status) => {
-                // Restore stock when cancelling
-                if (status === 'cancelled') {
-                    const state = get();
-                    const order = state.orders.find(o => o.id === orderId);
-                    if (order) {
-                        useProductStore.getState().restoreStock(order.items);
-                    }
+                const state = get();
+                const order = state.orders.find(o => o.id === orderId);
+                // Restore stock and BOM ingredients when cancelling an uncancelled order
+                if (status === 'cancelled' && order && order.status !== 'cancelled') {
+                    useProductStore.getState().restoreStock(order.items);
+                    useInventoryStore.getState().restoreIngredientsForOrder(
+                        order.items,
+                        useProductStore.getState().products
+                    );
                 }
-                set((state) => ({
-                    orders: state.orders.map(o => o.id === orderId ? { ...o, status } : o)
+                set((s) => ({
+                    orders: s.orders.map(o => o.id === orderId ? { ...o, status } : o)
                 }));
                 const orderRef = ref(rtdb, `orders/${orderId}`);
-                firebaseUpdate(orderRef, { status }).catch(err => console.error("Firebase Update Error:", err));
+                firebaseUpdate(orderRef, { status }).catch(err => console.warn("Firebase Update Error:", err));
             },
 
             holdOrder: (order) => {
@@ -612,7 +652,7 @@ export const useSalesStore = create<SalesState>()(
                 }));
                 firebaseSet(ref(rtdb, `logs/${newLog.id}`), newLog)
                     .then(() => get().removeOfflineLog(newLog.id))
-                    .catch(err => console.error(err));
+                    .catch(err => console.warn(err));
             },
             removeOfflineLog: (id) => {
                 set((state) => ({ offlineLogs: state.offlineLogs.filter(l => l.id !== id) }));
@@ -667,14 +707,15 @@ export const useSalesStore = create<SalesState>()(
             },
             resetData: () => {
                 set({ orders: [], logs: [], sessions: [], isStoreOpen: false, currentSessionId: null });
-                firebaseSet(ref(rtdb, 'orders'), null).catch(err => console.error(err));
-                firebaseSet(ref(rtdb, 'logs'), null).catch(err => console.error(err));
-                firebaseSet(ref(rtdb, 'sessions'), null).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, 'orders'), null).catch(err => console.warn(err));
+                firebaseSet(ref(rtdb, 'logs'), null).catch(err => console.warn(err));
+                firebaseSet(ref(rtdb, 'sessions'), null).catch(err => console.warn(err));
             }
         }),
         { name: 'teh-raja-sales-v3', storage: createJSONStorage(() => idbStorage) }
     )
 );
+
 // ══════════════════════════════════════════════════════
 // PROMO STORE
 // ══════════════════════════════════════════════════════
@@ -704,22 +745,41 @@ export const usePromoStore = create<PromoState>()(
                 },
                 {
                     id: 'promo-weekend',
-                    name: 'Promo Weekend',
+                    name: 'Promo Spesial Teh Raja',
                     type: 'percent',
-                    value: 5,
-                    minSubtotal: 30000,
-                    isActive: false,
-                    description: 'Diskon 5% untuk pembelian min. Rp 30.000',
+                    value: 10,
+                    minSubtotal: 25000,
+                    isActive: true,
+                    description: 'Diskon 10% otomatis untuk pembelian min. Rp 25.000',
                 },
             ],
-            addPromo: (promo) => set((s) => ({ promos: [...s.promos, promo] })),
-            updatePromo: (id, updated) => set((s) => ({
-                promos: s.promos.map((p) => p.id === id ? { ...p, ...updated } : p),
-            })),
-            deletePromo: (id) => set((s) => ({ promos: s.promos.filter((p) => p.id !== id) })),
-            togglePromo: (id) => set((s) => ({
-                promos: s.promos.map((p) => p.id === id ? { ...p, isActive: !p.isActive } : p),
-            })),
+            addPromo: (promo) => {
+                set((s) => ({ promos: [...s.promos, promo] }));
+                firebaseSet(ref(rtdb, `promos/${promo.id}`), JSON.parse(JSON.stringify(promo))).catch(console.warn);
+            },
+            updatePromo: (id, updated) => {
+                set((s) => ({
+                    promos: s.promos.map((p) => p.id === id ? { ...p, ...updated } : p),
+                }));
+                firebaseUpdate(ref(rtdb, `promos/${id}`), JSON.parse(JSON.stringify(updated))).catch(console.warn);
+            },
+            deletePromo: (id) => {
+                set((s) => ({ promos: s.promos.filter((p) => p.id !== id) }));
+                firebaseSet(ref(rtdb, `promos/${id}`), null).catch(console.warn);
+            },
+            togglePromo: (id) => {
+                set((s) => {
+                    const updatedPromos = s.promos.map((p) => {
+                        if (p.id === id) {
+                            const next = { ...p, isActive: !p.isActive };
+                            firebaseUpdate(ref(rtdb, `promos/${id}`), { isActive: next.isActive }).catch(console.warn);
+                            return next;
+                        }
+                        return p;
+                    });
+                    return { promos: updatedPromos };
+                });
+            },
             getApplicablePromo: (subtotal) => {
                 const now = new Date();
                 const currentHour = now.getHours();
@@ -727,7 +787,6 @@ export const usePromoStore = create<PromoState>()(
                 let best: { promo: Promo; discountAmount: number } | null = null;
 
                 for (const promo of activePromos) {
-                    // Check min subtotal
                     if (promo.minSubtotal && subtotal < promo.minSubtotal) continue;
 
                     let discountAmount = 0;
@@ -764,6 +823,8 @@ interface CustomerState {
     customers: Customer[];
     findByPhone: (phone: string) => Customer | undefined;
     addCustomer: (customer: Customer) => void;
+    updateCustomer: (id: string, updated: Partial<Customer>) => void;
+    deleteCustomer: (id: string) => void;
     addPoints: (phone: string, orderTotal: number) => void;
     redeemPoints: (phone: string, points: number) => boolean;
     getRedeemValue: (points: number) => number;
@@ -773,32 +834,74 @@ interface CustomerState {
 export const useCustomerStore = create<CustomerState>()(
     persist(
         (set, get) => ({
-            customers: [],
+            customers: [
+                {
+                    id: 'cust-1',
+                    name: 'Budi Santoso',
+                    phone: '081234567890',
+                    points: 120,
+                    totalSpent: 120000,
+                    createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
+                    lastVisit: new Date(Date.now() - 86400000 * 2).toISOString(),
+                },
+                {
+                    id: 'cust-2',
+                    name: 'Siti Rahmawati',
+                    phone: '081298765432',
+                    points: 65,
+                    totalSpent: 65000,
+                    createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
+                    lastVisit: new Date(Date.now() - 86400000).toISOString(),
+                },
+            ],
             findByPhone: (phone) => get().customers.find((c) => c.phone === phone.trim()),
-            addCustomer: (customer) => set((s) => ({ customers: [...s.customers, customer] })),
+            addCustomer: (customer) => {
+                set((s) => ({ customers: [...s.customers.filter(c => c.id !== customer.id && c.phone !== customer.phone), customer] }));
+                firebaseSet(ref(rtdb, `customers/${customer.id}`), JSON.parse(JSON.stringify(customer))).catch(console.warn);
+            },
+            updateCustomer: (id, updated) => {
+                set((s) => ({
+                    customers: s.customers.map(c => c.id === id ? { ...c, ...updated } : c)
+                }));
+                firebaseUpdate(ref(rtdb, `customers/${id}`), JSON.parse(JSON.stringify(updated))).catch(console.warn);
+            },
+            deleteCustomer: (id) => {
+                set((s) => ({ customers: s.customers.filter(c => c.id !== id) }));
+                firebaseSet(ref(rtdb, `customers/${id}`), null).catch(console.warn);
+            },
             addPoints: (phone, orderTotal) => {
                 const earnedPoints = Math.floor(orderTotal * POINTS_PER_RUPIAH);
-                set((s) => ({
-                    customers: s.customers.map((c) =>
-                        c.phone === phone
-                            ? {
+                set((s) => {
+                    const updatedCustomers = s.customers.map((c) => {
+                        if (c.phone === phone.trim()) {
+                            const updated = {
                                 ...c,
                                 points: c.points + earnedPoints,
                                 totalSpent: c.totalSpent + orderTotal,
                                 lastVisit: new Date().toISOString(),
-                            }
-                            : c
-                    ),
-                }));
+                            };
+                            firebaseUpdate(ref(rtdb, `customers/${c.id}`), {
+                                points: updated.points,
+                                totalSpent: updated.totalSpent,
+                                lastVisit: updated.lastVisit,
+                            }).catch(console.warn);
+                            return updated;
+                        }
+                        return c;
+                    });
+                    return { customers: updatedCustomers };
+                });
             },
             redeemPoints: (phone, points) => {
                 const customer = get().findByPhone(phone);
                 if (!customer || customer.points < points) return false;
+                const newPoints = Math.max(0, customer.points - points);
                 set((s) => ({
                     customers: s.customers.map((c) =>
-                        c.phone === phone ? { ...c, points: c.points - points } : c
+                        c.phone === phone.trim() ? { ...c, points: newPoints } : c
                     ),
                 }));
+                firebaseUpdate(ref(rtdb, `customers/${customer.id}`), { points: newPoints }).catch(console.warn);
                 return true;
             },
             getRedeemValue: (points) => points * POINTS_REDEEM_VALUE,
@@ -833,19 +936,38 @@ interface InventoryState {
     updateIngredient: (id: string, updated: Partial<Ingredient>) => void;
     deleteIngredient: (id: string) => void;
     decrementIngredientsForOrder: (items: CartItem[], products: ExtendedProduct[]) => void;
+    restoreIngredientsForOrder: (items: CartItem[], products: ExtendedProduct[]) => void;
     recordOpname: (log: Omit<OpnameLog, 'id' | 'date'>) => void;
+}
+
+function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: CartItem): number {
+    let sizeMultiplier = 1;
+    if (cartItem.variants?.size === 'L') sizeMultiplier = 1.5;
+
+    let qty = recipeItem.quantity * sizeMultiplier * cartItem.quantity;
+
+    if (recipeItem.ingredientId === 'ing-sugar' && cartItem.variants?.sugar) {
+        const sugarLvl = parseInt(cartItem.variants.sugar.replace('%', ''));
+        if (!isNaN(sugarLvl)) qty = qty * (sugarLvl / 100);
+    }
+
+    if (recipeItem.ingredientId === 'ing-ice') {
+        if (cartItem.variants?.temperature === 'panas' || cartItem.variants?.ice === 'no-ice') {
+            qty = 0;
+        } else if (cartItem.variants?.ice === 'less') {
+            qty = Math.ceil(qty * 0.5);
+        } else if (cartItem.variants?.ice === 'extra') {
+            qty = Math.ceil(qty * 1.5);
+        }
+    }
+
+    return Math.round(qty * 100) / 100;
 }
 
 export const useInventoryStore = create<InventoryState>()(
     persist(
-        (set, get) => ({
-            ingredients: [
-                { id: 'ing-tea', name: 'Daun Teh Hitam', stock: 5000, unit: 'gram', minStockThreshold: 1000 },
-                { id: 'ing-sugar', name: 'Gula Cair', stock: 10000, unit: 'ml', minStockThreshold: 2000 },
-                { id: 'ing-milk', name: 'Susu Segar', stock: 5000, unit: 'ml', minStockThreshold: 1000 },
-                { id: 'ing-ice', name: 'Es Batu', stock: 200, unit: 'pcs', minStockThreshold: 50 },
-                { id: 'ing-cup', name: 'Cup Plastik M', stock: 500, unit: 'pcs', minStockThreshold: 100 },
-            ],
+        (set) => ({
+            ingredients: DEFAULT_INGREDIENTS,
             opnameLogs: [],
             recordOpname: (data) => {
                 const newLog: OpnameLog = {
@@ -857,20 +979,20 @@ export const useInventoryStore = create<InventoryState>()(
                     ingredients: state.ingredients.map(i => i.id === data.ingredientId ? { ...i, stock: data.actualStock } : i),
                     opnameLogs: [newLog, ...(state.opnameLogs || [])]
                 }));
-                firebaseUpdate(ref(rtdb, `ingredients/${data.ingredientId}`), { stock: data.actualStock }).catch(console.error);
-                firebaseSet(ref(rtdb, `opnameLogs/${newLog.id}`), JSON.parse(JSON.stringify(newLog))).catch(console.error);
+                firebaseUpdate(ref(rtdb, `ingredients/${data.ingredientId}`), { stock: data.actualStock }).catch(console.warn);
+                firebaseSet(ref(rtdb, `opnameLogs/${newLog.id}`), JSON.parse(JSON.stringify(newLog))).catch(console.warn);
             },
             addIngredient: (ingredient) => {
                 set((s) => ({ ingredients: [...s.ingredients, ingredient] }));
-                firebaseSet(ref(rtdb, `ingredients/${ingredient.id}`), ingredient).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, `ingredients/${ingredient.id}`), ingredient).catch(err => console.warn(err));
             },
             updateIngredient: (id, updated) => {
                 set((s) => ({ ingredients: s.ingredients.map(i => i.id === id ? { ...i, ...updated } : i) }));
-                firebaseUpdate(ref(rtdb, `ingredients/${id}`), updated).catch(err => console.error(err));
+                firebaseUpdate(ref(rtdb, `ingredients/${id}`), updated).catch(err => console.warn(err));
             },
             deleteIngredient: (id) => {
                 set((s) => ({ ingredients: s.ingredients.filter(i => i.id !== id) }));
-                firebaseSet(ref(rtdb, `ingredients/${id}`), null).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, `ingredients/${id}`), null).catch(err => console.warn(err));
             },
             decrementIngredientsForOrder: (items, products) => {
                 set((state) => {
@@ -878,27 +1000,16 @@ export const useInventoryStore = create<InventoryState>()(
                     
                     items.forEach(cartItem => {
                         const product = products.find(p => p.id === cartItem.id);
-                        if (!product || !product.recipe) return;
+                        const recipe = product?.recipe || cartItem.recipe;
+                        if (!recipe || recipe.length === 0) return;
 
-                        // Base quantity multiplier based on variant size
-                        let sizeMultiplier = 1;
-                        if (cartItem.variants?.size === 'L') sizeMultiplier = 1.5; // Large is 50% more
-
-                        product.recipe.forEach(recipeItem => {
+                        recipe.forEach(recipeItem => {
                             const ingIndex = newIngredients.findIndex(i => i.id === recipeItem.ingredientId);
                             if (ingIndex !== -1) {
-                                // Adjust quantity based on sugar/ice variants if applicable
-                                let qtyToDeduct = recipeItem.quantity * sizeMultiplier * cartItem.quantity;
-                                
-                                // Example: if this ingredient is sugar and variant is 50%
-                                if (newIngredients[ingIndex].id === 'ing-sugar' && cartItem.variants?.sugar) {
-                                    const sugarLvl = parseInt(cartItem.variants.sugar.replace('%', ''));
-                                    if (!isNaN(sugarLvl)) qtyToDeduct = qtyToDeduct * (sugarLvl / 100);
-                                }
-                                
+                                const qtyToDeduct = calculateRecipeIngredientQty(recipeItem, cartItem);
                                 newIngredients[ingIndex] = {
                                     ...newIngredients[ingIndex],
-                                    stock: Math.max(0, newIngredients[ingIndex].stock - qtyToDeduct)
+                                    stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - qtyToDeduct) * 100) / 100)
                                 };
                             }
                         });
@@ -909,9 +1020,41 @@ export const useInventoryStore = create<InventoryState>()(
                         updates[`ingredients/${ing.id}`] = ing;
                     });
                     if (Object.keys(updates).length > 0) {
-                        firebaseUpdate(ref(rtdb), updates).catch(err => console.error("Firebase BOM Update Error:", err));
+                        firebaseUpdate(ref(rtdb), updates).catch(err => console.warn("Firebase BOM Update Error:", err));
                     }
                     
+                    return { ingredients: newIngredients };
+                });
+            },
+            restoreIngredientsForOrder: (items, products) => {
+                set((state) => {
+                    const newIngredients = [...state.ingredients];
+
+                    items.forEach(cartItem => {
+                        const product = products.find(p => p.id === cartItem.id);
+                        const recipe = product?.recipe || cartItem.recipe;
+                        if (!recipe || recipe.length === 0) return;
+
+                        recipe.forEach(recipeItem => {
+                            const ingIndex = newIngredients.findIndex(i => i.id === recipeItem.ingredientId);
+                            if (ingIndex !== -1) {
+                                const qtyToRestore = calculateRecipeIngredientQty(recipeItem, cartItem);
+                                newIngredients[ingIndex] = {
+                                    ...newIngredients[ingIndex],
+                                    stock: Math.round((newIngredients[ingIndex].stock + qtyToRestore) * 100) / 100
+                                };
+                            }
+                        });
+                    });
+
+                    const updates: Record<string, any> = {};
+                    newIngredients.forEach(ing => {
+                        updates[`ingredients/${ing.id}`] = ing;
+                    });
+                    if (Object.keys(updates).length > 0) {
+                        firebaseUpdate(ref(rtdb), updates).catch(err => console.warn("Firebase BOM Restore Error:", err));
+                    }
+
                     return { ingredients: newIngredients };
                 });
             }
@@ -934,20 +1077,21 @@ export const useSupplierStore = create<SupplierState>()(
     persist(
         (set) => ({
             suppliers: [
-                { id: 'sup-1', name: 'PT Surya Daun Teh', contactPerson: 'Pak Budi', phone: '08123456789', address: 'Bandung', itemsSupplied: ['ing-tea'] },
-                { id: 'sup-2', name: 'CV Gula Manis', contactPerson: 'Bu Ani', phone: '08987654321', address: 'Cirebon', itemsSupplied: ['ing-sugar'] },
+                { id: 'sup-1', name: 'PT Surya Daun Teh', contactPerson: 'Pak Budi', phone: '08123456789', address: 'Bandung, Jawa Barat', itemsSupplied: ['ing-tea', 'ing-matcha'] },
+                { id: 'sup-2', name: 'CV Gula & Sirup Nusantara', contactPerson: 'Bu Ani', phone: '08987654321', address: 'Cirebon, Jawa Barat', itemsSupplied: ['ing-sugar', 'ing-syrup'] },
+                { id: 'sup-3', name: 'UD Dairy & Kemasan Prima', contactPerson: 'Pak Hendra', phone: '081322334455', address: 'Lembang, Bandung', itemsSupplied: ['ing-milk', 'ing-cup', 'ing-snack', 'ing-bread'] },
             ],
             addSupplier: (supplier) => {
                 set((s) => ({ suppliers: [...s.suppliers, supplier] }));
-                firebaseSet(ref(rtdb, `suppliers/${supplier.id}`), supplier).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, `suppliers/${supplier.id}`), supplier).catch(err => console.warn(err));
             },
             updateSupplier: (id, updated) => {
                 set((s) => ({ suppliers: s.suppliers.map(i => i.id === id ? { ...i, ...updated } : i) }));
-                firebaseUpdate(ref(rtdb, `suppliers/${id}`), updated).catch(err => console.error(err));
+                firebaseUpdate(ref(rtdb, `suppliers/${id}`), updated).catch(err => console.warn(err));
             },
             deleteSupplier: (id) => {
                 set((s) => ({ suppliers: s.suppliers.filter(i => i.id !== id) }));
-                firebaseSet(ref(rtdb, `suppliers/${id}`), null).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, `suppliers/${id}`), null).catch(err => console.warn(err));
             }
         }),
         { name: 'teh-raja-suppliers-v1', storage: createJSONStorage(() => idbStorage) }
@@ -983,23 +1127,23 @@ export const useForecastHistoryStore = create<ForecastHistoryState>()(
                 });
                 newRecords.forEach(r => {
                     const cleanRecord = JSON.parse(JSON.stringify(r));
-                    firebaseSet(ref(rtdb, `salesHistory/${r.id}`), cleanRecord).catch(err => console.error("Firebase History Set Error:", err));
+                    firebaseSet(ref(rtdb, `salesHistory/${r.id}`), cleanRecord).catch(err => console.warn("Firebase History Set Error:", err));
                 });
             },
             deleteRecord: (id) => {
                 set((state) => ({ records: state.records.filter(r => r.id !== id) }));
-                firebaseSet(ref(rtdb, `salesHistory/${id}`), null).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, `salesHistory/${id}`), null).catch(err => console.warn(err));
             },
             clearBySource: (source) => {
                 const toDelete = get().records.filter(r => r.source === source);
                 set((state) => ({ records: state.records.filter(r => r.source !== source) }));
                 toDelete.forEach(r => {
-                    firebaseSet(ref(rtdb, `salesHistory/${r.id}`), null).catch(err => console.error(err));
+                    firebaseSet(ref(rtdb, `salesHistory/${r.id}`), null).catch(err => console.warn(err));
                 });
             },
             clearAll: () => {
                 set({ records: [] });
-                firebaseSet(ref(rtdb, 'salesHistory'), null).catch(err => console.error(err));
+                firebaseSet(ref(rtdb, 'salesHistory'), null).catch(err => console.warn(err));
             }
         }),
         { name: 'teh-raja-forecast-history-v1', storage: createJSONStorage(() => idbStorage) }
@@ -1040,7 +1184,7 @@ interface ExpenseState {
 
 export const useExpenseStore = create<ExpenseState>()(
     persist(
-        (set, get) => ({
+        (set) => ({
             expenses: [
                 {
                     id: 'exp-demo-1',
@@ -1069,17 +1213,14 @@ export const useExpenseStore = create<ExpenseState>()(
                     date: new Date().toISOString(),
                 };
                 set((s) => ({ expenses: [newExp, ...s.expenses] }));
-                firebaseSet(ref(rtdb, `expenses/${newExp.id}`), JSON.parse(JSON.stringify(newExp))).catch(console.error);
+                firebaseSet(ref(rtdb, `expenses/${newExp.id}`), JSON.parse(JSON.stringify(newExp))).catch(console.warn);
                 return newExp;
             },
             deleteExpense: (id) => {
                 set((s) => ({ expenses: s.expenses.filter(e => e.id !== id) }));
-                firebaseSet(ref(rtdb, `expenses/${id}`), null).catch(console.error);
+                firebaseSet(ref(rtdb, `expenses/${id}`), null).catch(console.warn);
             }
         }),
         { name: 'teh-raja-expenses-v1', storage: createJSONStorage(() => idbStorage) }
     )
 );
-
-
-

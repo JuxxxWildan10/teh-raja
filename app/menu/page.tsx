@@ -2,17 +2,23 @@
 
 /**
  * @file Menu Catalog Page
- * @description Halaman Menu interaktif untuk pelanggan. Dilengkapi dengan sistem rekomendasi (Quiz AI) untuk mencocokkan rasa teh dengan profil pengguna.
+ * @description Halaman Menu interaktif untuk pelanggan. Dilengkapi dengan sistem rekomendasi (Quiz AI), banner promo aktif, dan pengecekan stok/BOM real-time.
  */
-
 
 import Navbar from "@/components/Navbar";
 import RecommendationQuiz from "@/components/RecommendationQuiz";
-import OrderStatusOverlay from "@/components/OrderStatusOverlay"; // [NEW] 
+import OrderStatusOverlay from "@/components/OrderStatusOverlay";
 import VariantModal from "@/components/VariantModal";
-import { useCartStore, useProductStore, ExtendedProduct, ProductVariants } from "@/lib/store"; // Use dynamic store
+import {
+  useCartStore,
+  useProductStore,
+  usePromoStore,
+  useInventoryStore,
+  ExtendedProduct,
+  ProductVariants,
+} from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, ArrowDown, AlertTriangle, Download, Search, ShoppingBag } from "lucide-react";
+import { Star, ArrowDown, AlertTriangle, Download, Search, ShoppingBag, Tag } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -20,18 +26,33 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  all: 'Semua Menu',
+  signature: 'Signature',
+  milk: 'Milk Tea',
+  fruit: 'Fruit Tea',
+  classic: 'Classic',
+  snack: 'Snack',
+  food: 'Food & Roti',
+};
+
 export default function Home() {
   const addToCart = useCartStore((state) => state.addToCart);
   const cartItems = useCartStore((state) => state.items);
   const cartTotal = useCartStore((state) => state.total);
   const setCartOpen = useCartStore((state) => state.setCartDrawerOpen);
   const isCartOpen = useCartStore((state) => state.isCartDrawerOpen);
-  const products = useProductStore((state) => state.products); // Dynamic products
+  const products = useProductStore((state) => state.products);
+  const promos = usePromoStore((state) => state.promos);
+  const ingredients = useInventoryStore((state) => state.ingredients);
+
   const [isClient, setIsClient] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [variantProduct, setVariantProduct] = useState<ExtendedProduct | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const activePromos = promos.filter(p => p.isActive);
 
   const handleVariantConfirm = (variants: ProductVariants, finalPrice: number, qty: number) => {
     if (!variantProduct) return;
@@ -42,10 +63,7 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     setIsClient(true);
-
-    // PWA Install Prompt
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
@@ -55,16 +73,13 @@ export default function Home() {
   const handleInstall = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
-      deferredPrompt.userChoice.then((choiceResult: { outcome: 'accepted' | 'dismissed' }) => {
-        if (choiceResult.outcome === 'accepted') {
-          console.log('User accepted the install prompt');
-        }
+      deferredPrompt.userChoice.then(() => {
         setDeferredPrompt(null);
       });
     }
-  }
+  };
 
-  if (!isClient) return null; // Hydration fix
+  if (!isClient) return null;
 
   return (
     <main className="min-h-screen bg-forest text-cream selection:bg-gold selection:text-forest">
@@ -73,7 +88,6 @@ export default function Home() {
       {/* HERO SECTION */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">
-          {/* Abstract Background */}
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--color-gold-light)_0%,_transparent_20%)] opacity-20" />
           <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_bottom_left,_var(--color-forest-light)_0%,_transparent_40%)] opacity-40" />
         </div>
@@ -109,7 +123,6 @@ export default function Home() {
             </a>
           </motion.div>
 
-          {/* PWA Install Button (Only visible if proper criteria met) */}
           {deferredPrompt && (
             <motion.button
               initial={{ opacity: 0, scale: 0.8 }}
@@ -147,7 +160,25 @@ export default function Home() {
       {/* MENU GRID */}
       <section id="menu" className="py-20">
         <div className="container mx-auto px-6">
-          <h2 className="text-4xl font-serif text-center mb-8"><span className="border-b-2 border-gold pb-2">Koleksi Raja</span></h2>
+          <h2 className="text-4xl font-serif text-center mb-6"><span className="border-b-2 border-gold pb-2">Koleksi Raja</span></h2>
+
+          {/* Active Promos Banner */}
+          {activePromos.length > 0 && (
+            <div className="flex flex-wrap gap-2 justify-center mb-6">
+              {activePromos.map(promo => (
+                <div
+                  key={promo.id}
+                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gold/15 border border-gold/40 text-gold text-xs font-bold"
+                >
+                  <Tag size={13} />
+                  <span>{promo.name}:</span>
+                  <span className="text-white/90 font-normal">
+                    {promo.description || (promo.type === 'amount' ? `Potongan Rp ${promo.value.toLocaleString('id-ID')}` : `Diskon ${promo.value}%`)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="flex gap-2 overflow-x-auto pb-4 mb-6 scrollbar-hide justify-center flex-wrap">
             {/* Search bar */}
@@ -155,7 +186,7 @@ export default function Home() {
               <Search size={16} className="text-white/40 flex-shrink-0" />
               <input
                 type="text"
-                placeholder="Cari minuman favoritmu..."
+                placeholder="Cari minuman atau camilan favoritmu..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="bg-transparent text-sm w-full focus:outline-none text-white placeholder:text-white/30"
@@ -166,7 +197,7 @@ export default function Home() {
             </div>
 
             {/* Category buttons */}
-            {['all', 'signature', 'milk', 'fruit', 'classic', 'snack'].map(cat => (
+            {['all', 'signature', 'milk', 'fruit', 'classic', 'snack', 'food'].map(cat => (
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
@@ -176,7 +207,7 @@ export default function Home() {
                   : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
                 }`}
               >
-                {cat === 'all' ? 'Semua Menu' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                {CATEGORY_LABELS[cat] || cat}
               </button>
             ))}
           </div>
@@ -190,81 +221,84 @@ export default function Home() {
               products
                 .filter(p => activeCategory === 'all' || p.category === activeCategory)
                 .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.description || '').toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((product, idx) => (
-                <motion.div
-                  itemProp="product"
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: idx * 0.1 }}
-                  key={product.id}
-                  className={`group relative bg-white/5 border rounded-2xl overflow-hidden transition-colors ${product.stock <= 0 ? 'border-red-500/30 opacity-70' : 'border-white/5 hover:border-gold/30'
-                    }`}
-                >
-                  <div className="h-64 bg-black/20 relative overflow-hidden">
-                    {/* Image / Placeholder */}
-                    <div className="absolute inset-0 flex items-center justify-center text-gold/20 font-serif text-4xl opacity-30">
-                      {product.image ? (
-                        <img src={product.image} alt={product.name} className={`w-full h-full object-cover transition duration-700 group-hover:scale-110 ${product.stock <= 0 ? 'grayscale' : ''}`} />
-                      ) : (
-                        <span>{product.name[0]}</span>
-                      )}
-                    </div>
+                .map((product, idx) => {
+                  const isBomDepleted = product.recipe && product.recipe.length > 0 && product.recipe.some(r => {
+                    const ing = ingredients.find(i => i.id === r.ingredientId);
+                    return !ing || ing.stock < r.quantity;
+                  });
+                  const isOut = !product.isAvailable || product.stock <= 0 || isBomDepleted;
 
-                    {/* STATUS BADGES */}
-                    <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
-                      {product.category === 'signature' && (
-                        <span className="bg-gold text-forest text-xs font-bold px-3 py-1 rounded-full shadow-lg">Signature</span>
-                      )}
-                      {product.stock <= 0 ? (
-                        <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">SOLD OUT</span>
-                      ) : product.stock <= (product.minStockThreshold || 5) && (
-                        <span className="bg-yellow-500 text-forest text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
-                          <AlertTriangle size={10} /> Limited: {product.stock}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* OVERLAY ACTION */}
-                    <div className={`absolute inset-0 bg-black/60 opacity-0 transition duration-300 flex items-center justify-center ${product.stock > 0 ? 'group-hover:opacity-100' : ''}`}>
-                      <button
-                        onClick={() => setVariantProduct(product)}
-                        disabled={product.stock <= 0}
-                        className="bg-gold text-forest px-6 py-2 rounded-full font-bold transform translate-y-4 group-hover:translate-y-0 transition duration-300 hover:scale-105"
-                      >
-                        Tambah ke Tray
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-xl font-serif font-bold">{product.name}</h3>
-                    </div>
-                    <p className="text-sm opacity-60 mb-4 h-10 overflow-hidden line-clamp-2">{product.description}</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-bold text-gold-light">Rp {product.price.toLocaleString('id-ID')}</span>
-                      <div className="flex gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            size={12}
-                            className="text-gold fill-gold"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    {/* Mobile-visible add button */}
-                    <button
-                      onClick={() => setVariantProduct(product)}
-                      disabled={product.stock <= 0}
-                      className="w-full mt-3 py-2 bg-gold text-forest rounded-lg font-bold text-sm hover:bg-gold-light transition disabled:opacity-40 disabled:cursor-not-allowed md:hidden"
+                  return (
+                    <motion.div
+                      itemProp="product"
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.08 }}
+                      key={product.id}
+                      className={`group relative bg-white/5 border rounded-2xl overflow-hidden transition-colors ${isOut ? 'border-red-500/30 opacity-70' : 'border-white/5 hover:border-gold/30'}`}
                     >
-                      {product.stock <= 0 ? 'Habis' : '+ Tambah ke Tray'}
-                    </button>
-                  </div>
-                </motion.div>
-              ))
+                      <div className="h-64 bg-black/20 relative overflow-hidden">
+                        <div className="absolute inset-0 flex items-center justify-center text-gold/20 font-serif text-4xl opacity-30">
+                          {product.image ? (
+                            <img src={product.image} alt={product.name} className={`w-full h-full object-cover transition duration-700 group-hover:scale-110 ${isOut ? 'grayscale' : ''}`} />
+                          ) : (
+                            <span>{product.name[0]}</span>
+                          )}
+                        </div>
+
+                        {/* STATUS BADGES */}
+                        <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
+                          {product.category === 'signature' && (
+                            <span className="bg-gold text-forest text-xs font-bold px-3 py-1 rounded-full shadow-lg">Signature</span>
+                          )}
+                          {isOut ? (
+                            <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                              {isBomDepleted ? 'BAHAN HABIS' : 'SOLD OUT'}
+                            </span>
+                          ) : product.stock <= (product.minStockThreshold || 5) && (
+                            <span className="bg-yellow-500 text-forest text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
+                              <AlertTriangle size={10} /> Limited: {product.stock}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* OVERLAY ACTION */}
+                        <div className={`absolute inset-0 bg-black/60 opacity-0 transition duration-300 flex items-center justify-center ${!isOut ? 'group-hover:opacity-100' : ''}`}>
+                          <button
+                            onClick={() => setVariantProduct(product)}
+                            disabled={isOut}
+                            className="bg-gold text-forest px-6 py-2 rounded-full font-bold transform translate-y-4 group-hover:translate-y-0 transition duration-300 hover:scale-105"
+                          >
+                            Tambah ke Tray
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-6">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="text-xl font-serif font-bold">{product.name}</h3>
+                        </div>
+                        <p className="text-sm opacity-60 mb-4 h-10 overflow-hidden line-clamp-2">{product.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-lg font-bold text-gold-light">Rp {product.price.toLocaleString('id-ID')}</span>
+                          <div className="flex gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} size={12} className="text-gold fill-gold" />
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setVariantProduct(product)}
+                          disabled={isOut}
+                          className="w-full mt-3 py-2 bg-gold text-forest rounded-lg font-bold text-sm hover:bg-gold-light transition disabled:opacity-40 disabled:cursor-not-allowed md:hidden"
+                        >
+                          {isOut ? 'Habis' : '+ Tambah ke Tray'}
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })
             )}
           </div>
         </div>
@@ -291,9 +325,11 @@ export default function Home() {
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <ShoppingBag size={20} />
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">{cartItems.length}</span>
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                    {cartItems.reduce((s, i) => s + i.quantity, 0)}
+                  </span>
                 </div>
-                <span>{cartItems.length} item di Tray</span>
+                <span>{cartItems.reduce((s, i) => s + i.quantity, 0)} item di Tray</span>
               </div>
               <span className="font-black">Rp {cartTotal().toLocaleString('id-ID')} →</span>
             </button>
