@@ -1,8 +1,17 @@
 /**
+ * ============================================================================
+ * FILE: lib/forecast/data.ts
+ * ============================================================================
  * @file Forecast Data Layer
  * @description Mengubah transaksi POS (orders) + data histori (impor/simulasi)
  * menjadi deret waktu harian yang kontinu (hari tanpa penjualan diisi 0).
  * Semua tanggal dihitung pada zona waktu Asia/Jakarta (WIB).
+ *
+ * FUNGSI UTAMA (Untuk Fitur Pengembangan Lanjutan / Skripsi AI Forecasting):
+ * 1. `buildDailySeries`: Menggabungkan data transaksi POS (`orders`) dan data histori (`records`) menjadi agregasi penjualan harian.
+ * 2. `computeReorderPlan`: Menghitung kebutuhan bahan baku (BOM) selama horizon peramalan, *Safety Stock*, dan *Reorder Point (ROP)*.
+ * 3. `generateSimulatedHistory` & `parseImportedRows`: Membantu simulasi atau impor CSV/Excel data histori penjualan.
+ * ============================================================================
  */
 import type { Order, ExtendedProduct, RecipeItem, Ingredient } from '@/lib/store';
 

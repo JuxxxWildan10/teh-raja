@@ -1,5 +1,18 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/ConfirmModal.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Modal dialog konfirmasi serbaguna (pengganti `window.confirm` bawaan browser)
+ * untuk mencegah kesalahan klik pada aksi sensitif seperti:
+ * - Membatalkan pesanan POS (yang memicu pengembalian stok BOM),
+ * - Menghapus menu/bahan baku, atau
+ * - Mereset/memulihkan database.
+ * ============================================================================
+ */
+
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, X } from "lucide-react";
 

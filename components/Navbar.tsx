@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/Navbar.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Bilah navigasi atas (*Header Navbar*) pada halaman publik pelanggan (`/menu`).
+ *
+ * FITUR PENTING:
+ * 1. **Isolasi Tampilan Pembeli (`!user`)**:
+ *    Hanya menampilkan tautan **Beranda**, **Menu**, tombol **Lacak Pesanan & Struk**, dan **Keranjang Belanja**.
+ * 2. **Pemicu Rahasia Tap Logo 5x (`useSecretLogoTap`)**:
+ *    Mengetuk logo "TEH RAJA" 5 kali berturut-turut membuka `SecretStaffModal` untuk login staf/admin.
+ * 3. **Indikator Pesanan Aktif**:
+ *    Menampilkan status pesanan pelanggan yang sedang berlangsung secara *real-time*.
+ * ============================================================================
+ */
+
 import { useState, useEffect } from "react";
 import { useCartStore, useSalesStore, useAuthStore } from "@/lib/store";
 import {

@@ -1,8 +1,18 @@
 "use client";
 
 /**
+ * ============================================================================
+ * FILE: app/menu/page.tsx
+ * ============================================================================
  * @file Menu Catalog Page
  * @description Halaman Menu interaktif untuk pelanggan. Dilengkapi dengan sistem rekomendasi (Quiz AI), banner promo aktif, dan pengecekan stok/BOM real-time.
+ *
+ * FUNGSI UTAMA:
+ * 1. Menampilkan katalog menu Teh Raja dengan filter kategori (`signature`, `milk`, `fruit`, `classic`, `snack`, `food`) dan pencarian nama menu.
+ * 2. Mengecek ketersediaan stok bahan baku BOM secara real-time (`isOutOfIngredient`): jika salah satu bahan resep habis, kartu menu otomatis berstatus "Habis".
+ * 3. Membuka modal pemilihan varian (`VariantModal`) saat pelanggan menekan tombol "+ Keranjang".
+ * 4. Menampilkan progres pesanan aktif (`OrderStatusOverlay`) dan mendukung ketukan rahasia 5x pada judul/logo untuk akses staf (`useSecretLogoTap`).
+ * ============================================================================
  */
 
 import Navbar from "@/components/Navbar";

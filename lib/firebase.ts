@@ -1,6 +1,19 @@
 /**
+ * ============================================================================
+ * FILE: lib/firebase.ts
+ * ============================================================================
  * @file Firebase Client Configuration
  * @description Inisialisasi SDK Firebase untuk frontend. Termasuk Auth, Firestore, dan Realtime Database.
+ *
+ * FUNGSI UTAMA:
+ * Menghubungkan aplikasi Next.js dengan layanan cloud Firebase menggunakan kredensial
+ * dari variabel lingkungan (`.env.local`).
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - `rtdb` (Realtime Database) digunakan oleh `lib/store.ts` dan `components/FirebaseSync.tsx`
+ *   untuk menyinkronkan pesanan, stok produk, dan bahan baku BOM secara real-time (<500ms).
+ * - `auth` (Firebase Authentication) digunakan oleh `lib/store.ts` saat proses login staf/admin.
+ * ============================================================================
  */
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";

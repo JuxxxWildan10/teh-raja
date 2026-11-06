@@ -1,4 +1,7 @@
 /**
+ * ============================================================================
+ * FILE: lib/forecast/engine.ts
+ * ============================================================================
  * @file Forecast Engine
  * @description Pipeline peramalan otomatis:
  *   1. Validasi kecukupan data & kelayakan tiap model.
@@ -9,6 +12,10 @@
  *      ramalan terbukti sering lebih akurat (Makridakis dkk., M4 Competition 2018).
  *   5. Model terbaik (berdasarkan kriteria pilihan) dilatih ulang pada seluruh
  *      data, lalu digunakan untuk meramal h hari ke depan beserta interval prediksi 95%.
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Dipanggil oleh `components/forecast/ForecastDashboard.tsx` pada tab AI Forecast di halaman Admin.
+ * ============================================================================
  */
 import { MODELS, ModelSpec } from './models';
 import { computeMetrics, criterionValue, Criterion, Metrics } from './metrics';

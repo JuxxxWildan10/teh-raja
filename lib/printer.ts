@@ -1,6 +1,18 @@
 /**
+ * ============================================================================
+ * FILE: lib/printer.ts
+ * ============================================================================
  * @file Thermal Printer Service (Web Bluetooth)
  * @description Modul utilitas untuk menghubungkan aplikasi browser dengan printer struk thermal (Bluetooth) dengan mencetak perintah ESC/POS.
+ *
+ * FUNGSI UTAMA:
+ * 1. `ThermalPrinter`: Class pembangun byte array perintah standar ESC/POS (rata tengah/kiri/kanan, huruf tebal, ukuran teks, potong kertas).
+ * 2. `buildReceiptPayload(order)`: Mengubah data pesanan (`Order`) menjadi susunan baris struk kasir Teh Raja.
+ * 3. `printViaBluetooth(payload)`: Menghubungkan browser ke printer thermal via Web Bluetooth API dan mengirimkan data struk per potongan 100 byte (chunking).
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Digunakan oleh `components/ReceiptModal.tsx` ketika kasir menekan tombol cetak struk Bluetooth.
+ * ============================================================================
  */
 import { Order, formatVariantLabel } from './store';
 

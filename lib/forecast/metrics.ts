@@ -1,4 +1,7 @@
 /**
+ * ============================================================================
+ * FILE: lib/forecast/metrics.ts
+ * ============================================================================
  * @file Forecast Accuracy Metrics
  * @description Ukuran akurasi peramalan yang umum dipakai dalam penelitian:
  *   MAE   = (1/n) Σ |yt − ŷt|
@@ -6,6 +9,11 @@
  *   MAPE  = (100/n) Σ |yt − ŷt| / |yt|          (hanya untuk yt ≠ 0)
  *   sMAPE = (100/n) Σ 2|yt − ŷt| / (|yt| + |ŷt|)
  *   WAPE  = 100 · Σ|yt − ŷt| / Σ|yt|
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Dipanggil oleh `lib/forecast/engine.ts` dan ditampilkan di `components/forecast/ForecastDashboard.tsx`
+ *   untuk menentukan model peramalan terbaik beserta kategori akurasi menurut kriteria Lewis (1982).
+ * ============================================================================
  */
 
 export interface Metrics {

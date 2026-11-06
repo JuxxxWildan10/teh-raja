@@ -1,3 +1,21 @@
+/**
+ * ============================================================================
+ * FILE: app/api/payment/qris/route.ts
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Endpoint API Server (`POST /api/payment/qris`) untuk membuat kode QRIS Dinamis
+ * sesuai dengan nominal total tagihan pesanan (`total`) dan `orderId`.
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Dipanggil oleh `app/pos/page.tsx` saat kasir memilih metode bayar QRIS.
+ * - Dipanggil oleh `components/OrderStatusOverlay.tsx` saat pelanggan memilih bayar via QRIS.
+ *
+ * ALUR KERJA:
+ * 1. Menerima `orderId` dan `total` dari request body.
+ * 2. Menyusun payload string standar QRIS (EMVCo) dengan menyisipkan nominal transaksi.
+ * 3. Mengembalikan URL gambar QR Code (`qrCodeUrl`) dan ID transaksi (`TRX-...`).
+ * ============================================================================
+ */
 import { NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 

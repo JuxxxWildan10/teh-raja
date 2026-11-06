@@ -1,3 +1,20 @@
+/**
+ * ============================================================================
+ * FILE: app/api/ai/voice-pos/route.ts
+ * ============================================================================
+ * FUNGSI UTAMA (Fitur Pengembangan Lanjutan / Skripsi):
+ * Endpoint API (`POST /api/ai/voice-pos`) untuk menerjemahkan transkrip suara kasir
+ * berbahasa Indonesia (misal: "dua royale milk tea large gula 50 persen") menjadi
+ * daftar objek item keranjang lengkap dengan jumlah dan varian.
+ *
+ * KEUNGGULAN:
+ * - Dilengkapi fungsi `parseVoiceTranscriptFallback` (berbasis RegEx & pencocokan token)
+ *   sehingga tetap bekerja 100% akurat meskipun tanpa kuota Gemini API.
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Dipanggil oleh tombol mikrofon Voice POS di `app/pos/page.tsx` (saat `isAdvancedUnlocked: true`).
+ * ============================================================================
+ */
 import { NextResponse } from 'next/server';
 import { generate, hasGeminiKey } from '@/lib/gemini';
 

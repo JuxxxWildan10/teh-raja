@@ -1,5 +1,23 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: app/page.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Halaman Utama (*Landing Page* `/` Kedai Teh Raja).
+ *
+ * FITUR PENTING DI DALAM FILE INI:
+ * 1. **Isolasi Tampilan Pelanggan (`!user`)**:
+ *    Pelanggan biasa hanya melihat profil kedai, menu unggulan, tombol **Pesan Sekarang (`/menu`)**,
+ *    dan tombol **Lacak Pesanan & Struk (`CustomerOrderTrackerModal`)**. Tidak ada tombol ke POS/Admin.
+ * 2. **Pemicu Rahasia Tap Logo 5x (`useSecretLogoTap` & `SecretStaffModal`)**:
+ *    Jika staf/admin mengetuk logo mahkota Teh Raja 5 kali cepat di kiri atas, modal login staf akan muncul.
+ * 3. **Portal Modul Sistem (`PORTAL_MODULES`)**:
+ *    Hanya muncul di bagian bawah halaman setelah staf/admin berhasil login.
+ * ============================================================================
+ */
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";

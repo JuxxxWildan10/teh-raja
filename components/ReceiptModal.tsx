@@ -1,8 +1,18 @@
 "use client";
 
 /**
+ * ============================================================================
+ * FILE: components/ReceiptModal.tsx
+ * ============================================================================
  * @file Receipt Modal Component
  * @description Komponen tampilan UI untuk struk belanja. Menyediakan opsi untuk mencetak via Bluetooth Thermal atau mendownloadnya sebagai gambar.
+ *
+ * FUNGSI UTAMA:
+ * Menampilkan nota/struk transaksi resmi Kedai Teh Raja dengan 3 opsi distribusi:
+ * 1. **Cetak Bluetooth (`handleBluetoothPrint`)**: Mencetak langsung ke printer thermal 58mm via Web Bluetooth API (`lib/printer.ts`).
+ * 2. **Cetak Browser / PDF (`handlePrint`)**: Mencetak via `window.print()`.
+ * 3. **Kirim Struk WhatsApp (`handleWhatsApp`)**: Mengonversi struk menjadi gambar PNG (`html2canvas`) dan teks rincian pesanan untuk dikirim ke WhatsApp pelanggan.
+ * ============================================================================
  */
 
 

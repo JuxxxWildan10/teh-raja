@@ -1,7 +1,19 @@
 /**
+ * ============================================================================
+ * FILE: lib/bluetoothPrint.ts
+ * ============================================================================
  * @file bluetoothPrint.ts
  * @description Utility untuk mencetak struk thermal via Web Bluetooth API (ESC/POS Protocol).
  * Compatible dengan printer thermal Bluetooth standar (Epson, Xprinter, POS-58, dsb).
+ *
+ * FUNGSI UTAMA:
+ * - `buildReceipt(order)`: Menyusun byte perintah ESC/POS untuk kertas struk ukuran 58mm (32 karakter per baris).
+ * - `writeChunked(char, data)`: Mengirimkan byte data ke karakteristik GATT Bluetooth secara bertahap (per 100 byte) agar buffer printer tidak penuh.
+ * - `printReceipt(order)`: Membuka dialog pemilihan perangkat Bluetooth di Chrome/Edge lalu mencetak struk pesanan.
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Digunakan oleh `app/pos/page.tsx` dan `components/ReceiptModal.tsx` untuk cetak struk langsung dari kasir POS.
+ * ============================================================================
  */
 
 const ESC = 0x1B;

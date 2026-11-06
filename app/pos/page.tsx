@@ -1,9 +1,26 @@
 "use client";
 
 /**
+ * ============================================================================
+ * FILE: app/pos/page.tsx
+ * ============================================================================
  * @file POS (Point of Sale) Page
  * @description Halaman utama Kasir untuk memproses pesanan, memilih metode pembayaran, dan sinkronisasi data offline-first.
  * Menggunakan Zustand untuk state management lokal dan Firebase untuk sinkronisasi Realtime.
+ *
+ * FUNGSI UTAMA (Dirancang untuk Operasional Kasir Merangkap Barista di Kedai Teh Raja):
+ * 1. **Katalog & Keranjang Kasir**: Memilih produk dan varian (Ukuran M/L, Suhu, % Gula, Level Es), hold/resume pesanan.
+ * 2. **Multi-Metode Pembayaran**:
+ *    - Tunai (*Quick Cash* Uang Pas, 10rb, 20rb, 50rb, 100rb) dengan hitung kembalian otomatis.
+ *    - QRIS Dinamis (memanggil `/api/payment/qris`).
+ *    - Transfer Bank.
+ * 3. **Pemotongan Stok & Resep BOM Otomatis (`handleCheckout`)**:
+ *    Saat pesanan dibayar, sistem memanggil `decrementStock` dan `decrementIngredientsForOrder` untuk memotong bahan baku gudang.
+ * 4. **Laci Antrean & Struk Terpadu (3 Tab: `Masuk`, `Sedang Diracik`, `Selesai`)**:
+ *    Memungkinkan kasir merangkap barista memantau pesanan dari `/menu`, melihat detail racikan, mengubah status pesanan, dan mencetak struk dalam 1 layar.
+ * 5. **Manajemen Shift & Kas Keluar (`Petty Cash`)**:
+ *    Buka shift (modal awal), catat pengeluaran laci kasir, dan tutup shift (`ShiftSummaryModal`).
+ * ============================================================================
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -155,6 +172,9 @@ export default function POSPage() {
     const [expenseDesc, setExpenseDesc] = useState('');
     const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>('bahan_tambahan');
 
+    // ── FUNGSI PENCATATAN KAS KELUAR / PETTY CASH DARI LACI KASIR ──
+    // Mencatat uang tunai yang diambil dari laci kasir untuk belanja mendadak (es batu, galon, gas)
+    // agar ekspektasi uang laci saat tutup shift otomatis dikurangi dan tidak tekor.
     const handleAddExpense = () => {
         const amount = parseFloat(expenseAmount.replace(/\D/g, '')) || 0;
         if (amount <= 0 || !expenseDesc.trim()) {
@@ -464,7 +484,11 @@ export default function POSPage() {
         recognition.start();
     }, [isListening, isProcessingVoice, products, addToCart, toast]);
 
-    // ── Checkout ──────────────────────────────────────────────
+    // ── FUNGSI UTAMA CHECKOUT TRANSAKSI KASIR & PEMOTONGAN RESEP BOM ──
+    // 1. Memvalidasi status buka shift, nama pelanggan, dan kecukupan uang tunai / konfirmasi QRIS.
+    // 2. Menyimpan objek pesanan (`addOrder`) ke IndexedDB lokal & Firebase Realtime Database.
+    // 3. Memotong stok produk (`decrementStock`) dan memotong takaran bahan baku sesuai resep BOM (`decrementIngredientsForOrder`).
+    // 4. Membuka modal struk (`ReceiptModal`) untuk cetak Bluetooth 58mm / Browser / WhatsApp.
     const handleCheckout = useCallback(() => {
         if (!isStoreOpen) { toast.error('Toko harus dibuka terlebih dahulu!'); return; }
         if (items.length === 0) return;
@@ -538,6 +562,9 @@ export default function POSPage() {
         usePoints, customer, customerPhone, redeemPoints, addCustomer, addPoints,
         addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, clearCart, toast, isAdvancedUnlocked]);
 
+    // ── FUNGSI TUTUP SHIFT KASIR & REKONSILIASI UANG LACI ──
+    // Membandingkan uang tunai fisik yang dihitung kasir (`actualCash`) dengan
+    // rumus `expectedCash = Modal Awal + Penjualan Tunai - Kas Keluar (Petty Cash)`
     const handleTutupToko = () => {
         const parsedActual = parseFloat(actualCash.replace(/[^0-9]/g, '')) || 0;
         const summary = closeStore(parsedActual, closeNotes);

@@ -1,3 +1,22 @@
+/**
+ * ============================================================================
+ * FILE: data/menu.ts
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Menyimpan struktur tipe data `Product` dan data master menu awal (initial seed)
+ * untuk Kedai Teh Raja, lengkap dengan komposisi resep bahan baku (Bill of Materials / BOM).
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Diimpor oleh `lib/store.ts` (`useProductStore`) sebagai data awal produk.
+ * - Diimpor oleh `lib/recommendation.ts` untuk pencocokan profil rasa.
+ *
+ * BAGIAN KODE PENTING:
+ * 1. `type Product`: Struktur objek menu (id, nama, harga, kategori, atribut rasa, dan `recipe` BOM).
+ * 2. `products`: Daftar menu default beserta takaran bahan baku (`ingredientId` & `quantity` per cup ukuran M).
+ * ============================================================================
+ */
+
+// Struktur tipe data untuk setiap item menu produk di Kedai Teh Raja
 export type Product = {
     id: string;
     name: string;
@@ -10,9 +29,11 @@ export type Product = {
         creamy: number; // 0-10
         fruity: number; // 0-10
     };
+    // Daftar bahan baku (Bill of Materials / BOM) yang otomatis dipotong saat produk ini terjual
     recipe?: { ingredientId: string; quantity: number }[];
 };
 
+// Daftar produk awal beserta resep takaran bahan baku standar (untuk ukuran Cup Medium / Normal)
 export const products: Product[] = [
     {
         id: '1',

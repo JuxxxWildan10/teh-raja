@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/PWAInstall.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Komponen pendaftar *Service Worker* (`/sw.js`) dan penampil tombol instalasi
+ * **Progressive Web App (PWA)** agar aplikasi Web POS Teh Raja dapat diinstal ke
+ * layar utama (*Home Screen*) tablet kasir maupun smartphone pelanggan dan berjalan *offline-first*.
+ * ============================================================================
+ */
+
 import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";

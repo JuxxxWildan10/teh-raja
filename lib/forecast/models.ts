@@ -1,4 +1,7 @@
 /**
+ * ============================================================================
+ * FILE: lib/forecast/models.ts
+ * ============================================================================
  * @file Forecasting Models (Time Series)
  * @description Implementasi murni TypeScript dari metode peramalan deret waktu yang
  * dibandingkan secara otomatis oleh engine:
@@ -14,6 +17,10 @@
  *
  * Parameter tiap model dioptimasi dengan grid search untuk meminimalkan
  * Sum of Squared Errors (SSE) one-step-ahead pada data latih.
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Diimpor oleh `lib/forecast/engine.ts` untuk dievaluasi akurasinya pada data histori POS.
+ * ============================================================================
  */
 
 export interface FitResult {

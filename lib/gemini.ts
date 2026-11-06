@@ -1,4 +1,7 @@
 /**
+ * ============================================================================
+ * FILE: lib/gemini.ts
+ * ============================================================================
  * @file Gemini API Client (server-only)
  * @description Klien bersama untuk semua route AI. Fitur:
  *   - Model cepat (default gemini-3.5-flash-lite, ±1-2 detik) + model cadangan otomatis.
@@ -6,6 +9,12 @@
  *   - Mode JSON terstruktur (responseMimeType + responseSchema).
  *   - Menggabungkan seluruh "parts" teks (abaikan bagian "thought").
  *   Hanya diimpor dari Route Handler (server) — API key tidak pernah terkirim ke browser.
+ *
+ * KETERKAITAN DENGAN FILE LAIN (Digunakan pada Fitur Pengembangan Lanjutan / Skripsi):
+ * - Dipanggil oleh `app/api/ai/forecast/route.ts` untuk narasi analisis peramalan penjualan.
+ * - Dipanggil oleh `app/api/ai/voice-pos/route.ts` untuk menerjemahkan suara kasir menjadi item keranjang.
+ * - Dipanggil oleh `app/api/ai/crm-upsell/route.ts` untuk membuat pesan penawaran WhatsApp member.
+ * ============================================================================
  */
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';

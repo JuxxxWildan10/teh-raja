@@ -1,8 +1,17 @@
 "use client";
 
 /**
+ * ============================================================================
+ * FILE: components/FirebaseSync.tsx
+ * ============================================================================
  * @file Firebase Realtime Synchronizer
  * @description Komponen tersembunyi yang bertugas di latar belakang. Bertanggung jawab memantau koneksi internet, mengunggah data kasir yang tertunda, dan mendengarkan pembaruan pesanan, stok, BOM, promo, member, dan kas secara live.
+ *
+ * FUNGSI UTAMA (Jantung Arsitektur Offline-First & Real-Time):
+ * 1. **Auto-Flush Antrean Offline**: Saat koneksi internet kembali *online*, otomatis mengunggah `offlineOrders` dan `offlineLogs` dari IndexedDB ke Firebase RTDB.
+ * 2. **Real-Time Listener (`onValue`)**: Mendengarkan perubahan node `orders`, `products`, `ingredients` (BOM), `sessions`, `expenses`, `suppliers`, `opnameLogs`, dan `users` agar layar Pelanggan, Kasir POS, dan Admin selalu sinkron (<500ms).
+ * 3. **Notifikasi Audio Otomatis**: Memutar bunyi bel saat ada pesanan baru masuk di kasir atau saat pesanan pelanggan selesai diracik.
+ * ============================================================================
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";

@@ -1,8 +1,24 @@
 "use client";
 
 /**
+ * ============================================================================
+ * FILE: app/admin/page.tsx
+ * ============================================================================
  * @file Admin Dashboard
  * @description Halaman Panel Kendali (Admin). Berfungsi untuk melihat grafik penjualan, laporan harian, manajemen stok produk & resep BOM, pengaturan promo, manajemen member loyalty, inventori & suplier, multi-cabang, analitik BI, laporan laba rugi (P&L), dan AI Demand Forecasting.
+ *
+ * FUNGSI UTAMA:
+ * 1. **Mode Default PKL (`!isAdvancedUnlocked`) — 6 Tab Inti POS & BOM**:
+ *    - `overview`  : Dashboard KPI penjualan harian, menu terlaris, dan peringatan stok bahan baku kritis.
+ *    - `products`  : CRUD produk menu & editor komposisi **Resep Bill of Materials (BOM)** per cup.
+ *    - `inventory` : Manajemen 9 bahan baku utama, daftar suplier, **Restok Bahan (PO Suplier)**, & **Audit Stock Opname Fisik**.
+ *    - `orders`    : Riwayat seluruh pesanan POS, filter status, batalkan pesanan (otomatis *rollback* BOM), & cetak struk.
+ *    - `finance`   : Laporan Laba Rugi (*Profit & Loss*), riwayat shift kasir, *Petty Cash*, Export Excel/PDF/CSV, & Backup/Restore JSON.
+ *    - `users`     : Manajemen akun staf Kasir dan Administrator.
+ * 2. **Mode Pengembangan Lanjutan / Skripsi (`isAdvancedUnlocked: true`) — Tambahan 6 Tab**:
+ *    - Dapat dibuka dalam 1 klik lewat tombol `[🔒 Mode PKL (POS & BOM)]` di navbar atas Admin untuk memunculkan tab:
+ *      `promos`, `customers`, `analytics`, `forecast` (AI Demand Forecasting), `branches`, dan `logs`.
+ * ============================================================================
  */
 
 import { useState, useEffect, useMemo, useRef } from "react";

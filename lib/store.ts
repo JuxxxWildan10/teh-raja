@@ -1,7 +1,27 @@
 /**
+ * ============================================================================
+ * FILE: lib/store.ts
+ * ============================================================================
  * @file Global State Management (Zustand)
  * @description Jantung arsitektur offline-first dari aplikasi. Semua logika penyimpanan lokal (Cart, Sales, Products, dll) dikonfigurasi di sini.
  * Menggunakan idb-keyval (IndexedDB) untuk kapabilitas penyimpanan tanpa batas.
+ *
+ * FUNGSI UTAMA & DAFTAR ZUSTAND STORE DI DALAM FILE INI:
+ * 1. `useAuthStore`            : Mengelola sesi login staf/admin, daftar karyawan (`users`), dan sakelar `isAdvancedUnlocked`
+ *                                (Mode PKL POS & BOM vs Mode Pengembangan Lanjutan / Skripsi).
+ * 2. `useCartStore`            : Mengelola keranjang belanja pelanggan (`items`), varian kustomisasi, dan `activeOrderId`.
+ * 3. `useProductStore`         : Mengelola katalog produk, harga, ketersediaan menu, dan pemotongan/pengembalian stok langsung.
+ * 4. `useSalesStore`           : Mengelola daftar pesanan (`orders`), antrean offline (`offlineOrders`), sesi buka/tutup shift kasir (`sessions`),
+ *                                rekonsiliasi uang laci, *hold order*, dan analitik penjualan harian.
+ * 5. `usePromoStore`           : Mengelola aturan diskon otomatis (Persen, Nominal, Happy Hour) — *Fitur Pengembangan Lanjutan*.
+ * 6. `useCustomerStore`        : Mengelola member CRM dan poin loyalitas — *Fitur Pengembangan Lanjutan*.
+ * 7. `useInventoryStore`       : **INTI MANAJEMEN BAHAN BAKU (BOM)** — Mengelola 9 bahan baku utama, rumus pemotongan takaran resep
+ *                                (`calculateRecipeIngredientQty` & `decrementIngredientsForOrder`), *rollback* stok saat order batal
+ *                                (`restoreIngredientsForOrder`), serta pencatatan **Audit Stock Opname Fisik** (`recordOpname`).
+ * 8. `useSupplierStore`        : Mengelola daftar pemasok bahan baku (`suppliers`) untuk fitur Restok Bahan (PO).
+ * 9. `useForecastHistoryStore` : Menyimpan data histori penjualan (impor/simulasi) untuk modul AI Demand Forecasting.
+ * 10. `useExpenseStore`        : Mengelola pengeluaran operasional & kas kecil laci kasir (*Petty Cash*).
+ * ============================================================================
  */
 import { create } from 'zustand';
 import { persist, StateStorage, createJSONStorage } from 'zustand/middleware';
@@ -920,7 +940,9 @@ export const useCustomerStore = create<CustomerState>()(
 export { POINTS_PER_RUPIAH, POINTS_REDEEM_VALUE };
 
 // ══════════════════════════════════════════════════════
-// INVENTORY STORE (BOM)
+// INVENTORY STORE (BILL OF MATERIALS / BOM & STOCK OPNAME)
+// ══════════════════════════════════════════════════════
+// Struktur log untuk mencatat hasil audit perhitungan stok fisik bahan baku di gudang (Stock Opname)
 export interface OpnameLog {
     id: string;
     date: string; // ISO
@@ -946,6 +968,14 @@ interface InventoryState {
     recordOpname: (log: Omit<OpnameLog, 'id' | 'date'>) => void;
 }
 
+/**
+ * FUNGSI INTI PERHITUNGAN RESEP BOM DINAMIS (`calculateRecipeIngredientQty`):
+ * Menghitung berapa gram/ml/pcs bahan baku yang harus dipotong untuk setiap item pesanan,
+ * dengan menyesuaikan varian:
+ * - Ukuran Cup Large (L) = 1.5x takaran normal (M)
+ * - Gula Cair (`ing-sugar`) = proporsional sesuai pilihan % gula (0%, 25%, 50%, 75%, 100%)
+ * - Es Batu (`ing-ice`) = 0 jika minuman Panas atau No-Ice, 0.5x jika Less Ice, 1.5x jika Extra Ice
+ */
 function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: CartItem): number {
     let sizeMultiplier = 1;
     if (cartItem.variants?.size === 'L') sizeMultiplier = 1.5;

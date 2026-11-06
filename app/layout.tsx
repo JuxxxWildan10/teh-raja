@@ -1,6 +1,16 @@
 /**
+ * ============================================================================
+ * FILE: app/layout.tsx
+ * ============================================================================
  * @file Root Layout
  * @description Struktur dasar HTML (Layout) dari aplikasi Next.js. Mendeklarasikan meta tag untuk PWA (Progressive Web App) dan memuat komponen FirebaseSync.
+ *
+ * FUNGSI UTAMA:
+ * Membungkus seluruh halaman aplikasi (`/`, `/menu`, `/pos`, `/admin`, `/kds`) dengan:
+ * 1. `ToastProvider`: Sistem notifikasi pop-up global.
+ * 2. `PWAInstall`: Banner instalasi aplikasi ke layar utama HP/Tablet.
+ * 3. `FirebaseSync`: Jembatan sinkronisasi real-time latar belakang antara IndexedDB dan Firebase RTDB.
+ * ============================================================================
  */
 import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";

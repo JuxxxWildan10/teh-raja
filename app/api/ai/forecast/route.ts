@@ -1,3 +1,19 @@
+/**
+ * ============================================================================
+ * FILE: app/api/ai/forecast/route.ts
+ * ============================================================================
+ * FUNGSI UTAMA (Fitur Pengembangan Lanjutan / Skripsi):
+ * Endpoint API (`POST /api/ai/forecast`) untuk menghasilkan laporan narasi analisis
+ * peramalan penjualan (AI Demand Forecasting) dan rekomendasi pengadaan bahan baku BOM.
+ *
+ * KEUNGGULAN:
+ * - Memiliki `buildRuleBasedNarrative(summary)` sebagai *fallback* deterministik jika
+ *   `GEMINI_API_KEY` tidak tersedia, sehingga narasi eksekutif selalu berhasil dibuat.
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Dipanggil oleh komponen `components/forecast/ForecastDashboard.tsx` pada tab AI Forecast.
+ * ============================================================================
+ */
 import { NextResponse } from 'next/server';
 import { generate, hasGeminiKey } from '@/lib/gemini';
 import { runForecast, assessQuality } from '@/lib/forecast/engine';

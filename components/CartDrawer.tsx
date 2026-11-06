@@ -1,5 +1,20 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/CartDrawer.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Laci keranjang belanja (*Slide-Over Cart Drawer*) untuk pemesanan mandiri pelanggan (`/menu`).
+ *
+ * ALUR KERJA SAAT PELANGGAN CHECKOUT (`handleCheckout`):
+ * 1. Memvalidasi nama pelanggan, tipe pesanan (*Dine-In* / *Take-Away*), nomor meja, dan kecukupan stok BOM.
+ * 2. Menyimpan objek pesanan baru (`addOrder`) ke IndexedDB & Firebase Realtime Database.
+ * 3. Memotong stok produk (`decrementStock`) dan **memotong takaran bahan baku resep BOM otomatis (`decrementIngredientsForOrder`)**.
+ * 4. Mengaktifkan `OrderStatusOverlay` (`setActiveOrder`) agar pelanggan bisa memilih bayar QRIS/Kasir dan melacak status racikan.
+ * ============================================================================
+ */
+
 import { motion, AnimatePresence } from "framer-motion";
 import {
     useCartStore,

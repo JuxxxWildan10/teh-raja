@@ -1,3 +1,17 @@
+/**
+ * ============================================================================
+ * FILE: app/api/ai/crm-upsell/route.ts
+ * ============================================================================
+ * FUNGSI UTAMA (Fitur Pengembangan Lanjutan / Skripsi):
+ * Endpoint API (`POST /api/ai/crm-upsell`) untuk membuat kalimat rekomendasi penawaran
+ * (*upsell / cross-sell*) yang personal bagi pelanggan member berdasarkan riwayat
+ * pesanan dan jumlah poin loyalitas mereka.
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Dipanggil oleh halaman Kasir `app/pos/page.tsx` dan tab Pelanggan di `app/admin/page.tsx`
+ *   ketika fitur pengembangan lanjutan dibuka (`isAdvancedUnlocked: true`).
+ * ============================================================================
+ */
 import { NextResponse } from 'next/server';
 import { generate, hasGeminiKey } from '@/lib/gemini';
 

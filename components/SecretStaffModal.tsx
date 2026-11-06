@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/SecretStaffModal.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Komponen keamanan akses staf/admin melalui mekanisme rahasia **Tap Logo 5 Kali (`useSecretLogoTap`)**
+ * serta pengatur kunci **Mode PKL (POS & BOM) vs Mode Pengembangan Lanjutan / Skripsi (`isAdvancedUnlocked`)**.
+ *
+ * FITUR PENTING:
+ * 1. `useSecretLogoTap`: Hook pendeteksi 5 ketukan cepat (<2,5 detik) pada logo Teh Raja untuk membuka modal ini.
+ * 2. Form Login Staf/Admin (`admin / 123` atau `kasir / 123`).
+ * 3. Pintasan navigasi cepat ke `/pos`, `/admin`, Slide Sempro, dan Slide Laporan Akhir PKL.
+ * 4. Tombol **`Unlock / Kunci Fitur Pengembangan Lanjutan`**: Membuka seluruh fitur Skripsi (AI Forecasting,
+ *    Layar KDS Terpisah `/kds`, Voice POS, CRM, Multi-Cabang) dalam 1 klik saat ditanya Dosen Penguji.
+ * ============================================================================
+ */
+
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";

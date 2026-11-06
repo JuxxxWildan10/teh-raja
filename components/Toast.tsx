@@ -1,5 +1,18 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/Toast.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Sistem notifikasi pop-up melayang (*Toast Notification Provider*) untuk menampilkan
+ * umpan balik instan (`success`, `error`, `warning`, `info`) di seluruh halaman aplikasi.
+ *
+ * CARA PAKAI DI KOMPONEN LAIN:
+ * `const toast = useToast();` lalu panggil `toast.success("Pesanan berhasil disimpan!")`.
+ * ============================================================================
+ */
+
 import { createContext, useContext, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react";

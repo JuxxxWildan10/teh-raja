@@ -1,5 +1,19 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/CustomerOrderTrackerModal.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Modal **Lacak Pesanan & Struk Digital** untuk pembeli/pelanggan.
+ *
+ * FITUR PENTING:
+ * 1. Memungkinkan pembeli mencari pesanan mereka berdasarkan **Nama Pemesan**, **ID Order (`#...`)**, atau **Nomor HP**.
+ * 2. Menampilkan status pesanan terkini (*Menunggu Bayar*, *Verifikasi Kasir*, *Sedang Diracik*, *Siap Diambil*).
+ * 3. Memungkinkan pembeli membuka kembali layar pantau *live* atau mengunduh/mencetak **Struk Digital (`ReceiptModal`)**.
+ * ============================================================================
+ */
+
 import { useState, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";

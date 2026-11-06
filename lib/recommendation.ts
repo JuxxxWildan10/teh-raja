@@ -1,3 +1,17 @@
+/**
+ * ============================================================================
+ * FILE: lib/recommendation.ts
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Mesin pemberi rekomendasi menu minuman berdasarkan kemiripan profil rasa
+ * (manis / `sweet`, gurih susu / `creamy`, dan segar buah / `fruity`) menggunakan
+ * rumus matematika Jarak Euclidean (Euclidean Distance).
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Dipanggil oleh `components/RecommendationQuiz.tsx` (Kuis AI Tea Sommelier)
+ *   dan `app/pos/page.tsx` (pencari profil rasa) saat fitur lanjutan di-unlock.
+ * ============================================================================
+ */
 import { Product } from '@/data/menu';
 
 // Tipe data untuk menyimpan preferensi rasa pengguna

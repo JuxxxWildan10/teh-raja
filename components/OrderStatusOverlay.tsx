@@ -1,9 +1,18 @@
 "use client";
 
 /**
+ * ============================================================================
+ * FILE: components/OrderStatusOverlay.tsx
+ * ============================================================================
  * @file Order Status Overlay (Customer-Facing)
  * @description Overlay tampilan status pesanan untuk pelanggan.
  * Flow: Pesanan Diterima → Pilih Metode Bayar → Menunggu Konfirmasi Kasir → Sedang Diracik → Siap
+ *
+ * FUNGSI UTAMA:
+ * 1. Menampilkan pilihan pembayaran mandiri pelanggan setelah checkout: **Scan QRIS Dinamis** atau **Bayar Tunai di Kasir**.
+ * 2. Menampilkan *stepper* progres pesanan 4 tahap secara *real-time* yang tersinkronisasi dengan tombol kasir di `/pos`.
+ * 3. Menyediakan tombol **Lihat / Cetak Struk (`ReceiptModal`)** untuk bukti pembayaran pelanggan.
+ * ============================================================================
  */
 
 import { useSalesStore, useCartStore, formatVariantLabel } from "@/lib/store";

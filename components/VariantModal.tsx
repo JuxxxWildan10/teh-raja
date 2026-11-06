@@ -1,5 +1,23 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/VariantModal.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Modal interaktif untuk mengatur kustomisasi varian minuman/makanan sebelum masuk ke keranjang.
+ *
+ * PILIHAN VARIAN YANG DIATUR:
+ * 1. Ukuran Cup (`M` = Harga Normal, `L` = +Rp 2.000 & memotong bahan baku BOM 1.5x).
+ * 2. Suhu Minuman (`Es` atau `Panas` — otomatis mengatur es batu = 0 jika Panas).
+ * 3. Tingkat Kemanisan Gula (`0%`, `25%`, `50%`, `75%`, `100%` — memotong gula cair proporsional di BOM).
+ * 4. Takaran Es Batu (`Tanpa Es`, `Sedikit`, `Normal`, `Banyak`).
+ *
+ * KETERKAITAN DENGAN FILE LAIN:
+ * - Dipanggil oleh `app/menu/page.tsx` (pelanggan) dan `app/pos/page.tsx` (kasir).
+ * ============================================================================
+ */
+
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";

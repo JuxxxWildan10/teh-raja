@@ -1,6 +1,9 @@
 "use client";
 
 /**
+ * ============================================================================
+ * FILE: components/forecast/ForecastDashboard.tsx
+ * ============================================================================
  * @file ForecastDashboard.tsx
  * @description Komponen Dashboard Peramalan Penjualan (Forecasting) & Analitik Deret Waktu untuk Kedai Teh Raja.
  * Dirancang komprehensif untuk kebutuhan operasional bisnis dan materi ilmiah Skripsi:
@@ -10,6 +13,11 @@
  *   - Analisis narasi strategis bertenaga Gemini 3.5 Flash Lite
  *   - Generator data simulasi realistis F&B & Import CSV / Excel
  *   - Export laporan ke Microsoft Excel (.xlsx) untuk lampiran Skripsi
+ *
+ * CATATAN MODE PKL VS SKRIPSI:
+ * - Komponen ini dirender di dalam tab `AI Forecast` pada halaman `app/admin/page.tsx`
+ *   ketika tombol `[🔓 Mode Full (Unlocked)]` diaktifkan.
+ * ============================================================================
  */
 
 import { useState, useMemo, useEffect, useRef } from "react";

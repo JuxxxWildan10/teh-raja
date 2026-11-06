@@ -1,3 +1,17 @@
+/**
+ * ============================================================================
+ * FILE: public/sw.js (Service Worker PWA)
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Mengatur *caching* aset halaman dan gambar di browser agar aplikasi Web POS Teh Raja
+ * tetap dapat dibuka dan beroperasi meskipun koneksi Wi-Fi/internet sedang mati (Offline-First).
+ *
+ * STRATEGI CACHING:
+ * 1. Navigasi Halaman (`/`, `/pos`, `/admin`, `/menu`) : Network-First dengan fallback ke Cache.
+ * 2. Gambar Produk                                      : Cache-First agar loading katalog instan.
+ * 3. File JS / CSS / Font                               : Stale-While-Revalidate.
+ * ============================================================================
+ */
 const CACHE_NAME = 'teh-raja-cache-v5';
 const STATIC_ASSETS = [
     '/',

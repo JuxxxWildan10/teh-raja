@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/RecommendationQuiz.tsx
+ * ============================================================================
+ * FUNGSI UTAMA (Fitur Pengembangan Lanjutan / Skripsi):
+ * Komponen kuis interaktif **AI Tea Sommelier** pada halaman `/menu` (tampil saat `isAdvancedUnlocked: true`).
+ * Mengumpulkan preferensi rasa pelanggan (Manis, Creamy, Fruity) menggunakan slider 0-10
+ * lalu memanggil algoritma *Euclidean Distance* di `lib/recommendation.ts` untuk merekomendasikan 3 menu paling cocok.
+ * ============================================================================
+ */
+
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRecommendations } from "@/lib/recommendation";

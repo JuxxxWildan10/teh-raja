@@ -1,8 +1,16 @@
 "use client";
 
 /**
+ * ============================================================================
+ * FILE: app/kds/page.tsx
+ * ============================================================================
  * @file KDS (Kitchen Display System) Page
  * @description Layar khusus dapur untuk menerima pesanan secara Real-time dari kasir dan menu pelanggan. Mendukung notifikasi suara dan perubahan status pesanan.
+ *
+ * CATATAN MODE PKL VS SKRIPSI:
+ * - Di Kedai Teh Raja saat ini 1 staf kasir merangkap sebagai barista, sehingga antrean racik utama sudah terintegrasi di laci `Antrean & Struk` pada halaman `/pos`.
+ * - Halaman `/kds` ini disiapkan sebagai **Fitur Pengembangan Lanjutan (Skripsi)** apabila kedai menambah staf barista khusus di area dapur terpisah (muncul saat `isAdvancedUnlocked: true`).
+ * ============================================================================
  */
 
 import { useEffect, useState, useMemo } from "react";

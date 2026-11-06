@@ -1,5 +1,20 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/ShiftSummaryModal.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Modal laporan ringkasan penutupan shift kasir (*End-of-Shift Cash Reconciliation*).
+ *
+ * FITUR PENTING:
+ * 1. Menghitung rincian penjualan selama shift berlangsung per metode bayar (Tunai, QRIS, Transfer).
+ * 2. Menampilkan rekonsiliasi uang tunai laci kasir:
+ *    `Kas Diharapkan = Modal Awal Shift + Penjualan Tunai - Kas Keluar (Petty Cash)`
+ * 3. Menampilkan selisih (*Variance*) antara Uang Fisik Aktual dengan Kas Diharapkan Sistem (`Klop Rp 0`, `Lebih`, atau `Kurang/Tekor`).
+ * ============================================================================
+ */
+
 import { motion, AnimatePresence } from "framer-motion";
 import { X, TrendingUp, CreditCard, Banknote, QrCode, Building2, Clock, CheckCircle2, ShoppingBag } from "lucide-react";
 import { StoreSession, Order } from "@/lib/store";

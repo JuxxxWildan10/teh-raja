@@ -1,5 +1,19 @@
 "use client";
 
+/**
+ * ============================================================================
+ * FILE: components/ReportGenerator.tsx
+ * ============================================================================
+ * FUNGSI UTAMA:
+ * Komponen pembuat laporan penjualan resmi dalam format dokumen **PDF (`jsPDF` & `jspdf-autotable`)**.
+ *
+ * ALUR KERJA (`generatePDF`):
+ * 1. Memfilter hanya transaksi yang valid (`status !== 'cancelled'`).
+ * 2. Menghitung total omzet, jumlah pesanan valid, dan total diskon.
+ * 3. Mencetak tabel transaksi lengkap ke dalam file PDF bernama `Laporan_Penjualan_TehRaja_YYYY-MM-DD.pdf`.
+ * ============================================================================
+ */
+
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Order } from "@/lib/store";
