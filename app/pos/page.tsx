@@ -55,7 +55,7 @@ function formatRp(n: number) { return 'Rp ' + n.toLocaleString('id-ID'); }
 
 export default function POSPage() {
     const router = useRouter();
-    const { user, logout } = useAuthStore();
+    const { user, logout, isAdvancedUnlocked } = useAuthStore();
     const { items, addToCart, removeFromCart, updateQuantity, updateNote, clearCart, total } = useCartStore();
     const { products, decrementStock } = useProductStore();
     const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders, updateOrderStatus, branchId, branchName } = useSalesStore();
@@ -528,11 +528,15 @@ export default function POSPage() {
         setDiscountMode('none'); setDiscountValue(''); setUsePoints(false);
         setQrisGenerated(false); setQrisSuccess(false); setUpsellHint(null); setQrisUrl(null);
         setMobileCartOpen(false);
-        toast.success(`Order #${newOrder.id.slice(0, 6)} berhasil! Dikirim ke KDS (${formatRp(orderTotal)})`);
+        toast.success(
+            isAdvancedUnlocked
+                ? `Order #${newOrder.id.slice(0, 6)} berhasil! Dikirim ke KDS (${formatRp(orderTotal)})`
+                : `Order #${newOrder.id.slice(0, 6)} berhasil! Stok bahan baku (BOM) otomatis dipotong (${formatRp(orderTotal)})`
+        );
     }, [isStoreOpen, items, customerName, paymentMethod, cashIn, orderTotal, subtotal,
         discountAmount, pointsDiscount, pointsToRedeem, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user, branchId,
         usePoints, customer, customerPhone, redeemPoints, addCustomer, addPoints,
-        addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, clearCart, toast]);
+        addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, clearCart, toast, isAdvancedUnlocked]);
 
     const handleTutupToko = () => {
         const parsedActual = parseFloat(actualCash.replace(/[^0-9]/g, '')) || 0;
@@ -627,10 +631,12 @@ export default function POSPage() {
                         </>
                     )}
 
-                    <Link href="/kds" className="hidden sm:flex items-center gap-1 text-xs text-white/70 hover:text-amber-300 transition px-2 py-1 rounded hover:bg-white/10" title="Kitchen Display System">
-                        <ChefHat size={13} />
-                        <span className="hidden md:inline">KDS</span>
-                    </Link>
+                    {isAdvancedUnlocked && (
+                        <Link href="/kds" className="hidden sm:flex items-center gap-1 text-xs text-white/70 hover:text-amber-300 transition px-2 py-1 rounded hover:bg-white/10" title="Kitchen Display System">
+                            <ChefHat size={13} />
+                            <span className="hidden md:inline">KDS</span>
+                        </Link>
+                    )}
 
                     <Link href="/admin" className="flex items-center gap-1.5 text-[10px] sm:text-xs text-white/70 hover:text-white transition px-2 py-1 rounded hover:bg-white/10">
                         <LayoutDashboard size={13} />
@@ -694,24 +700,28 @@ export default function POSPage() {
                                     className="w-full text-gray-900 pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0D2B20] transition" />
                             </div>
 
-                            <button onClick={handleVoiceCommand}
-                                disabled={isListening || isProcessingVoice}
-                                title="Pesan dengan Suara (AI Voice POS)"
-                                className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all flex-shrink-0 border ${
-                                    isListening ? 'bg-red-500 text-white border-red-600 animate-pulse' :
-                                    isProcessingVoice ? 'bg-amber-400 text-[#0D2B20] border-amber-500' :
-                                    'bg-[#0D2B20] text-white border-[#0D2B20] shadow-md hover:bg-[#1a4433]'
-                                }`}>
-                                {isProcessingVoice ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />}
-                            </button>
+                            {isAdvancedUnlocked && (
+                                <>
+                                    <button onClick={handleVoiceCommand}
+                                        disabled={isListening || isProcessingVoice}
+                                        title="Pesan dengan Suara (AI Voice POS)"
+                                        className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all flex-shrink-0 border ${
+                                            isListening ? 'bg-red-500 text-white border-red-600 animate-pulse' :
+                                            isProcessingVoice ? 'bg-amber-400 text-[#0D2B20] border-amber-500' :
+                                            'bg-[#0D2B20] text-white border-[#0D2B20] shadow-md hover:bg-[#1a4433]'
+                                        }`}>
+                                        {isProcessingVoice ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />}
+                                    </button>
 
-                            <button onClick={() => setShowFlavorFinder(v => !v)}
-                                title="Temukan Minuman Sesuai Selera"
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex-shrink-0 ${showFlavorFinder ? 'bg-[#0D2B20] text-amber-400 border-[#0D2B20] shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#0D2B20] hover:text-[#0D2B20]'}`}>
-                                <Wand2 size={13} />
-                                <span className="hidden sm:inline">Pilih Rasa</span>
-                                <ChevronDown size={11} className={`transition-transform ${showFlavorFinder ? 'rotate-180' : ''}`} />
-                            </button>
+                                    <button onClick={() => setShowFlavorFinder(v => !v)}
+                                        title="Temukan Minuman Sesuai Selera"
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex-shrink-0 ${showFlavorFinder ? 'bg-[#0D2B20] text-amber-400 border-[#0D2B20] shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#0D2B20] hover:text-[#0D2B20]'}`}>
+                                        <Wand2 size={13} />
+                                        <span className="hidden sm:inline">Pilih Rasa</span>
+                                        <ChevronDown size={11} className={`transition-transform ${showFlavorFinder ? 'rotate-180' : ''}`} />
+                                    </button>
+                                </>
+                            )}
                         </div>
 
                         {/* Flavor Finder Panel */}
@@ -925,47 +935,53 @@ export default function POSPage() {
                         {/* Form */}
                         <div className="px-3 py-2.5 space-y-2">
                             <div className="flex flex-col gap-2">
-                                <div className="flex gap-2">
-                                    <div className="relative flex-1">
-                                        <Users size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                                        <input type="text" placeholder="No. HP Member (misal: 081234567890)" value={customerPhone}
-                                            onChange={e => setCustomerPhone(e.target.value)}
-                                            className="w-full text-gray-900 pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
+                                {isAdvancedUnlocked && (
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <Users size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input type="text" placeholder="No. HP Member (misal: 081234567890)" value={customerPhone}
+                                                onChange={e => setCustomerPhone(e.target.value)}
+                                                className="w-full text-gray-900 pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
+                                        </div>
                                     </div>
+                                )}
+                                <div className="flex gap-2">
+                                    <input type="text" placeholder="Nama Pelanggan *" value={customerName}
+                                        onChange={e => setCustomerName(e.target.value)}
+                                        className="flex-1 text-gray-900 px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
                                     <input type="text" placeholder="Meja" value={tableNumber}
                                         onChange={e => setTableNumber(e.target.value)}
                                         className="w-16 text-gray-900 px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition text-center" />
                                 </div>
-                                <input type="text" placeholder="Nama Pelanggan *" value={customerName}
-                                    onChange={e => setCustomerName(e.target.value)}
-                                    className="w-full text-gray-900 px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
                             </div>
 
-                            {/* Loyalty Points & AI Upsell */}
-                            <AnimatePresence>
-                                {upsellHint && (
-                                    <div className="flex items-start gap-1.5 p-2 bg-violet-50 border border-violet-200 rounded-lg mb-1 animate-fade-in">
-                                        <Sparkles size={11} className="text-violet-500 flex-shrink-0 mt-0.5" />
-                                        <p className="text-[10px] text-violet-700 font-medium leading-tight">{upsellHint}</p>
-                                    </div>
-                                )}
-                                {customer && (
-                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex justify-between items-center text-xs">
-                                            <div>
-                                                <p className="font-bold text-amber-900">Member: {customer.name}</p>
-                                                <p className="text-amber-700 text-[10px]">Poin: <strong>{customer.points}</strong> (Senilai {formatRp(maxPointsRpValue)})</p>
-                                            </div>
-                                            {customer.points > 0 && (
-                                                <label className="flex items-center gap-1.5 cursor-pointer">
-                                                    <input type="checkbox" checked={usePoints} onChange={e => setUsePoints(e.target.checked)} className="accent-amber-600" />
-                                                    <span className="font-bold text-amber-800 text-[10px]">Gunakan Poin</span>
-                                                </label>
-                                            )}
+                            {/* Loyalty Points & AI Upsell (Hanya tampil jika fitur pengembangan di-unlock) */}
+                            {isAdvancedUnlocked && (
+                                <AnimatePresence>
+                                    {upsellHint && (
+                                        <div className="flex items-start gap-1.5 p-2 bg-violet-50 border border-violet-200 rounded-lg mb-1 animate-fade-in">
+                                            <Sparkles size={11} className="text-violet-500 flex-shrink-0 mt-0.5" />
+                                            <p className="text-[10px] text-violet-700 font-medium leading-tight">{upsellHint}</p>
                                         </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
+                                    )}
+                                    {customer && (
+                                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex justify-between items-center text-xs">
+                                                <div>
+                                                    <p className="font-bold text-amber-900">Member: {customer.name}</p>
+                                                    <p className="text-amber-700 text-[10px]">Poin: <strong>{customer.points}</strong> (Senilai {formatRp(maxPointsRpValue)})</p>
+                                                </div>
+                                                {customer.points > 0 && (
+                                                    <label className="flex items-center gap-1.5 cursor-pointer">
+                                                        <input type="checkbox" checked={usePoints} onChange={e => setUsePoints(e.target.checked)} className="accent-amber-600" />
+                                                        <span className="font-bold text-amber-800 text-[10px]">Gunakan Poin</span>
+                                                    </label>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            )}
 
                             {/* Auto Promo Info */}
                             {applicablePromo && discountMode === 'none' && (
@@ -1390,7 +1406,11 @@ export default function POSPage() {
                                                             onClick={() => {
                                                                 updateOrderStatus(order.id, 'processing');
                                                                 addLog("PROCESS_ORDER", `Terima & racik order #${order.id.slice(0, 6)}`, user?.name || 'Kasir');
-                                                                toast.success(`Order #${order.id.slice(0, 6)} diterima & dikirim ke KDS!`);
+                                                                toast.success(
+                                                                    isAdvancedUnlocked
+                                                                        ? `Order #${order.id.slice(0, 6)} diterima & dikirim ke KDS!`
+                                                                        : `Order #${order.id.slice(0, 6)} diterima & sedang diracik!`
+                                                                );
                                                             }}
                                                             className="flex-1 py-2 bg-[#0D2B20] hover:bg-[#1a4433] text-amber-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 shadow-sm"
                                                         >

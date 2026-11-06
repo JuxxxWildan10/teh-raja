@@ -54,14 +54,14 @@ const FEATURED_TEAS = [
 
 const CUSTOMER_FEATURES = [
     {
-        icon: Sparkles,
-        title: "AI Tea Sommelier",
-        desc: "Bingung memilih varian teh? Jawab kuis singkat dan temukan racikan minuman yang paling pas dengan mood Anda hari ini.",
+        icon: Coffee,
+        title: "Katalog Menu & Kustomisasi Varian",
+        desc: "Pilih menu teh favorit, atur ukuran cup, tingkat kemanisan, es batu, hingga pilihan topping sesuai selera Anda.",
     },
     {
-        icon: Coffee,
-        title: "Kustomisasi Rasa & Topping",
-        desc: "Atur ukuran cup, tingkat kemanisan, es batu, hingga pilihan topping favorit sesuai selera Anda.",
+        icon: Star,
+        title: "Status Stok & Bahan Baku Real-Time",
+        desc: "Ketersediaan menu terhubung otomatis dengan takaran bahan baku (Bill of Materials) di kedai sehingga akurat setiap saat.",
     },
     {
         icon: QrCode,
@@ -71,7 +71,7 @@ const CUSTOMER_FEATURES = [
     {
         icon: Receipt,
         title: "Lacak Pesanan & Struk Digital",
-        desc: "Pantau status racikan minuman Anda secara real-time dari meja dan unduh struk digital kapan saja.",
+        desc: "Pantau status peracikan minuman Anda secara real-time dan unduh struk digital kapan saja.",
     },
 ];
 
@@ -79,44 +79,48 @@ const PORTAL_MODULES = [
     {
         title: "Self-Order Pelanggan",
         subtitle: "/menu",
-        desc: "Katalog interaktif, AI Tea Sommelier Quiz, keranjang promo otomatis, & tracker pesanan live.",
+        desc: "Katalog menu digital interaktif, pengecekan stok BOM real-time, & pelacakan pesanan serta struk pelanggan.",
         href: "/menu",
         icon: Coffee,
         badge: "Pelanggan",
         color: "border-amber-400/30 hover:border-amber-400 bg-amber-400/5",
+        advancedOnly: false,
     },
     {
         title: "Kasir Point of Sale (POS)",
         subtitle: "/pos",
-        desc: "Transaksi cepat, AI Voice POS, CRM Loyalty & Upsell, Hold Order, Kas Kecil, & Cetak Struk Thermal/WA.",
+        desc: "Transaksi cepat kasir (merangkap barista), pemotongan bahan baku BOM otomatis, QRIS, Kas Kecil, & Cetak Struk Bluetooth.",
         href: "/pos",
         icon: ShoppingCart,
-        badge: "Kasir",
+        badge: "Kasir & Barista",
         color: "border-emerald-400/30 hover:border-emerald-400 bg-emerald-400/5",
+        advancedOnly: false,
     },
     {
-        title: "Kitchen Display (KDS)",
-        subtitle: "/kds",
-        desc: "Layar antrean barista real-time dengan indikator SLA waktu tunggu dan penyelesaian pesanan satu klik.",
-        href: "/kds",
-        icon: ChefHat,
-        badge: "Barista / Dapur",
-        color: "border-blue-400/30 hover:border-blue-400 bg-blue-400/5",
-    },
-    {
-        title: "Admin ERP & AI Forecast",
+        title: "Admin & Inventori Resep BOM",
         subtitle: "/admin",
-        desc: "Manajemen Menu & Resep BOM, Inventori & Opname, Promo, CRM, Multi-Cabang, Analitik BI, & AI Prediksi.",
+        desc: "Manajemen Menu & Resep BOM, Stok Bahan Baku, Stock Opname, Restock PO Suplier, & Laporan Laba Rugi.",
         href: "/admin",
         icon: LayoutDashboard,
         badge: "Manajemen",
         color: "border-purple-400/30 hover:border-purple-400 bg-purple-400/5",
+        advancedOnly: false,
+    },
+    {
+        title: "Kitchen Display (KDS Terpisah)",
+        subtitle: "/kds",
+        desc: "Layar antrean khusus dapur terpisah (Fitur Pengembangan Lanjutan saat gerai menambah staf khusus dapur).",
+        href: "/kds",
+        icon: ChefHat,
+        badge: "Pengembangan",
+        color: "border-blue-400/30 hover:border-blue-400 bg-blue-400/5",
+        advancedOnly: true,
     },
 ];
 
 export default function LandingPage() {
     const router = useRouter();
-    const { user, logout } = useAuthStore();
+    const { user, logout, isAdvancedUnlocked } = useAuthStore();
     const activeOrderId = useCartStore((state) => state.activeOrderId);
     const orders = useSalesStore((state) => state.orders);
     const activeOrder = activeOrderId ? orders.find((o) => o.id === activeOrderId) : null;
@@ -336,7 +340,7 @@ export default function LandingPage() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {PORTAL_MODULES.map((mod) => {
+                            {PORTAL_MODULES.filter((mod) => !mod.advancedOnly || isAdvancedUnlocked).map((mod) => {
                                 const Icon = mod.icon;
                                 return (
                                     <Link

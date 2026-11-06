@@ -644,12 +644,12 @@
         <div class="slide active" id="slide-1">
             <div class="hero-title-box">
                 <div class="hero-crown">👑</div>
-                <div class="slide-tag">Seminar Proposal • Rancang Bangun Sistem Informasi Point of Sale (POS)</div>
+                <div class="slide-tag">Seminar Proposal PKL Berbasis Project • FIKOM UNU Cirebon</div>
                 <h1 class="hero-main-title">
-                    RANCANG BANGUN SISTEM INFORMASI POINT OF SALE (POS) TERINTEGRASI BERBASIS WEB PROGRESSIVE WEB APP (PWA) OFFLINE-FIRST DAN REALTIME DATABASE PADA KEDAI TEH RAJA
+                    RANCANG BANGUN SISTEM INFORMASI POINT OF SALE (POS) DAN MANAJEMEN INVENTORI BAHAN BAKU BERBASIS BILL OF MATERIALS (BOM) DENGAN ARSITEKTUR PWA OFFLINE-FIRST PADA KEDAI TEH RAJA
                 </h1>
                 <p class="hero-sub-title">
-                    Integrasi Pemesanan Mandiri Pelanggan (Self-Order), Kasir Pintar (Smart POS), Layar Dapur Barista (KDS), Inventaris Resep Bahan Baku (BOM), dan Laporan Keuangan Laba Rugi
+                    Fokus Operasional Kasir Merangkap Barista: Kasir POS Satu Layar, Pemesanan Mandiri &amp; Lacak Struk Pelanggan, Pemotongan Resep BOM Otomatis, Shift &amp; Petty Cash, serta Laporan Laba Rugi
                 </p>
                 <div class="author-card">
                     <div class="author-item">
@@ -661,17 +661,17 @@
                         <div class="author-val" style="font-family:'JetBrains Mono',monospace;">0402231058</div>
                     </div>
                     <div class="author-item">
-                        <div class="author-label">Mitra Studi Kasus</div>
+                        <div class="author-label">Mitra PKL</div>
                         <div class="author-val">Kedai Minuman "Teh Raja"</div>
                     </div>
                     <div class="author-item">
-                        <div class="author-label">Fokus Pengembangan</div>
-                        <div class="author-val" style="color: var(--accent-green);">● Full-Stack Web POS Terpadu</div>
+                        <div class="author-label">Fokus Project PKL</div>
+                        <div class="author-val" style="color: var(--accent-green);">● POS Kasir-Barista &amp; Resep BOM</div>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
-                <span>Seminar Proposal — Bab I Pendahuluan, Bab II Landasan Teori, Bab III Perancangan Sistem POS</span>
+                <span>Seminar Proposal PKL — Sesuai Juknis FIKOM UNU Cirebon TA 2026/2027</span>
                 <span>Gunakan Tombol Panah [← / →] atau Spasi untuk Navigasi</span>
             </div>
         </div>
@@ -681,43 +681,43 @@
             <div>
                 <div class="slide-tag">Bab I • Pendahuluan (1/4)</div>
                 <h2 class="slide-title">Latar Belakang Masalah di Kedai Teh Raja</h2>
-                <p class="slide-subtitle">Kendala nyata pada proses transaksi kasir, komunikasi dapur, kontrol uang laci, dan pencatatan stok bahan</p>
+                <p class="slide-subtitle">Kondisi riil operasional mitra dengan pola kerja 1 operator tunggal (Kasir merangkap Barista)</p>
             </div>
             <div class="slide-body">
                 <div class="grid-2">
                     <div class="card">
-                        <div class="card-title"><span>🧾</span> 1. Antrean Kasir &amp; Pencatatan Pesanan Manual</div>
+                        <div class="card-title"><span>🧾</span> 1. Beban Ganda Kasir Merangkap Barista</div>
                         <p class="card-text">
-                            Pada jam sibuk, pencatatan pesanan beserta kustomisasi minuman (ukuran Cup M/L, panas/es, takaran gula, dan level es) secara manual memakan waktu lama, rawan salah hitung kembalian, dan memicu antrean panjang.
+                            Di Kedai Teh Raja, 1 staf bertugas melayani transaksi pembayaran sekaligus meracik minuman. Pencatatan manual beserta varian (Size M/L, panas/es, gula, es) memakan waktu lama dan memicu antrean.
                         </p>
-                        <div class="notes-highlight">Dibutuhkan sistem POS cepat dengan <em>Self-Order</em> pelanggan, <em>Quick Cash</em>, dan QRIS Dinamis.</div>
+                        <div class="notes-highlight">Dibutuhkan <strong>POS Satu Layar</strong> yang menggabungkan kasir &amp; daftar antrean racikan tanpa perlu pindah perangkat.</div>
                     </div>
                     <div class="card">
-                        <div class="card-title"><span>👨‍🍳</span> 2. Miss-Komunikasi Kasir ke Dapur Barista</div>
+                        <div class="card-title"><span>🧪</span> 2. Stok Bahan Baku Tidak Terpotong Otomatis</div>
                         <p class="card-text">
-                            Penggunaan bon kertas ke area peracikan sering mengalami kendala kertas basah terkena tumpahan teh/es, terselip, atau urutan pesanan tertukar sehingga barista salah meracik varian pesanan pelanggan.
+                            Penjualan per cup belum memotong bahan baku (daun teh, susu, gula cair, bubuk varian, es batu, cup) secara otomatis sesuai takaran resep. Akibatnya bahan baku sering habis mendadak saat jam ramai.
                         </p>
-                        <div class="notes-highlight">Dibutuhkan <em>Kitchen Display System</em> (KDS) digital yang terhubung langsung dari layar kasir.</div>
+                        <div class="notes-highlight">Dibutuhkan manajemen inventori berbasis <em>Bill of Materials</em> (BOM) yang sadar varian ukuran, gula, dan es.</div>
                     </div>
                     <div class="card">
-                        <div class="card-title"><span>💸</span> 3. Selisih Uang Laci Kasir &amp; Stok Tidak Terkontrol</div>
+                        <div class="card-title"><span>💸</span> 3. Selisih Uang Laci Kasir (Tekor Saat Tutup Shift)</div>
                         <p class="card-text">
-                            Pengeluaran kas dadakan dari laci kasir (beli es batu, gas, plastik) sering lupa dicatat sehingga kas laci tekor saat tutup shift. Selain itu, stok bahan baku tidak terpotong otomatis sesuai resep per cup.
+                            Pengeluaran kas mendadak dari laci kasir (beli es batu kristal, gas, plastik) sering lupa dicatat sehingga uang fisik laci kasir selisih saat tutup shift dan menyulitkan perhitungan laba bersih.
                         </p>
-                        <div class="notes-highlight">Dibutuhkan modul <em>Shift Management</em>, <em>Petty Cash</em>, dan pemotongan resep <em>Bill of Materials</em> (BOM).</div>
+                        <div class="notes-highlight">Dibutuhkan fitur <em>Shift Management</em>, <em>Petty Cash</em>, dan <em>Laporan Laba Rugi (P&amp;L)</em> otomatis.</div>
                     </div>
                     <div class="card">
-                        <div class="card-title"><span>📶</span> 4. Ketergantungan Koneksi Internet pada POS Cloud</div>
+                        <div class="card-title"><span>📶</span> 4. Kendala Koneksi Internet &amp; Keamanan Akses</div>
                         <p class="card-text">
-                            Aplikasi kasir berbasis web biasa langsung berhenti beroperasi ketika Wi-Fi kedai gangguan. Kedai membutuhkan Web POS berarsitektur <strong>Offline-First</strong> yang tetap bisa melayani transaksi tanpa internet.
+                            Aplikasi web biasa berhenti bekerja saat Wi-Fi kedai gangguan. Selain itu, antarmuka menu pelanggan harus bersih dari tombol menuju halaman internal kasir/admin.
                         </p>
-                        <div class="notes-highlight">Menggabungkan penyimpanan lokal <em>IndexedDB</em> dengan sinkronisasi otomatis ke <em>Firebase Realtime DB</em>.</div>
+                        <div class="notes-highlight">Dibutuhkan arsitektur <strong>PWA Offline-First</strong> (IndexedDB + Firebase) dan proteksi rahasia <strong>Tap Logo 5x</strong>.</div>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <span>Bab I — Latar Belakang Masalah</span>
-                <span>Studi Kasus Operasional Kedai Teh Raja</span>
+                <span>Studi Kasus Operasional Kedai Teh Raja (Kasir Merangkap Barista)</span>
             </div>
         </div>
 
@@ -726,30 +726,30 @@
             <div>
                 <div class="slide-tag">Bab I • Pendahuluan (2/4)</div>
                 <h2 class="slide-title">Identifikasi &amp; Rumusan Masalah</h2>
-                <p class="slide-subtitle">Fokus permasalahan yang akan diselesaikan melalui pembangunan aplikasi Web POS</p>
+                <p class="slide-subtitle">Fokus permasalahan yang diselesaikan melalui rancang bangun Web POS &amp; BOM</p>
             </div>
             <div class="slide-body">
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-title"><span>🔍</span> Identifikasi Masalah</div>
                         <ul class="luxury-list">
-                            <li><strong>Proses Transaksi Belum Terdigitalisasi Penuh:</strong> Perhitungan subtotal, diskon promo, poin pelanggan, dan uang kembalian masih rentan human error.</li>
-                            <li><strong>Alur Pesanan Terputus:</strong> Belum ada penghubung <em>real-time</em> antara pesanan pelanggan di meja, kasir penerima pembayaran, dan barista peracik di dapur.</li>
-                            <li><strong>Stok Bahan Baku Tidak Akurat:</strong> Penjualan menu belum memotong stok bahan baku (teh, susu, gula, es, cup) secara otomatis berdasarkan takaran resep.</li>
-                            <li><strong>Rekap Keuangan Lambat:</strong> Pemilik kedai harus merekap omzet, HPP, dan pengeluaran kas kecil secara manual untuk mengetahui laba bersih harian.</li>
+                            <li><strong>Beban Kerja Ganda Operator:</strong> Kasir merangkap barista kesulitan jika harus mencatat pesanan, menghitung kembalian, dan mengingat antrean racikan secara manual.</li>
+                            <li><strong>Ketiadaan Pemotongan Resep BOM:</strong> Stok 9 bahan baku utama belum terpotong otomatis mengikuti varian ukuran Cup M/L, persentase gula, dan level es.</li>
+                            <li><strong>Kas Laci &amp; Pembukuan Belum Terintegrasi:</strong> Kas keluar mendadak (<em>Petty Cash</em>) dari laci belum memotong ekspektasi kas tutup shift secara otomatis.</li>
+                            <li><strong>Ketergantungan Jaringan:</strong> Kasir membutuhkan sistem yang tetap berjalan 100% saat internet mati.</li>
                         </ul>
                     </div>
                     <div class="card card-gold">
                         <div class="card-title"><span>❓</span> Rumusan Masalah</div>
                         <ul class="luxury-list">
                             <li>
-                                <strong>1. Bagaimana merancang dan membangun Sistem Informasi Point of Sale (POS) berbasis Web</strong> yang mengintegrasikan modul Katalog Pelanggan, Kasir POS, dan Layar Dapur (KDS) secara <em>real-time</em> pada Kedai Teh Raja?
+                                <strong>1. Bagaimana merancang dan membangun Sistem Informasi POS Satu Layar</strong> yang ergonomis bagi operasional kasir merangkap barista serta terintegrasi dengan katalog <em>Self-Order</em> pelanggan?
                             </li>
                             <li>
-                                <strong>2. Bagaimana menerapkan arsitektur PWA Offline-First</strong> agar transaksi kasir tetap berjalan lancar saat internet terputus dan tersinkronisasi otomatis saat kembali <em>online</em>?
+                                <strong>2. Bagaimana mengimplementasikan metode Bill of Materials (BOM) dinamis</strong> agar setiap transaksi otomatis memotong takaran bahan baku (gram/ml/pcs) sesuai kustomisasi varian?
                             </li>
                             <li>
-                                <strong>3. Bagaimana mengintegrasikan transaksi POS dengan manajemen stok resep (BOM), kas laci (Petty Cash), dan Laporan Laba Rugi</strong> secara otomatis dan akurat?
+                                <strong>3. Bagaimana menerapkan arsitektur PWA Offline-First, rekonsiliasi Shift &amp; Petty Cash, serta proteksi Tap Logo 5x</strong> agar sistem aman dan tahan gangguan internet?
                             </li>
                         </ul>
                     </div>
@@ -757,7 +757,7 @@
             </div>
             <div class="slide-footer">
                 <span>Bab I — Identifikasi &amp; Rumusan Masalah</span>
-                <span>Fokus Utama: Pembuatan &amp; Integrasi Sistem Web POS</span>
+                <span>Fokus Utama: Web POS Kasir-Barista &amp; Manajemen Bahan Baku BOM</span>
             </div>
         </div>
 
@@ -765,15 +765,15 @@
         <div class="slide" id="slide-4">
             <div>
                 <div class="slide-tag">Bab I • Pendahuluan (3/4)</div>
-                <h2 class="slide-title">Batasan Masalah Pengembangan POS</h2>
-                <p class="slide-subtitle">Cakupan modul dan fitur pada pembuatan aplikasi Web POS Kedai Teh Raja</p>
+                <h2 class="slide-title">Batasan Masalah Project PKL</h2>
+                <p class="slide-subtitle">Fokus lingkup PKL pada POS &amp; BOM agar tepat guna bagi mitra (tanpa fitur berlebihan)</p>
             </div>
             <div class="slide-body">
                 <div class="grid-3">
                     <div class="card">
-                        <div class="card-title"><span>👥</span> 1. Peran Pengguna (Role)</div>
+                        <div class="card-title"><span>👥</span> 1. Tiga Peran Pengguna</div>
                         <p class="card-text">
-                            Sistem dibagi menjadi 4 aktor: <strong>Pelanggan</strong> (pesan mandiri tanpa login), <strong>Kasir</strong> (akses transaksi POS &amp; shift), <strong>Barista</strong> (layar KDS dapur), dan <strong>Admin/Pemilik</strong> (akses penuh ERP &amp; laporan).
+                            Disesuaikan dengan struktur SDM nyata di Kedai Teh Raja: <strong>Pelanggan</strong> (pesan &amp; lacak struk tanpa login), <strong>Kasir merangkap Barista</strong> (akses POS &amp; antrean racikan), serta <strong>Admin/Pemilik</strong>.
                         </p>
                     </div>
                     <div class="card">
@@ -783,34 +783,34 @@
                         </p>
                     </div>
                     <div class="card">
-                        <div class="card-title"><span>💳</span> 3. Metode Pembayaran &amp; Struk</div>
+                        <div class="card-title"><span>💳</span> 3. Pembayaran &amp; Struk</div>
                         <p class="card-text">
-                            Mendukung pembayaran <strong>Tunai (Cash)</strong>, <strong>QRIS Dinamis</strong>, dan <strong>Transfer Bank</strong>, serta cetak struk via Printer Thermal Bluetooth 58mm, Browser Print, dan WhatsApp.
+                            Mendukung pembayaran <strong>Tunai (Quick Cash)</strong>, <strong>QRIS Dinamis</strong>, dan <strong>Transfer Bank</strong>, serta cetak struk via Printer Thermal Bluetooth 58mm, Browser Print, dan WhatsApp.
                         </p>
                     </div>
-                    <div class="card">
+                    <div class="card card-gold">
                         <div class="card-title"><span>🧪</span> 4. Inventaris Resep (BOM)</div>
                         <p class="card-text">
-                            Setiap menu terhubung ke resep bahan baku (gram, ml, pcs) yang otomatis berkurang saat transaksi dibuat dan kembali otomatis jika pesanan dibatalkan.
+                            Pemotongan otomatis bahan baku (gram, ml, pcs) per transaksi, <em>rollback</em> otomatis saat order batal, <strong>Restok Bahan (PO Suplier)</strong>, dan <strong>Audit Stock Opname</strong>.
+                        </p>
+                    </div>
+                    <div class="card card-gold">
+                        <div class="card-title"><span>💰</span> 5. Shift, Petty Cash &amp; P&amp;L</div>
+                        <p class="card-text">
+                            Buka/tutup shift kasir, pencatatan pengeluaran kas laci (<em>Petty Cash</em>), laporan Laba Rugi (P&amp;L) bersih, serta ekspor laporan ke Excel (<code>.xlsx</code>), PDF, dan CSV.
                         </p>
                     </div>
                     <div class="card">
-                        <div class="card-title"><span>💰</span> 5. Sesi Shift &amp; Laba Rugi</div>
+                        <div class="card-title"><span>🔒</span> 6. Proteksi &amp; Mode Unlock</div>
                         <p class="card-text">
-                            Mencakup buka/tutup shift kasir, pencatatan pengeluaran kas laci (<em>Petty Cash</em>), laporan Laba Rugi (P&amp;L), dan ekspor laporan ke PDF, CSV, serta Excel (<code>.xlsx</code>).
-                        </p>
-                    </div>
-                    <div class="card">
-                        <div class="card-title"><span>✨</span> 6. Fitur Cerdas Pendukung</div>
-                        <p class="card-text">
-                            Dilengkapi fitur bernilai tambah: <strong>Voice POS</strong> (input pesanan via suara), <strong>Promo Engine</strong>, <strong>Member Loyalty CRM</strong>, dan <strong>AI Demand Forecasting</strong> untuk prediksi stok.
+                            Pelanggan hanya melihat <code>/menu</code> &amp; Lacak Pesanan. Akses staf disembunyikan di balik <strong>Tap Logo 5x</strong>. Fitur lanjutan (AI/KDS/CRM) dikunci untuk pengembangan Skripsi.
                         </p>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <span>Bab I — Batasan Masalah</span>
-                <span>Lingkup Sistem POS F&amp;B Modern</span>
+                <span>Fokus Operasional Riil Kedai Teh Raja</span>
             </div>
         </div>
 
@@ -818,25 +818,25 @@
         <div class="slide" id="slide-5">
             <div>
                 <div class="slide-tag">Bab I • Pendahuluan (4/4)</div>
-                <h2 class="slide-title">Tujuan &amp; Manfaat Pengembangan</h2>
-                <p class="slide-subtitle">Sasaran akhir yang ingin dicapai dari pembuatan Web POS Teh Raja</p>
+                <h2 class="slide-title">Tujuan &amp; Manfaat Pelaksanaan Project PKL</h2>
+                <p class="slide-subtitle">Kontribusi nyata sistem Web POS &amp; BOM bagi mitra, mahasiswa, dan perguruan tinggi</p>
             </div>
             <div class="slide-body">
                 <div class="grid-2">
                     <div class="card card-gold">
-                        <div class="card-title"><span>🎯</span> Tujuan Pengembangan</div>
+                        <div class="card-title"><span>🎯</span> Tujuan Pelaksanaan Project</div>
                         <ul class="luxury-list">
-                            <li>Membangun aplikasi <strong>Web POS Terintegrasi</strong> yang menghubungkan alur pemesanan pelanggan, pembayaran kasir, peracikan dapur, dan pemotongan stok bahan baku dalam satu sistem.</li>
-                            <li>Mengimplementasikan teknologi <strong>PWA Offline-First</strong> dan <strong>Firebase Realtime Database</strong> untuk menjamin ketersediaan layanan kasir 100% tanpa terkendala gangguan internet.</li>
-                            <li>Menyediakan otomasi pembukuan kasir mulai dari rekonsiliasi uang laci tutup shift, <em>Petty Cash</em>, hingga pembuatan Laporan Laba Rugi (P&amp;L) dan prediksi kebutuhan stok.</li>
+                            <li>Membangun aplikasi <strong>Web POS Satu Layar</strong> yang memudahkan staf kasir merangkap barista melayani pembayaran sekaligus memantau antrean racikan dalam satu tampilan.</li>
+                            <li>Mengimplementasikan <strong>Manajemen Bahan Baku Berbasis BOM</strong> yang memotong stok otomatis sesuai varian pesanan serta menyediakan fitur Restok PO dan Stock Opname.</li>
+                            <li>Menerapkan arsitektur <strong>PWA Offline-First</strong> serta otomatisasi rekonsiliasi uang laci (Shift &amp; Petty Cash) dan Laporan Laba Rugi (P&amp;L).</li>
                         </ul>
                     </div>
                     <div class="card">
                         <div class="card-title"><span>🌟</span> Manfaat Bagi Pihak Terkait</div>
                         <ul class="luxury-list">
-                            <li><strong>Bagi Kasir &amp; Barista:</strong> Mempercepat proses input pesanan dan pembayaran, menghilangkan bon kertas dapur, serta mencegah selisih hitungan uang kas saat tutup shift.</li>
-                            <li><strong>Bagi Pelanggan:</strong> Memudahkan pemesanan mandiri lewat HP (<em>Self-Order</em>), memilih varian gula/es sesuai selera, mendapatkan diskon promo otomatis, dan memantau status racikan secara <em>live</em>.</li>
-                            <li><strong>Bagi Pemilik Kedai Teh Raja:</strong> Memantau omzet harian, stok bahan baku kritis, kinerja multi-cabang, dan laba bersih riil secara transparan dari mana saja.</li>
+                            <li><strong>Bagi Kasir Merangkap Barista:</strong> Transaksi kasir dan kontrol antrean racik lebih cepat dalam 1 layar, bebas salah hitung kembalian, dan uang laci klop saat tutup shift.</li>
+                            <li><strong>Bagi Pelanggan:</strong> Memesan mandiri dari meja (<em>Self-Order</em>), memantau status racikan <em>live</em>, dan mengunduh struk digital langsung dari HP.</li>
+                            <li><strong>Bagi Pemilik Kedai Teh Raja:</strong> Mengontrol sisa takaran bahan baku gudang, riwayat Stock Opname, dan laba bersih harian secara transparan.</li>
                         </ul>
                     </div>
                 </div>
@@ -847,37 +847,37 @@
             </div>
         </div>
 
-        <!-- SLIDE 6: BAB II - TINJAUAN PUSTAKA SISTEM POS & KDS -->
+        <!-- SLIDE 6: BAB II - GAMBARAN MITRA & KONSEP POS + BOM -->
         <div class="slide" id="slide-6">
             <div>
-                <div class="slide-tag">Bab II • Landasan Teori (1/3)</div>
-                <h2 class="slide-title">Konsep Sistem Point of Sale (POS) &amp; Kitchen Display System</h2>
-                <p class="slide-subtitle">Perbandingan sistem kasir konvensional dengan arsitektur Web POS Terintegrasi yang diusulkan</p>
+                <div class="slide-tag">Bab II • Gambaran Mitra &amp; Landasan Konseptual (1/3)</div>
+                <h2 class="slide-title">Transformasi Operasional Kasir &amp; Bahan Baku Kedai Teh Raja</h2>
+                <p class="slide-subtitle">Perbandingan sistem manual sebelumnya dengan Sistem Web POS &amp; BOM yang dibangun</p>
             </div>
             <div class="slide-body">
                 <table class="pres-table">
                     <thead>
                         <tr>
                             <th>Komponen Layanan</th>
-                            <th>Sistem Kasir Konvensional</th>
-                            <th>Sistem Web POS Teh Raja (Usulan)</th>
+                            <th>Sebelum Sistem (Manual / Konvensional)</th>
+                            <th>Sistem Web POS &amp; BOM Teh Raja (Usulan PKL)</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td><strong>Input Pesanan</strong></td>
-                            <td>Hanya lewat kasir (antrean menumpuk)</td>
-                            <td><span style="color:var(--accent-green); font-weight:bold;">Dual-Channel: Kasir POS (Tap &amp; Voice AI) + Self-Order Pelanggan</span></td>
+                            <td><strong>Input Pesanan &amp; Racikan</strong></td>
+                            <td>Catat manual di kertas bon, rawan terselip/basah</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">POS Satu Layar (Kasir + Laci Antrean Racik 3 Tab) &amp; Self-Order</span></td>
                         </tr>
                         <tr>
-                            <td><strong>Komunikasi ke Dapur</strong></td>
-                            <td>Teriak manual / bon kertas cetak</td>
-                            <td><span style="color:var(--accent-green); font-weight:bold;">Kitchen Display System (KDS) Real-Time &lt;500ms + Audio Bell</span></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Manajemen Stok</strong></td>
-                            <td>Hitung manual di akhir minggu</td>
+                            <td><strong>Manajemen Bahan Baku</strong></td>
+                            <td>Kira-kira manual, sering habis mendadak</td>
                             <td><span style="color:var(--accent-green); font-weight:bold;">Potong Otomatis per Resep BOM (Sadar Varian M/L, Gula, Es)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Audit &amp; Belanja Stok</strong></td>
+                            <td>Tidak ada catatan selisih fisik &amp; nota suplier</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">Modul Stock Opname Fisik &amp; Restok PO Suplier Terintegrasi</span></td>
                         </tr>
                         <tr>
                             <td><strong>Pengelolaan Kas Laci</strong></td>
@@ -890,56 +890,56 @@
                             <td><span style="color:var(--accent-green); font-weight:bold;">Offline-First PWA (IndexedDB Lokal + Auto-Sync Cloud)</span></td>
                         </tr>
                         <tr>
-                            <td><strong>Bukti Pembayaran</strong></td>
-                            <td>Kertas struk saja</td>
-                            <td><span style="color:var(--accent-green); font-weight:bold;">Bluetooth Thermal 58mm + Browser Print + Struk WhatsApp</span></td>
+                            <td><strong>Keamanan Akses</strong></td>
+                            <td>Tautan admin terbuka di halaman publik</td>
+                            <td><span style="color:var(--accent-green); font-weight:bold;">Mode Pelanggan Terkunci + Login Rahasia Tap Logo 5x</span></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
             <div class="slide-footer">
-                <span>Bab II — Tinjauan Pustaka</span>
-                <span>Transformasi Digital Point of Sale F&amp;B</span>
+                <span>Bab II — Gambaran Mitra &amp; Landasan Konseptual</span>
+                <span>Efisiensi Operasional Kasir Merangkap Barista</span>
             </div>
         </div>
 
         <!-- SLIDE 7: BAB II - LANDASAN TEORI PWA OFFLINE-FIRST & REALTIME DB -->
         <div class="slide" id="slide-7">
             <div>
-                <div class="slide-tag">Bab II • Landasan Teori (2/3)</div>
+                <div class="slide-tag">Bab II • Gambaran Mitra &amp; Landasan Konseptual (2/3)</div>
                 <h2 class="slide-title">Arsitektur PWA Offline-First &amp; Realtime Database</h2>
-                <p class="slide-subtitle">Fondasi teknis agar aplikasi POS memiliki kecepatan lokal sekaligus sinkronisasi cloud</p>
+                <p class="slide-subtitle">Fondasi teknis agar aplikasi POS memiliki kecepatan lokal 0ms sekaligus sinkronisasi cloud</p>
             </div>
             <div class="slide-body">
                 <div class="grid-2">
                     <div class="card card-gold">
                         <div class="card-title"><span>⚡</span> 1. Zustand + IndexedDB (Offline-First)</div>
                         <p class="card-text">
-                            Berbeda dengan web biasa yang bergantung penuh pada request HTTP ke server, seluruh <em>state</em> transaksi POS disimpan terlebih dahulu ke <strong>IndexedDB</strong> di dalam browser perangkat kasir:
+                            Berbeda dengan web biasa yang bergantung penuh pada request HTTP ke server, seluruh <em>state</em> transaksi POS dan stok BOM disimpan terlebih dahulu ke <strong>IndexedDB</strong> di dalam browser perangkat kasir:
                         </p>
                         <ul class="luxury-list" style="margin-top:10px;">
                             <li>Transaksi kasir terjadi secara <strong>instan (0ms latency)</strong> tanpa menunggu loading jaringan.</li>
-                            <li>Saat internet terputus, pesanan masuk ke antrean <code>offlineOrders</code> dan <code>offlineLogs</code>.</li>
+                            <li>Saat internet terputus, pesanan dan log stok masuk ke antrean <code>offlineOrders</code> dan <code>offlineLogs</code>.</li>
                             <li>Begitu internet tersambung kembali, komponen <code>FirebaseSync</code> otomatis mengunggah antrean ke cloud tanpa ada data yang hilang.</li>
                         </ul>
                     </div>
                     <div class="card">
                         <div class="card-title"><span>🔄</span> 2. Firebase Realtime Database (WebSocket)</div>
                         <p class="card-text">
-                            Menggunakan protokol WebSocket dua arah (<em>event-driven listener</em> <code>onValue</code>) untuk menyinkronkan seluruh perangkat di kedai:
+                            Menggunakan protokol WebSocket dua arah (<em>event-driven listener</em> <code>onValue</code>) untuk menyinkronkan perangkat pelanggan, kasir-barista, dan pemilik:
                         </p>
                         <div class="code-box">
                             [Pelanggan /menu] ──┐<br>
                             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├──► [Firebase Realtime DB]<br>
-                            [Kasir /pos] ───────┘ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ (Push &lt;500ms)<br>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─► [Dapur /kds]<br>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─► [Owner /admin]
+                            [Kasir-Barista /pos]┘ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ (Push &lt;500ms)<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─► [Lacak Pesanan &amp; Struk Pelanggan]<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─► [Owner /admin (Stok BOM &amp; P&amp;L)]
                         </div>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
-                <span>Bab II — Landasan Teori Teknis</span>
+                <span>Bab II — Landasan Konseptual Teknis</span>
                 <span>Next.js 16 + TypeScript + Zustand IndexedDB + Firebase RTDB</span>
             </div>
         </div>
@@ -947,13 +947,13 @@
         <!-- SLIDE 8: BAB II - LANDASAN TEORI BOM, PETTY CASH & LABA RUGI -->
         <div class="slide" id="slide-8">
             <div>
-                <div class="slide-tag">Bab II • Landasan Teori (3/3)</div>
-                <h2 class="slide-title">Logika Bisnis POS: Resep BOM, Kas Laci &amp; Laba Rugi</h2>
+                <div class="slide-tag">Bab II • Gambaran Mitra &amp; Landasan Konseptual (3/3)</div>
+                <h2 class="slide-title">Logika Bisnis Inti: Resep BOM, Kas Shift &amp; Laba Rugi</h2>
                 <p class="slide-subtitle">Rumus perhitungan otomatis yang tertanam di dalam mesin transaksi POS Teh Raja</p>
             </div>
             <div class="slide-body">
                 <div class="grid-3">
-                    <div class="card">
+                    <div class="card card-gold">
                         <div class="card-title"><span>🧋</span> 1. Potong Stok Resep (BOM)</div>
                         <p class="card-text">Setiap 1 cup menu yang terjual di POS memotong beberapa bahan baku sekaligus sesuai varian:</p>
                         <div class="code-box">
@@ -989,110 +989,101 @@
                 </div>
             </div>
             <div class="slide-footer">
-                <span>Bab II — Logika Bisnis POS</span>
+                <span>Bab II — Logika Bisnis POS &amp; BOM</span>
                 <span>Akurasi Stok Gudang &amp; Akuntabilitas Kasir</span>
             </div>
         </div>
 
-        <!-- SLIDE 9: BAB III - METODOLOGI PENGEMBANGAN SISTEM -->
+        <!-- SLIDE 9: BAB III - PERENCANAAN & PELAKSANAAN PROJECT -->
         <div class="slide" id="slide-9">
             <div>
-                <div class="slide-tag">Bab III • Metodologi &amp; Perancangan (1/6)</div>
-                <h2 class="slide-title">Metodologi Pengembangan Perangkat Lunak</h2>
-                <p class="slide-subtitle">Tahapan rekayasa perangkat lunak dalam membangun Sistem Informasi Web POS Teh Raja</p>
+                <div class="slide-tag">Bab III • Perencanaan &amp; Pelaksanaan Project (1/6)</div>
+                <h2 class="slide-title">Tahapan Pelaksanaan Project PKL (Agile Prototyping)</h2>
+                <p class="slide-subtitle">Tahapan rekayasa perangkat lunak sesuai Juknis PKL FIKOM UNU Cirebon</p>
             </div>
             <div class="slide-body">
                 <div class="grid-3">
                     <div class="card">
-                        <div class="card-title"><span>01</span> Analisis Kebutuhan</div>
-                        <p class="card-text">Observasi alur kasir dan dapur di Kedai Teh Raja, mendata daftar menu, harga, kustomisasi varian, serta takaran resep bahan baku.</p>
+                        <div class="card-title"><span>01</span> Observasi &amp; Analisis</div>
+                        <p class="card-text">Observasi alur kerja kasir merangkap barista di Kedai Teh Raja, mendata 13 menu, harga, varian, serta takaran resep 9 bahan baku utama.</p>
                     </div>
                     <div class="card">
                         <div class="card-title"><span>02</span> Perancangan Sistem</div>
-                        <p class="card-text">Merancang alur hak akses 4 aktor, alur status pesanan 4 tahap, struktur database NoSQL Firebase, serta desain antarmuka responsif.</p>
+                        <p class="card-text">Merancang alur 3 aktor, siklus pesanan 4 tahap, skema database NoSQL Firebase &amp; IndexedDB, serta desain antarmuka kasir satu layar.</p>
                     </div>
                     <div class="card card-gold">
-                        <div class="card-title"><span>03</span> Implementasi Modul POS</div>
-                        <p class="card-text">Pengkodean menggunakan Next.js 16 (App Router) dan TypeScript untuk modul <code>/menu</code>, <code>/pos</code>, <code>/kds</code>, dan <code>/admin</code>.</p>
+                        <div class="card-title"><span>03</span> Implementasi POS &amp; BOM</div>
+                        <p class="card-text">Pengkodean dengan Next.js 16 (App Router) dan TypeScript untuk modul <code>/menu</code>, <code>/pos</code>, dan 6 tab inti <code>/admin</code>.</p>
                     </div>
                     <div class="card card-gold">
-                        <div class="card-title"><span>04</span> Integrasi Antarfitur</div>
-                        <p class="card-text">Menghubungkan keranjang belanja dengan Promo Engine, Poin Member, QRIS, pemotongan BOM, KDS Dapur, dan Laba Rugi secara <em>real-time</em>.</p>
+                        <div class="card-title"><span>04</span> Proteksi Akses &amp; Sync</div>
+                        <p class="card-text">Menyembunyikan modul staf di balik <strong>Tap Logo 5x</strong>, membangun modal Lacak Struk pelanggan, serta sinkronisasi <code>FirebaseSync</code>.</p>
                     </div>
                     <div class="card">
                         <div class="card-title"><span>05</span> Pengujian Black-Box</div>
-                        <p class="card-text">Menguji seluruh skenario fungsional kasir, uji pemutusan jaringan internet (<em>offline mode</em>), dan uji validasi pengembalian stok saat order batal.</p>
+                        <p class="card-text">Menguji seluruh skenario transaksi kasir, pemotongan &amp; <em>rollback</em> BOM, Stock Opname, serta uji pemutusan jaringan internet (<em>offline mode</em>).</p>
                     </div>
                     <div class="card">
-                        <div class="card-title"><span>06</span> Evaluasi &amp; Penerapan</div>
-                        <p class="card-text">Deploy sistem ke lingkungan produksi dan penyusunan dokumentasi penggunaan serta laporan akhir.</p>
+                        <div class="card-title"><span>06</span> Evaluasi Mitra (F-05)</div>
+                        <p class="card-text">Deploy sistem ke lingkungan produksi, evaluasi kepuasan pengguna di Kedai Teh Raja, serta penyusunan laporan akhir PKL.</p>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
-                <span>Bab III — Metodologi Pengembangan</span>
-                <span>Pendekatan Terstruktur &amp; Berorientasi Pengguna</span>
+                <span>Bab III — Perencanaan &amp; Pelaksanaan Project</span>
+                <span>Pendekatan Agile Prototyping Berorientasi Mitra</span>
             </div>
         </div>
 
-        <!-- SLIDE 10: BAB III - ANALISIS KEBUTUHAN AKTOR & MODUL -->
+        <!-- SLIDE 10: BAB III - ANALISIS KEBUTUHAN AKTOR & 3 MODUL INTI -->
         <div class="slide" id="slide-10">
             <div>
-                <div class="slide-tag">Bab III • Metodologi &amp; Perancangan (2/6)</div>
-                <h2 class="slide-title">Perancangan Hak Akses Aktor &amp; 4 Modul Utama</h2>
-                <p class="slide-subtitle">Pembagian peran yang jelas namun terhubung pada satu basis data yang sama</p>
+                <div class="slide-tag">Bab III • Perencanaan &amp; Pelaksanaan Project (2/6)</div>
+                <h2 class="slide-title">Perancangan Hak Akses Aktor &amp; 3 Modul Inti Sistem</h2>
+                <p class="slide-subtitle">Dirancang ramping dan fokus sesuai kebutuhan operasional Kedai Teh Raja</p>
             </div>
             <div class="slide-body">
-                <div class="grid-2">
+                <div class="grid-3">
                     <div class="card">
                         <div class="card-title"><span>📱</span> 1. Modul Pelanggan (<code>/menu</code>)</div>
                         <ul class="luxury-list">
-                            <li>Melihat katalog menu interaktif &amp; status stok <em>real-time</em>.</li>
-                            <li>Mengikuti <strong>Smart Tea Quiz</strong> untuk rekomendasi minuman sesuai selera.</li>
-                            <li>Memilih varian ukuran, suhu, gula, es, serta klaim promo &amp; poin member.</li>
-                            <li>Memilih bayar via QRIS atau Kasir &amp; memantau status pesanan secara <em>live</em>.</li>
+                            <li>Melihat katalog menu interaktif &amp; status ketersediaan stok BOM secara <em>real-time</em>.</li>
+                            <li>Memilih varian ukuran M/L, suhu, level gula, dan level es batu.</li>
+                            <li>Memantau progres racikan &amp; mencetak struk digital lewat tombol <strong>Lacak Pesanan &amp; Struk</strong>.</li>
+                            <li><strong>Aman:</strong> Tidak ada tombol ke halaman POS atau Admin.</li>
                         </ul>
                     </div>
                     <div class="card card-gold">
-                        <div class="card-title"><span>🖥️</span> 2. Modul Kasir POS (<code>/pos</code>)</div>
+                        <div class="card-title"><span>🖥️</span> 2. Modul Kasir-Barista (<code>/pos</code>)</div>
                         <ul class="luxury-list">
                             <li>Membuka &amp; menutup sesi shift kasir beserta rekonsiliasi modal laci.</li>
-                            <li>Input pesanan cepat via sentuhan layar atau perintah suara (<strong>Voice POS AI</strong>).</li>
-                            <li>Memproses pembayaran Tunai (<em>Quick Cash</em>), QRIS Dinamis, &amp; Transfer.</li>
-                            <li>Mencatat <em>Petty Cash</em> &amp; mencetak struk (Bluetooth 58mm / Print / WhatsApp).</li>
-                        </ul>
-                    </div>
-                    <div class="card">
-                        <div class="card-title"><span>👨‍🍳</span> 3. Modul Barista Dapur (<code>/kds</code>)</div>
-                        <ul class="luxury-list">
-                            <li>Menerima kartu antrean pesanan masuk secara <em>real-time</em> (&lt;500ms) dengan bunyi bel.</li>
-                            <li>Melihat rincian kustomisasi varian gula/es dan catatan khusus per cup.</li>
-                            <li>Mengubah status pesanan menjadi <strong>Selesai</strong> atau <strong>Racik Ulang</strong>.</li>
+                            <li>Memproses pembayaran Tunai (<em>Quick Cash</em>), QRIS Dinamis, &amp; Transfer Bank.</li>
+                            <li>Mengelola <strong>Laci Antrean &amp; Struk (3 Tab)</strong>: <em>Masuk</em>, <em>Sedang Diracik</em>, dan <em>Selesai</em> dalam 1 layar.</li>
+                            <li>Mencatat <em>Petty Cash</em> &amp; cetak struk Bluetooth 58mm / WhatsApp.</li>
                         </ul>
                     </div>
                     <div class="card card-gold">
-                        <div class="card-title"><span>📊</span> 4. Modul Admin &amp; Owner (<code>/admin</code>)</div>
+                        <div class="card-title"><span>📊</span> 3. Modul Admin &amp; BOM (<code>/admin</code>)</div>
                         <ul class="luxury-list">
-                            <li>Mengelola produk, harga, dan takaran <strong>Resep BOM</strong> per menu.</li>
-                            <li>Mengelola stok bahan baku, <strong>Restok PO Suplier</strong>, dan <strong>Stock Opname</strong>.</li>
-                            <li>Mengatur Promo Engine, Member Loyalty, Akun Karyawan, &amp; Multi-Cabang.</li>
-                            <li>Melihat Dashboard Analitik BI, <strong>Laba Rugi (P&amp;L)</strong>, &amp; <strong>AI Forecasting</strong>.</li>
+                            <li><strong>6 Tab Inti Mode PKL:</strong> Dashboard, Menu &amp; Resep BOM, Bahan Baku &amp; Suplier, Pesanan POS, Laba Rugi &amp; Kas, serta Karyawan.</li>
+                            <li>Mengatur takaran resep BOM per menu, Restok PO Suplier, dan Audit Stock Opname.</li>
+                            <li>Ekspor laporan Laba Rugi ke Excel (<code>.xlsx</code>), PDF, CSV, &amp; Backup JSON.</li>
                         </ul>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <span>Bab III — Analisis Fungsional</span>
-                <span>4 Modul Inti yang Saling Terintegrasi</span>
+                <span>3 Modul Utama + Proteksi Rahasia Tap Logo 5x</span>
             </div>
         </div>
 
-        <!-- SLIDE 11: BAB III - ALUR TRANSAKSI POS 4 TAHAP -->
+        <!-- SLIDE 11: BAB III - ALUR TRANSAKSI POS & BOM 4 TAHAP -->
         <div class="slide" id="slide-11">
             <div>
-                <div class="slide-tag">Bab III • Metodologi &amp; Perancangan (3/6)</div>
-                <h2 class="slide-title">Perancangan Alur Siklus Hidup Pesanan (Order Pipeline)</h2>
-                <p class="slide-subtitle">Integrasi status pesanan dari pelanggan/kasir hingga dapur dan laporan keuangan</p>
+                <div class="slide-tag">Bab III • Perencanaan &amp; Pelaksanaan Project (3/6)</div>
+                <h2 class="slide-title">Alur Siklus Hidup Pesanan &amp; Pemotongan BOM</h2>
+                <p class="slide-subtitle">Integrasi status pesanan dari pelanggan/kasir hingga peracikan dan laporan keuangan</p>
             </div>
             <div class="slide-body">
                 <div class="grid-4">
@@ -1100,71 +1091,69 @@
                         <div class="card-title"><span>1️⃣</span> Pesan Masuk</div>
                         <p class="card-text">
                             Status: <code>pending</code><br><br>
-                            Pesanan dibuat dari Web Menu pelanggan atau Kasir POS. Stok produk dan bahan baku BOM langsung divalidasi &amp; dipotong otomatis.
+                            Pesanan dibuat dari Web Menu pelanggan atau Kasir POS. Stok produk dan seluruh bahan baku BOM langsung divalidasi &amp; dipotong otomatis.
                         </p>
                     </div>
                     <div class="card">
                         <div class="card-title"><span>2️⃣</span> Pembayaran</div>
                         <p class="card-text">
                             Status: <code>awaiting_payment</code><br><br>
-                            Pelanggan melakukan scan QRIS atau konfirmasi bayar di kasir. Poin loyalitas member otomatis dihitung dan ditambahkan.
+                            Pelanggan melakukan scan QRIS atau bayar tunai di kasir. Kasir memvalidasi pembayaran dalam 1 klik pada Laci Antrean POS.
                         </p>
                     </div>
                     <div class="card card-gold">
                         <div class="card-title"><span>3️⃣</span> Sedang Diracik</div>
                         <p class="card-text">
                             Status: <code>processing</code><br><br>
-                            Pesanan tampil di layar <strong>Dapur KDS</strong> dengan bunyi bel. Pelanggan melihat status <em>"Sedang Diracik Barista"</em> di layar HP.
+                            Kasir (merangkap barista) melihat takaran varian di tab <strong>Sedang Diracik</strong> pada layar POS. Pelanggan melihat status <em>live</em> di HP.
                         </p>
                     </div>
                     <div class="card card-gold">
-                        <div class="card-title"><span>4️⃣</span> Selesai &amp; Saji</div>
+                        <div class="card-title"><span>4️⃣</span> Selesai &amp; Struk</div>
                         <p class="card-text">
                             Status: <code>completed</code><br><br>
-                            Barista menekan tombol Selesai. Notifikasi berbunyi di HP pelanggan, struk dicetak/WA, dan omzet masuk ke Laba Rugi.
+                            Minuman selesai disajikan. Notifikasi berbunyi di HP pelanggan, struk dicetak/WA, dan transaksi masuk ke Laporan Laba Rugi.
                         </p>
                     </div>
                 </div>
                 <div class="notes-highlight">
-                    <strong>Mekanisme Pembatalan Aman (Rollback):</strong> Jika pesanan dibatalkan (<code>cancelled</code>), sistem otomatis mengembalikan stok produk beserta seluruh takaran bahan baku BOM ke gudang dan mengecualikan transaksi tersebut dari omzet Laba Rugi.
+                    <strong>Mekanisme Pembatalan Aman (Automatic BOM Rollback):</strong> Jika pesanan dibatalkan (<code>cancelled</code>), fungsi <code>updateOrderStatus</code> otomatis mengembalikan stok produk beserta seluruh takaran bahan baku BOM ke gudang dan mengecualikan transaksi dari omzet Laba Rugi.
                 </div>
             </div>
             <div class="slide-footer">
                 <span>Bab III — Perancangan Alur Transaksi</span>
-                <span>Sinkronisasi Status Real-Time di Semua Layar</span>
+                <span>Sinkronisasi Status &amp; Stok Gudang Real-Time</span>
             </div>
         </div>
 
         <!-- SLIDE 12: BAB III - PERANCANGAN DATABASE NOSQL -->
         <div class="slide" id="slide-12">
             <div>
-                <div class="slide-tag">Bab III • Metodologi &amp; Perancangan (4/6)</div>
+                <div class="slide-tag">Bab III • Perencanaan &amp; Pelaksanaan Project (4/6)</div>
                 <h2 class="slide-title">Perancangan Struktur Basis Data (NoSQL JSON Tree)</h2>
                 <p class="slide-subtitle">Skema penyimpanan pada Firebase Realtime Database dan IndexedDB</p>
             </div>
             <div class="slide-body">
                 <div class="grid-2">
                     <div class="card">
-                        <div class="card-title"><span>🌳</span> Struktur Node Database</div>
+                        <div class="card-title"><span>🌳</span> Struktur Node Database Inti</div>
                         <div class="code-box" style="margin-top:0;">
                             tehraja-rtdb/<br>
                             ├── products/{id} &nbsp;&nbsp;&nbsp;&nbsp;➔ nama, harga, stok, recipe: [{ingredientId, qty}]<br>
                             ├── ingredients/{id} &nbsp;➔ nama, stok, satuan (gr/ml/pcs), minThreshold<br>
-                            ├── orders/{id} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;➔ items, varian, total, diskon, status, branchId<br>
+                            ├── orders/{id} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;➔ items, varian, total, metodeBayar, status<br>
                             ├── sessions/{id} &nbsp;&nbsp;&nbsp;&nbsp;➔ kasir, modalAwal, kasAktual, pettyCash, status<br>
                             ├── expenses/{id} &nbsp;&nbsp;&nbsp;&nbsp;➔ nominal, kategori, sumberDana (laci/rekening)<br>
-                            ├── promos/{id} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;➔ tipe (percent/amount/happy_hour), nilai, aktif<br>
-                            ├── customers/{id} &nbsp;&nbsp;&nbsp;➔ nama, noHP, poin, totalSpent, lastVisit<br>
                             ├── suppliers/{id} &nbsp;&nbsp;&nbsp;➔ nama, kontak, telepon, itemsSupplied[]<br>
                             ├── opnameLogs/{id} &nbsp;&nbsp;➔ stokSistem, stokFisik, selisih, alasan<br>
                             └── users/{id} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;➔ username, password, nama, role (admin/cashier)
                         </div>
                     </div>
                     <div class="card card-gold">
-                        <div class="card-title"><span>🔗</span> Relasi Antar-Entitas pada POS</div>
+                        <div class="card-title"><span>🔗</span> Relasi Antar-Entitas pada POS &amp; BOM</div>
                         <ul class="luxury-list">
                             <li><strong>Products ↔ Ingredients (BOM):</strong> Setiap item di <code>products</code> memiliki array <code>recipe</code> yang merujuk ke <code>ingredientId</code> pada tabel <code>ingredients</code>.</li>
-                            <li><strong>Orders ↔ Customers &amp; Promos:</strong> Transaksi di <code>orders</code> mencatat <code>customerPhone</code> untuk mutasi poin di <code>customers</code> serta potongan dari <code>promos</code>.</li>
+                            <li><strong>Orders ↔ Products &amp; Ingredients:</strong> Saat order dibuat di <code>orders</code>, stok bahan baku di <code>ingredients</code> otomatis berkurang proporsional sesuai varian pesanan.</li>
                             <li><strong>Sessions ↔ Expenses:</strong> Pengeluaran di <code>expenses</code> dengan sumber <code>kas_laci</code> memotong ekspektasi kas pada sesi <code>sessions</code> yang sedang aktif.</li>
                             <li><strong>Suppliers ↔ Ingredients &amp; Expenses:</strong> Proses restok bahan (PO) menambah stok di <code>ingredients</code> sekaligus mencatat biaya pembelian di <code>expenses</code>.</li>
                         </ul>
@@ -1177,47 +1166,49 @@
             </div>
         </div>
 
-        <!-- SLIDE 13: BAB III - PERANCANGAN ANTARMUKA (UI/UX) -->
+        <!-- SLIDE 13: BAB III - ANTARMUKA & RENCANA PENGEMBANGAN LANJUTAN (SKRIPSI) -->
         <div class="slide" id="slide-13">
             <div>
-                <div class="slide-tag">Bab III • Metodologi &amp; Perancangan (5/6)</div>
-                <h2 class="slide-title">Perancangan Antarmuka &amp; Fitur Unggulan Sistem POS</h2>
-                <p class="slide-subtitle">Desain antarmuka ergonomis untuk layar sentuh tablet kasir, smartphone pelanggan, dan layar dapur</p>
+                <div class="slide-tag">Bab III • Perencanaan &amp; Pelaksanaan Project (5/6)</div>
+                <h2 class="slide-title">Desain Antarmuka Inti &amp; Kesiapan Pengembangan Lanjutan (Skripsi)</h2>
+                <p class="slide-subtitle">Sistem dikunci pada mode POS &amp; BOM untuk PKL, namun memiliki fitur lanjutan yang siap di-unlock 1 klik</p>
             </div>
             <div class="slide-body">
-                <div class="grid-3">
+                <div class="grid-2">
                     <div class="card card-gold">
-                        <div class="card-title"><span>🎙️</span> 1. Antarmuka Kasir &amp; Voice POS</div>
-                        <p class="card-text">
-                            Layout 2 panel (katalog kiri, keranjang kanan) dengan tombol nominal uang cepat, pemindai member, serta tombol mikrofon <strong>Voice POS</strong> yang menerjemahkan kalimat kasir menjadi item keranjang secara otomatis.
-                        </p>
+                        <div class="card-title"><span>🔒</span> 1. Fokus Mode PKL (Default: POS &amp; BOM)</div>
+                        <ul class="luxury-list">
+                            <li><strong>Kasir POS Satu Layar (<code>/pos</code>):</strong> Katalog kiri, keranjang kanan, tombol <em>Quick Cash</em>, QRIS Dinamis, serta Laci Antrean &amp; Struk 3 Tab untuk kasir merangkap barista.</li>
+                            <li><strong>Panel Admin 6 Tab Inti (<code>/admin</code>):</strong> Dashboard Ringkasan, Menu &amp; Resep BOM, Bahan Baku &amp; Suplier (PO + Opname), Pesanan POS, Laba Rugi &amp; Kas, serta Karyawan.</li>
+                            <li><strong>Proteksi Tap Logo 5x:</strong> Pembeli hanya bisa mengakses menu &amp; lacak struk.</li>
+                        </ul>
                     </div>
-                    <div class="card card-gold">
-                        <div class="card-title"><span>📲</span> 2. QRIS Dinamis &amp; Struk Multi-Opsi</div>
+                    <div class="card">
+                        <div class="card-title"><span>🔓</span> 2. Fitur Pengembangan Lanjutan / Skripsi (1-Click Unlock)</div>
                         <p class="card-text">
-                            Modal pembayaran menghasilkan kode QRIS sesuai nominal transaksi. Setelah lunas, kasir dapat mencetak struk ke printer Bluetooth 58mm atau mengirim nota langsung ke WhatsApp pelanggan.
+                            Apabila kedai berkembang dan menambah staf, sistem telah menyiapkan 6 fitur lanjutan yang dapat dibuka kuncinya (<em>Unlock</em>) kapan saja melalui <strong>Tap Logo 5x</strong> atau navbar Admin:
                         </p>
-                    </div>
-                    <div class="card card-gold">
-                        <div class="card-title"><span>📈</span> 3. Dashboard ERP &amp; AI Forecast</div>
-                        <p class="card-text">
-                            Panel Admin menyajikan 12 tab terpadu: grafik penjualan harian, Laba Rugi (P&amp;L), editor resep BOM, stock opname, hingga tab <strong>AI Forecast</strong> untuk memprediksi kebutuhan belanja bahan baku.
-                        </p>
+                        <ul class="luxury-list" style="margin-top:8px;">
+                            <li><strong>AI Demand Forecasting:</strong> Prediksi penjualan &amp; kebutuhan belanja stok 30 hari.</li>
+                            <li><strong>Kitchen Display System (<code>/kds</code>):</strong> Layar monitor khusus barista dapur terpisah.</li>
+                            <li><strong>AI Voice POS &amp; Tea Sommelier:</strong> Input kasir via suara &amp; kuis rekomendasi teh.</li>
+                            <li><strong>Promo Engine, Loyalty Member CRM &amp; Multi-Cabang.</strong></li>
+                        </ul>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
-                <span>Bab III — Perancangan Antarmuka</span>
-                <span>Responsif di Desktop, Tablet Kasir, dan Smartphone</span>
+                <span>Bab III — Perancangan Antarmuka &amp; Skalabilitas</span>
+                <span>Tepat Guna untuk PKL • Siap Dikembangkan untuk Skripsi</span>
             </div>
         </div>
 
         <!-- SLIDE 14: BAB III - RENCANA PENGUJIAN & JADWAL -->
         <div class="slide" id="slide-14">
             <div>
-                <div class="slide-tag">Bab III • Metodologi &amp; Perancangan (6/6)</div>
+                <div class="slide-tag">Bab III • Perencanaan &amp; Pelaksanaan Project (6/6)</div>
                 <h2 class="slide-title">Rencana Pengujian Sistem &amp; Jadwal Pelaksanaan</h2>
-                <p class="slide-subtitle">Metode pengujian fungsionalitas POS dan tahapan penyelesaian proyek</p>
+                <p class="slide-subtitle">Metode pengujian fungsionalitas POS &amp; BOM serta jadwal penyelesaian project PKL</p>
             </div>
             <div class="slide-body">
                 <div class="grid-2">
@@ -1232,39 +1223,39 @@
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><strong>Autentikasi &amp; Shift</strong></td>
-                                    <td>Login Admin/Kasir, buka shift modal awal, tutup shift &amp; rekonsiliasi</td>
+                                    <td><strong>Proteksi &amp; Shift</strong></td>
+                                    <td>Login rahasia Tap Logo 5x, buka shift modal awal, Petty Cash, &amp; tutup shift</td>
                                 </tr>
                                 <tr>
                                     <td><strong>Transaksi POS</strong></td>
-                                    <td>Pilih varian, Voice POS, promo otomatis, poin member, bayar Tunai/QRIS</td>
+                                    <td>Pilih varian M/L/gula/es, Quick Cash, QRIS, Laci Antrean Racik, &amp; cetak struk</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Self-Order &amp; KDS</strong></td>
-                                    <td>Order dari <code>/menu</code> masuk ke <code>/pos</code> &amp; <code>/kds</code> secara <em>real-time</em></td>
+                                    <td><strong>Self-Order &amp; Struk</strong></td>
+                                    <td>Order dari <code>/menu</code> masuk ke <code>/pos</code> <em>real-time</em> &amp; lacak struk digital</td>
                                 </tr>
                                 <tr>
                                     <td><strong>BOM &amp; Keuangan</strong></td>
-                                    <td>Pemotongan bahan baku, restore saat batal, PO restok, &amp; Laba Rugi Excel</td>
+                                    <td>Potong bahan baku otomatis, rollback saat batal, PO restok, Opname, &amp; Laba Rugi</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                     <div class="card card-gold">
-                        <div class="card-title"><span>📅</span> Jadwal Pelaksanaan Kegiatan</div>
+                        <div class="card-title"><span>📅</span> Jadwal Pelaksanaan Project PKL</div>
                         <table class="pres-table">
                             <thead>
                                 <tr>
                                     <th>Tahapan Kegiatan</th>
-                                    <th>Bln 1</th>
-                                    <th>Bln 2</th>
-                                    <th>Bln 3</th>
-                                    <th>Bln 4</th>
+                                    <th>Mg 1-2</th>
+                                    <th>Mg 3-4</th>
+                                    <th>Mg 5-6</th>
+                                    <th>Mg 7-8</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>1. Observasi &amp; Analisis Kebutuhan POS</td>
+                                    <td>1. Observasi Mitra &amp; Analisis Resep BOM</td>
                                     <td>███</td>
                                     <td></td>
                                     <td></td>
@@ -1278,14 +1269,14 @@
                                     <td></td>
                                 </tr>
                                 <tr>
-                                    <td>3. Pembuatan Modul Menu, POS, KDS &amp; Admin</td>
+                                    <td>3. Implementasi Modul Menu, POS &amp; BOM Admin</td>
                                     <td></td>
                                     <td>███</td>
                                     <td>██</td>
                                     <td></td>
                                 </tr>
                                 <tr>
-                                    <td>4. Pengujian Sistem, Evaluasi &amp; Laporan Akhir</td>
+                                    <td>4. Pengujian Black-Box, Evaluasi &amp; Laporan PKL</td>
                                     <td></td>
                                     <td></td>
                                     <td> &nbsp;██</td>
@@ -1311,14 +1302,13 @@
                     TERIMA KASIH ATAS PERHATIAN BAPAK/IBU DOSEN PEMBIMBING &amp; PENGUJI
                 </h2>
                 <p class="hero-sub-title" style="margin-bottom:18px;">
-                    Demikian pemaparan proposal pembangunan <strong>Sistem Informasi Web POS Kedai Teh Raja</strong>.<br>
-                    Prototipe aplikasi telah siap didemonstrasikan secara langsung melalui modul berikut:
+                    Demikian pemaparan proposal <strong>Sistem Informasi Web POS &amp; Manajemen Bahan Baku BOM Kedai Teh Raja</strong>.<br>
+                    Aplikasi telah siap didemonstrasikan secara langsung (termasuk demo <em>Unlock</em> fitur pengembangan lanjutan):
                 </p>
                 <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-bottom:24px;">
-                    <a href="/pos" target="_blank" class="btn-nav" style="text-decoration:none;">🖥️ Demo Kasir Smart POS</a>
-                    <a href="/menu" target="_blank" class="btn-nav-outline" style="text-decoration:none;">🍵 Demo Web Menu Pelanggan</a>
-                    <a href="/kds" target="_blank" class="btn-nav-outline" style="text-decoration:none;">👨‍🍳 Demo Layar Dapur (KDS)</a>
-                    <a href="/admin" target="_blank" class="btn-nav-outline" style="text-decoration:none;">📊 Demo Panel Admin &amp; BOM</a>
+                    <a href="/pos" target="_blank" class="btn-nav" style="text-decoration:none;">🖥️ Demo Kasir POS (Kasir-Barista)</a>
+                    <a href="/menu" target="_blank" class="btn-nav-outline" style="text-decoration:none;">🍵 Demo Web Menu &amp; Lacak Struk</a>
+                    <a href="/admin" target="_blank" class="btn-nav-outline" style="text-decoration:none;">📊 Demo Panel Admin &amp; Resep BOM</a>
                 </div>
                 <div class="author-card">
                     <div class="author-item">
@@ -1330,14 +1320,14 @@
                         <div class="author-val" style="font-family:'JetBrains Mono',monospace;">0402231058</div>
                     </div>
                     <div class="author-item">
-                        <div class="author-label">Akun Demo Sistem</div>
-                        <div class="author-val" style="font-family:'JetBrains Mono',monospace;">admin / 123 &nbsp;|&nbsp; kasir / 123</div>
+                        <div class="author-label">Akun Demo &amp; Akses Rahasia</div>
+                        <div class="author-val" style="font-family:'JetBrains Mono',monospace;">Tap Logo 5x &nbsp;|&nbsp; admin / 123 &nbsp;|&nbsp; kasir / 123</div>
                     </div>
                 </div>
             </div>
             <div class="slide-footer">
                 <span>Seminar Proposal — M. Yarzuq Wildani [0402231058]</span>
-                <span>Web POS Terintegrasi Kedai Teh Raja</span>
+                <span>Web POS &amp; BOM Terintegrasi Kedai Teh Raja</span>
             </div>
         </div>
 
@@ -1383,21 +1373,21 @@
         let currentSlide = 1;
 
         const speakerScripts = {
-            1: "Assalamu'alaikum Wr. Wb. Selamat pagi/siang Bapak dan Ibu Dosen Pembimbing serta Dosen Penguji. Perkenalkan saya M. Yarzuq Wildani dengan NIM 0402231058. Pada Seminar Proposal ini, saya mempresentasikan usulan proyek pembangunan Sistem Informasi Point of Sale (POS) Terintegrasi Berbasis Web PWA Offline-First dan Realtime Database pada Kedai Teh Raja.",
-            2: "Latar belakang pembuatan sistem POS ini berawal dari empat masalah operasional di Kedai Teh Raja: Pertama, pencatatan pesanan dan varian minuman secara manual di kasir memicu antrean panjang. Kedua, penggunaan bon kertas ke dapur barista sering basah atau terselip. Ketiga, pengeluaran kas mendadak dari laci kasir sering membuat hitungan uang tutup shift tekor, ditambah stok bahan baku belum terpotong otomatis per resep. Keempat, kasir membutuhkan aplikasi web yang tetap berjalan normal meskipun Wi-Fi kedai sedang mati.",
-            3: "Berdasarkan masalah tersebut, rumusan masalah dalam proposal ini berfokus pada tiga hal: Bagaimana merancang dan membangun Web POS yang menghubungkan modul Pelanggan, Kasir, dan Dapur KDS secara real-time; bagaimana menerapkan arsitektur PWA Offline-First agar transaksi kasir tidak pernah terhenti saat internet putus; serta bagaimana mengintegrasikan transaksi POS dengan pemotongan resep bahan baku (BOM), kas kecil (Petty Cash), dan Laporan Laba Rugi otomatis.",
-            4: "Batasan masalah sistem POS ini mencakup 4 peran pengguna (Pelanggan, Kasir, Barista, Admin), 6 kategori menu dengan kustomisasi ukuran M/L, suhu, level gula, dan level es, 3 metode pembayaran (Tunai, QRIS, Transfer), pemotongan resep bahan baku BOM otomatis, manajemen shift kasir dan Laba Rugi, serta fitur pendukung Voice POS, Promo Engine, Member Loyalty, dan AI Forecasting.",
-            5: "Tujuan utama pembuatan sistem ini adalah menghadirkan ekosistem Web POS terpadu yang mempercepat layanan kasir dan dapur, menghilangkan selisih uang laci kasir, serta memberikan transparansi stok dan laporan laba rugi secara real-time kepada pemilik Kedai Teh Raja.",
-            6: "Pada Bab II Tinjauan Pustaka, sistem Web POS Teh Raja dirancang melampaui kasir konvensional karena mendukung Dual-Channel Order (input kasir maupun Self-Order dari HP pelanggan), terhubung ke Kitchen Display System paperless kurang dari 500 milidetik, serta memotong stok bahan baku sesuai varian.",
-            7: "Secara teknis, sistem menggunakan arsitektur hibrida: Zustand dan IndexedDB menyimpan data transaksi secara lokal di perangkat kasir sehingga kecepatan transaksi 0ms dan tahan gangguan internet, lalu Firebase Realtime Database menyinkronkan data melalui WebSocket ke layar dapur dan admin begitu koneksi tersedia.",
-            8: "Tiga logika bisnis utama yang ditanamkan pada mesin POS meliputi: perhitungan takaran resep BOM yang menyesuaikan varian ukuran Large 1,5x serta level gula dan es; rumus rekonsiliasi kas tutup shift yang memperhitungkan kas keluar Petty Cash; serta kalkulasi Laporan Laba Rugi bersih.",
-            9: "Pada Bab III Metodologi Pengembangan Sistem, pembangunan dilakukan melalui 6 tahap: Analisis kebutuhan operasional kedai, perancangan database dan antarmuka, implementasi kode dengan Next.js 16 dan TypeScript, integrasi seluruh modul, pengujian Black-Box, hingga evaluasi.",
-            10: "Sistem dibagi menjadi 4 modul utama yang saling terhubung: Modul Web Menu untuk pelanggan memesan mandiri, Modul Kasir POS untuk memproses pembayaran dan shift, Modul KDS untuk panduan racik barista di dapur, serta Modul Admin untuk manajemen menu, BOM, inventaris, dan keuangan.",
-            11: "Alur transaksi dirancang dalam 4 tahap terintegrasi: (1) Pesan Masuk dan potong stok BOM, (2) Konfirmasi Pembayaran QRIS/Tunai dan tambah poin member, (3) Sedang Diracik pada layar KDS dapur, dan (4) Selesai disajikan. Jika pesanan dibatalkan, stok produk dan bahan baku otomatis dikembalikan ke gudang.",
-            12: "Struktur database menggunakan NoSQL JSON Tree pada Firebase Realtime Database yang menghubungkan 10 entitas utama: products, ingredients, orders, sessions, expenses, promos, customers, suppliers, opnameLogs, dan users.",
-            13: "Antarmuka dirancang khusus untuk kemudahan operasional: layar POS dilengkapi Voice POS berbahasa Indonesia, QRIS dinamis otomatis, cetak struk Bluetooth 58mm dan WhatsApp, serta dashboard admin lengkap.",
-            14: "Pengujian sistem akan dilakukan menggunakan metode Black-Box Testing pada seluruh skenario transaksi kasir, sinkronisasi dapur, pemotongan BOM, serta uji pemutusan jaringan internet (offline-to-online).",
-            15: "Demikian pemaparan Seminar Proposal pembuatan Web POS Kedai Teh Raja. Prototipe sistem juga telah siap untuk saya demonstrasikan secara langsung. Terima kasih atas perhatian Bapak/Ibu Dosen, mohon arahan dan masukannya. Wassalamu'alaikum Wr. Wb."
+            1: "Assalamu'alaikum Wr. Wb. Selamat pagi/siang Bapak dan Ibu Dosen Pembimbing serta Dosen Penguji. Perkenalkan saya M. Yarzuq Wildani dengan NIM 0402231058. Pada Seminar Proposal PKL Berbasis Project ini, saya mempresentasikan rancang bangun Sistem Informasi Point of Sale (POS) dan Manajemen Inventori Bahan Baku Berbasis Bill of Materials (BOM) dengan Arsitektur PWA Offline-First pada Kedai Teh Raja.",
+            2: "Latar belakang project ini berangkat dari kondisi riil di Kedai Teh Raja, di mana 1 orang kasir merangkap sekaligus sebagai barista peracik minuman. Ada 4 masalah utama: Pertama, pencatatan pesanan dan antrean racikan secara manual membebani kasir-barista. Kedua, penjualan minuman belum memotong stok bahan baku secara otomatis per resep sehingga bahan sering habis mendadak. Ketiga, pengeluaran kas laci mendadak sering membuat uang tutup shift selisih. Keempat, dibutuhkan sistem yang tahan gangguan internet dan menyembunyikan akses admin dari layar pelanggan.",
+            3: "Berdasarkan masalah tersebut, rumusan masalah berfokus pada tiga hal: Bagaimana membangun POS Satu Layar yang ergonomis bagi kasir merangkap barista; bagaimana menerapkan metode Bill of Materials (BOM) agar transaksi otomatis memotong bahan baku sesuai varian ukuran, gula, dan es; serta bagaimana menerapkan PWA Offline-First, rekonsiliasi Shift & Petty Cash, dan proteksi akses Tap Logo 5 kali.",
+            4: "Agar tidak berlebihan dan tepat guna bagi skala Kedai Teh Raja, batasan masalah PKL ini difokuskan pada 3 aktor (Pelanggan, Kasir merangkap Barista, dan Admin), 6 kategori menu dengan kustomisasi varian, pembayaran Tunai/QRIS/Transfer, pemotongan bahan baku BOM beserta Stock Opname dan PO Suplier, serta Laporan Laba Rugi. Sementara fitur lanjutan seperti AI Forecasting dan KDS terpisah dikunci untuk pengembangan Skripsi.",
+            5: "Tujuan utama project ini adalah menghadirkan aplikasi POS Satu Layar dan manajemen bahan baku BOM yang mempercepat pelayanan kasir merangkap barista, menjaga akurasi stok gudang, serta menertibkan pembukuan kas harian Kedai Teh Raja.",
+            6: "Pada Bab II, terlihat transformasi dari sistem manual ke sistem Web POS & BOM Teh Raja: kasir dan antrean racik menyatu dalam satu layar, bahan baku terpotong otomatis per cup, tersedia audit Stock Opname, rekonsiliasi kas shift dengan Petty Cash, serta keamanan Tap Logo 5 kali.",
+            7: "Secara teknis, sistem menggunakan arsitektur hibrida: Zustand dan IndexedDB menyimpan data transaksi dan stok secara lokal di perangkat kasir sehingga berkecepatan 0 milidetik dan tetap berjalan saat internet mati, lalu Firebase Realtime Database menyinkronkan data seketika saat online.",
+            8: "Tiga logika bisnis utama yang ditanamkan pada mesin POS meliputi: rumus pemotongan bahan baku BOM yang menyesuaikan ukuran Large 1,5x serta level gula dan es; rumus rekonsiliasi kas tutup shift yang memperhitungkan Petty Cash; serta kalkulasi Laporan Laba Rugi bersih.",
+            9: "Pada Bab III Perencanaan dan Pelaksanaan Project, metode pengembangan menggunakan Agile Prototyping melalui 6 tahapan: observasi mitra dan analisis resep BOM, perancangan sistem, implementasi POS & BOM, proteksi akses & sinkronisasi, pengujian Black-Box, hingga evaluasi mitra F-05.",
+            10: "Sistem dibagi menjadi 3 modul inti yang saling terhubung: Modul Pelanggan (/menu) untuk pesan mandiri dan lacak struk tanpa melihat menu staf; Modul Kasir-Barista (/pos) dengan laci antrean racik 3 tab dalam satu layar; serta Modul Admin (/admin) dengan 6 tab inti pengelolaan resep BOM, bahan baku, dan keuangan.",
+            11: "Alur transaksi dirancang dalam 4 tahap: Pesan Masuk dan potong stok BOM, Konfirmasi Pembayaran, Sedang Diracik pada laci antrean POS, hingga Selesai & Cetak Struk. Jika pesanan dibatalkan, seluruh bahan baku BOM otomatis dikembalikan ke gudang.",
+            12: "Struktur database menggunakan NoSQL JSON Tree pada Firebase Realtime Database yang menghubungkan entitas products, ingredients, orders, sessions, expenses, suppliers, opnameLogs, dan users.",
+            13: "Menariknya, secara default aplikasi berada pada Mode PKL yang fokus pada POS dan BOM. Namun jika nanti Bapak/Ibu Penguji menanyakan pengembangan selanjutnya untuk Skripsi, saya telah menyiapkan tombol Unlock 1 klik yang dapat membuka fitur AI Demand Forecasting, Layar KDS Terpisah, Voice POS, dan Loyalty CRM.",
+            14: "Pengujian sistem dilakukan menggunakan metode Black-Box Testing pada skenario proteksi Tap Logo 5x, transaksi POS, pemotongan dan rollback BOM, Stock Opname, serta uji pemutusan jaringan internet.",
+            15: "Demikian pemaparan Seminar Proposal Web POS & BOM Kedai Teh Raja. Aplikasi siap saya demonstrasikan secara langsung. Terima kasih atas perhatian Bapak/Ibu Dosen, mohon arahan dan masukannya. Wassalamu'alaikum Wr. Wb."
         };
 
         function updateSlide() {

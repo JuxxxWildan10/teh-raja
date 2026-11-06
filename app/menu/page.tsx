@@ -11,6 +11,7 @@ import OrderStatusOverlay from "@/components/OrderStatusOverlay";
 import VariantModal from "@/components/VariantModal";
 import { useSecretLogoTap } from "@/components/SecretStaffModal";
 import {
+  useAuthStore,
   useCartStore,
   useProductStore,
   usePromoStore,
@@ -38,6 +39,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function Home() {
+  const isAdvancedUnlocked = useAuthStore((state) => state.isAdvancedUnlocked);
   const addToCart = useCartStore((state) => state.addToCart);
   const cartItems = useCartStore((state) => state.items);
   const cartTotal = useCartStore((state) => state.total);
@@ -124,9 +126,11 @@ export default function Home() {
             <a href="#menu" className="px-8 py-3 bg-gold text-forest font-bold rounded-full hover:scale-105 transition shadow-lg shadow-gold/20">
               Pesan Menu
             </a>
-            <a href="#recommendation" className="px-6 py-3 border border-white/20 rounded-full hover:bg-white/5 transition backdrop-blur-sm">
-              AI Tea Sommelier
-            </a>
+            {isAdvancedUnlocked && (
+              <a href="#recommendation" className="px-6 py-3 border border-white/20 rounded-full hover:bg-white/5 transition backdrop-blur-sm">
+                AI Tea Sommelier
+              </a>
+            )}
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('tehraja:open-tracker-modal'))}
@@ -157,18 +161,20 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* RECOMMENDATION SECTION */}
-      <section id="recommendation" className="py-20 bg-forest-light/10 relative">
-        <div className="container mx-auto px-6">
-          <div className="mb-12 text-center">
-            <h2 className="text-4xl font-serif text-gold mb-4">AI Tea Sommelier</h2>
-            <p className="opacity-60 max-w-md mx-auto">
-              Bingung mau pilih apa? Biarkan algoritma cerdas kami menganalisis selera Anda dan menyarankan racikan sempurna untuk mood Anda hari ini.
-            </p>
+      {/* RECOMMENDATION SECTION (Hanya tampil jika Fitur Pengembangan Lanjutan di-unlock) */}
+      {isAdvancedUnlocked && (
+        <section id="recommendation" className="py-20 bg-forest-light/10 relative">
+          <div className="container mx-auto px-6">
+            <div className="mb-12 text-center">
+              <h2 className="text-4xl font-serif text-gold mb-4">AI Tea Sommelier</h2>
+              <p className="opacity-60 max-w-md mx-auto">
+                Bingung mau pilih apa? Biarkan algoritma cerdas kami menganalisis selera Anda dan menyarankan racikan sempurna untuk mood Anda hari ini.
+              </p>
+            </div>
+            <RecommendationQuiz />
           </div>
-          <RecommendationQuiz />
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* MENU GRID */}
       <section id="menu" className="py-20">

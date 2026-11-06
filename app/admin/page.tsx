@@ -38,7 +38,7 @@ import {
     CheckCircle, XCircle, Clock, Loader,
     Menu, Search, Sparkles, RefreshCw, Ticket, Users as UsersIcon, Box,
     Building2, BarChart2, TrendingUp, FileSpreadsheet, Bell, Wallet, DollarSign, Upload, Database, ClipboardCheck,
-    ChefHat, Coffee, Presentation, PackagePlus
+    ChefHat, Coffee, Presentation, PackagePlus, Lock, Unlock
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -59,7 +59,7 @@ ChartJS.register(
 );
 
 export default function AdminPage() {
-    const { user, loginWithPassword, logout, users, addUser, removeUser, updateUser } = useAuthStore();
+    const { user, loginWithPassword, logout, users, addUser, removeUser, updateUser, isAdvancedUnlocked, toggleAdvancedUnlocked } = useAuthStore();
     const router = useRouter();
     const toast = useToast();
     const [loginUsername, setLoginUsername] = useState("");
@@ -915,18 +915,33 @@ export default function AdminPage() {
     const lowStockAlertCount = products.filter(p => p.stock <= (p.minStockThreshold ?? 5)).length + ingredients.filter(i => i.stock <= i.minStockThreshold).length;
     const tabs = [
         { id: 'dashboard' as const, label: 'Dashboard' },
-        ...(user.role === 'admin' ? [{ id: 'keuangan' as const, label: 'Laba Rugi (P&L) 💰', icon: <Wallet size={18} /> }] : []),
         { id: 'products' as const, label: 'Menu & Resep BOM' },
-        ...(user.role === 'admin' ? [{ id: 'analytics' as const, label: 'Analitik BI', icon: <BarChart2 size={18} /> }] : []),
-        ...(user.role === 'admin' ? [{ id: 'inventory' as const, label: 'Inventaris & Suplier', icon: <Box size={18} />, badge: lowStockAlertCount }] : []),
-        { id: 'orders' as const, label: 'Pesanan', badge: pendingCount },
-        ...(user.role === 'admin' ? [{ id: 'promos' as const, label: 'Promo Engine', icon: <Ticket size={18} /> }] : []),
-        ...(user.role === 'admin' ? [{ id: 'loyalty' as const, label: 'Loyalty CRM', icon: <UsersIcon size={18} /> }] : []),
-        ...(user.role === 'admin' ? [{ id: 'cabang' as const, label: 'Multi Cabang', icon: <Building2 size={18} /> }] : []),
+        ...(user.role === 'admin' ? [{ id: 'inventory' as const, label: 'Bahan Baku & Suplier', icon: <Box size={18} />, badge: lowStockAlertCount }] : []),
+        { id: 'orders' as const, label: 'Pesanan POS', badge: pendingCount },
+        ...(user.role === 'admin' ? [{ id: 'keuangan' as const, label: 'Laba Rugi & Kas 💰', icon: <Wallet size={18} /> }] : []),
         ...(user.role === 'admin' ? [{ id: 'karyawan' as const, label: 'Karyawan' }] : []),
-        ...(user.role === 'admin' ? [{ id: 'logs' as const, label: 'Log Aktivitas' }] : []),
-        ...(user.role === 'admin' ? [{ id: 'ai-forecast' as const, label: 'AI Forecast ✨' }] : []),
+        ...(user.role === 'admin' && isAdvancedUnlocked ? [
+            { id: 'analytics' as const, label: 'Analitik BI', icon: <BarChart2 size={18} /> },
+            { id: 'promos' as const, label: 'Promo Engine', icon: <Ticket size={18} /> },
+            { id: 'loyalty' as const, label: 'Loyalty CRM', icon: <UsersIcon size={18} /> },
+            { id: 'cabang' as const, label: 'Multi Cabang', icon: <Building2 size={18} /> },
+            { id: 'logs' as const, label: 'Log Aktivitas' },
+            { id: 'ai-forecast' as const, label: 'AI Forecast ✨' },
+        ] : []),
     ];
+
+    const handleToggleAdvancedMode = () => {
+        const nextVal = !isAdvancedUnlocked;
+        toggleAdvancedUnlocked();
+        if (!nextVal && ['analytics', 'promos', 'loyalty', 'cabang', 'logs', 'ai-forecast'].includes(activeTab)) {
+            setActiveTab('dashboard');
+        }
+        if (nextVal) {
+            toast.success('🔓 Seluruh Fitur Pengembangan Lanjutan (AI Forecast, KDS, CRM, Multi-Cabang) dibuka!');
+        } else {
+            toast.info('🔒 Dikunci ke Mode PKL (Fokus Kasir POS & Bahan Baku BOM).');
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 text-forest relative flex flex-col">
@@ -944,21 +959,32 @@ export default function AdminPage() {
                         <Link href="/" className="text-lg sm:text-xl font-serif font-bold text-gold">TEH RAJA</Link>
                         <span className="opacity-30 hidden sm:block">|</span>
                         <span className="text-xs opacity-60 hidden sm:block uppercase tracking-wider">
-                            Admin Panel · {branchName || 'Cabang Utama'}
+                            {isAdvancedUnlocked ? `Admin ERP · ${branchName || 'Cabang Utama'}` : 'Admin POS & Bahan Baku BOM'}
                         </span>
                     </div>
-                    <div className="flex gap-2 sm:gap-3 items-center">
-                        <div className="text-right leading-tight hidden lg:block">
-                            <p className="font-bold text-sm text-gold">{user.name}</p>
-                            <p className="text-xs opacity-60 uppercase tracking-wider">{user.role}</p>
-                        </div>
+                    <div className="flex gap-2 sm:gap-2.5 items-center">
+                        <button
+                            type="button"
+                            onClick={handleToggleAdvancedMode}
+                            className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition ${
+                                isAdvancedUnlocked
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/30'
+                                    : 'bg-white/10 text-amber-300 border-amber-400/30 hover:bg-white/20'
+                            }`}
+                            title={isAdvancedUnlocked ? 'Klik untuk kunci kembali ke Mode PKL (POS & BOM)' : 'Klik untuk membuka seluruh fitur pengembangan lanjutan (Skripsi)'}
+                        >
+                            {isAdvancedUnlocked ? <Unlock size={13} /> : <Lock size={13} />}
+                            <span className="hidden md:inline">{isAdvancedUnlocked ? 'Mode Full (Unlocked)' : 'Mode PKL (POS & BOM)'}</span>
+                        </button>
                         <div className="h-6 w-[1px] bg-white/10 hidden lg:block"></div>
                         <Link href="/menu" className="hidden sm:flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition">
                             <Coffee size={13} className="text-gold" /> Web Menu
                         </Link>
-                        <Link href="/kds" className="hidden sm:flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition">
-                            <ChefHat size={13} className="text-amber-400" /> Dapur KDS
-                        </Link>
+                        {isAdvancedUnlocked && (
+                            <Link href="/kds" className="hidden sm:flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition">
+                                <ChefHat size={13} className="text-amber-400" /> Dapur KDS
+                            </Link>
+                        )}
                         <Link href="/pos" className="flex items-center gap-1.5 text-xs bg-amber-400 text-forest font-bold px-3 py-1.5 rounded-lg hover:bg-amber-300 transition shadow">
                             <span>Buka Kasir POS</span>
                             <span className="w-2 h-2 bg-green-600 rounded-full animate-pulse flex-shrink-0"></span>

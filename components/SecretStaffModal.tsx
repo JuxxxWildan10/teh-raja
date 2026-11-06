@@ -11,6 +11,7 @@ import {
 import {
     ShieldCheck,
     Lock,
+    Unlock,
     X,
     ShoppingCart,
     LayoutDashboard,
@@ -61,7 +62,7 @@ interface SecretStaffModalProps {
 
 export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalProps) {
     const router = useRouter();
-    const { user, loginWithPassword, logout } = useAuthStore();
+    const { user, loginWithPassword, logout, isAdvancedUnlocked, toggleAdvancedUnlocked } = useAuthStore();
     const { addLog } = useSalesStore();
     const toast = useToast();
 
@@ -103,6 +104,16 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
         await logout();
         toast.info("Mode Admin ditutup. Tampilan kembali ke mode Pelanggan.");
         onClose();
+    };
+
+    const handleToggleAdvanced = () => {
+        const nextState = !isAdvancedUnlocked;
+        toggleAdvancedUnlocked();
+        if (nextState) {
+            toast.success("🔓 Fitur Pengembangan Lanjutan (AI Forecast, KDS, Voice AI, CRM & Multi-Cabang) berhasil di-unlock!");
+        } else {
+            toast.info("🔒 Dikunci kembali ke Mode PKL (Fokus POS & Manajemen Bahan Baku BOM).");
+        }
     };
 
     return (
@@ -153,7 +164,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                     <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-xs text-white/70 leading-relaxed flex items-start gap-3">
                                         <KeyRound size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                                         <div>
-                                            Masukkan kredensial resmi untuk membuka akses ke <strong className="text-amber-300">Kasir POS</strong>, <strong className="text-amber-300">Kitchen Display (KDS)</strong>, <strong className="text-amber-300">Dashboard Admin ERP</strong>, dan <strong className="text-amber-300">File Presentasi</strong>.
+                                            Masukkan kredensial resmi untuk membuka akses ke <strong className="text-amber-300">Kasir POS</strong>, <strong className="text-amber-300">Manajemen Resep &amp; Bahan Baku (BOM)</strong>, serta <strong className="text-amber-300">File Presentasi PKL</strong>.
                                         </div>
                                     </div>
 
@@ -214,8 +225,14 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                         <div className="flex items-center gap-2.5">
                                             <CheckCircle2 size={18} className="text-emerald-400" />
                                             <div>
-                                                <p className="text-xs font-bold text-emerald-300">Akses Penuh Aktif</p>
-                                                <p className="text-[11px] text-white/60">Pilih modul operasional atau dokumen presentasi di bawah ini</p>
+                                                <p className="text-xs font-bold text-emerald-300">
+                                                    {isAdvancedUnlocked
+                                                        ? "Mode Pengembangan Lanjutan (Full Fitur Aktif)"
+                                                        : "Mode PKL Aktif (Fokus POS & Bahan Baku BOM)"}
+                                                </p>
+                                                <p className="text-[11px] text-white/60">
+                                                    Pilih modul operasional atau dokumen presentasi di bawah ini
+                                                </p>
                                             </div>
                                         </div>
                                         <button
@@ -240,10 +257,12 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="font-bold text-sm text-white group-hover:text-emerald-300 transition">Kasir Smart POS</span>
+                                                    <span className="font-bold text-sm text-white group-hover:text-emerald-300 transition">Kasir POS</span>
                                                     <ChevronRight size={15} className="text-white/40 group-hover:translate-x-1 transition" />
                                                 </div>
-                                                <p className="text-[11px] text-white/60 mt-0.5">Transaksi kasir, QRIS, Voice AI &amp; cetak struk</p>
+                                                <p className="text-[11px] text-white/60 mt-0.5">
+                                                    Transaksi kasir (merangkap barista), QRIS &amp; cetak struk
+                                                </p>
                                             </div>
                                         </button>
 
@@ -259,30 +278,74 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="font-bold text-sm text-white group-hover:text-purple-300 transition">Admin ERP &amp; AI</span>
+                                                    <span className="font-bold text-sm text-white group-hover:text-purple-300 transition">
+                                                        {isAdvancedUnlocked ? "Admin ERP & AI" : "Admin & Bahan Baku BOM"}
+                                                    </span>
                                                     <ChevronRight size={15} className="text-white/40 group-hover:translate-x-1 transition" />
                                                 </div>
-                                                <p className="text-[11px] text-white/60 mt-0.5">Menu BOM, Laba Rugi, Inventori &amp; AI Forecast</p>
+                                                <p className="text-[11px] text-white/60 mt-0.5">
+                                                    {isAdvancedUnlocked
+                                                        ? "Menu BOM, Laba Rugi, Inventori & AI Forecast"
+                                                        : "Kelola Menu, Resep BOM, Stok Bahan Baku & Laporan"}
+                                                </p>
                                             </div>
                                         </button>
 
-                                        <button
-                                            onClick={() => {
-                                                onClose();
-                                                router.push("/kds");
-                                            }}
-                                            className="group p-4 rounded-2xl bg-blue-400/10 hover:bg-blue-400/20 border border-blue-400/30 text-left transition flex items-start gap-3 sm:col-span-2"
-                                        >
-                                            <div className="w-10 h-10 rounded-xl bg-blue-400/20 flex items-center justify-center text-blue-300 flex-shrink-0 group-hover:scale-110 transition">
-                                                <ChefHat size={20} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-bold text-sm text-white group-hover:text-blue-300 transition">Kitchen Display System (KDS Dapur)</span>
-                                                    <ChevronRight size={15} className="text-white/40 group-hover:translate-x-1 transition" />
+                                        {isAdvancedUnlocked && (
+                                            <button
+                                                onClick={() => {
+                                                    onClose();
+                                                    router.push("/kds");
+                                                }}
+                                                className="group p-4 rounded-2xl bg-blue-400/10 hover:bg-blue-400/20 border border-blue-400/30 text-left transition flex items-start gap-3 sm:col-span-2"
+                                            >
+                                                <div className="w-10 h-10 rounded-xl bg-blue-400/20 flex items-center justify-center text-blue-300 flex-shrink-0 group-hover:scale-110 transition">
+                                                    <ChefHat size={20} />
                                                 </div>
-                                                <p className="text-[11px] text-white/60 mt-0.5">Layar antrean racikan barista real-time &amp; penyelesaian pesanan</p>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-bold text-sm text-white group-hover:text-blue-300 transition">
+                                                            Kitchen Display System (KDS Dapur Terpisah)
+                                                        </span>
+                                                        <ChevronRight size={15} className="text-white/40 group-hover:translate-x-1 transition" />
+                                                    </div>
+                                                    <p className="text-[11px] text-white/60 mt-0.5">
+                                                        Layar antrean khusus dapur (Fitur Pengembangan Lanjutan)
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Toggle Unlock / Lock Fitur Pengembangan Selanjutnya (Skripsi) */}
+                                    <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isAdvancedUnlocked ? "bg-amber-400/20 text-amber-300" : "bg-white/10 text-white/60"}`}>
+                                                {isAdvancedUnlocked ? <Unlock size={15} /> : <Lock size={15} />}
                                             </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-white truncate">
+                                                    {isAdvancedUnlocked
+                                                        ? "Fitur Pengembangan Lanjutan: TERBUKA"
+                                                        : "Fitur Pengembangan Lanjutan: TERKUNCI"}
+                                                </p>
+                                                <p className="text-[10px] text-white/50 truncate">
+                                                    {isAdvancedUnlocked
+                                                        ? "AI Forecasting, KDS Dapur, Voice AI, CRM & Multi-Cabang aktif"
+                                                        : "Disembunyikan agar fokus pada POS & BOM untuk PKL"}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleToggleAdvanced}
+                                            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex-shrink-0 border ${
+                                                isAdvancedUnlocked
+                                                    ? "bg-white/10 hover:bg-white/20 text-white border-white/20"
+                                                    : "bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border-amber-400/40"
+                                            }`}
+                                        >
+                                            {isAdvancedUnlocked ? "🔒 Kunci (Mode PKL)" : "🔓 Unlock Fitur"}
                                         </button>
                                     </div>
 
@@ -319,4 +382,3 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
         </AnimatePresence>
     );
 }
-

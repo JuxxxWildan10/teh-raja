@@ -271,6 +271,9 @@ interface SalesState {
 interface AuthState {
     user: User | null;
     users: User[]; // Staff accounts
+    isAdvancedUnlocked: boolean; // false = Mode PKL (Fokus POS & BOM), true = Mode Pengembangan / Skripsi (Full Fitur)
+    setAdvancedUnlocked: (val: boolean) => void;
+    toggleAdvancedUnlocked: () => void;
     login: (username: string, role: Role) => User | null;
     loginWithPassword: (username: string, password: string) => Promise<User | null>;
     logout: () => Promise<void>;
@@ -289,6 +292,9 @@ export const useAuthStore = create<AuthState>()(
                 { id: '1', username: 'admin', password: '123', role: 'admin', name: 'Administrator' },
                 { id: '2', username: 'kasir', password: '123', role: 'cashier', name: 'Kasir Default' },
             ],
+            isAdvancedUnlocked: false,
+            setAdvancedUnlocked: (val) => set({ isAdvancedUnlocked: val }),
+            toggleAdvancedUnlocked: () => set((s) => ({ isAdvancedUnlocked: !s.isAdvancedUnlocked })),
             login: (username, role) => {
                 const found = get().users.find(u => u.username === username);
                 const u = found || { id: nanoid(), username, role, name: username === 'admin' ? 'Administrator' : 'Staff Kasir' };

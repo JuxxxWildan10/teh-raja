@@ -24,6 +24,7 @@ export default function Navbar() {
     const [isTrackerModalOpen, setIsTrackerModalOpen] = useState(false);
 
     const user = useAuthStore((state) => state.user);
+    const isAdvancedUnlocked = useAuthStore((state) => state.isAdvancedUnlocked);
     const cartCount = useCartStore((state) => state.items.reduce((s, i) => s + i.quantity, 0));
     const isCartOpen = useCartStore((state) => state.isCartDrawerOpen);
     const setCartOpen = useCartStore((state) => state.setCartDrawerOpen);
@@ -82,9 +83,11 @@ export default function Navbar() {
                             <a href="#menu" className="hover:text-gold transition">
                                 Menu Kami
                             </a>
-                            <a href="#recommendation" className="hover:text-gold transition">
-                                AI Sommelier
-                            </a>
+                            {isAdvancedUnlocked && (
+                                <a href="#recommendation" className="hover:text-gold transition">
+                                    AI Sommelier
+                                </a>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => setIsTrackerModalOpen(true)}
@@ -180,13 +183,15 @@ export default function Navbar() {
                                 >
                                     Menu Kami
                                 </a>
-                                <a
-                                    href="#recommendation"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className="text-base py-2 border-b border-white/5 hover:text-gold"
-                                >
-                                    AI Tea Sommelier
-                                </a>
+                                {isAdvancedUnlocked && (
+                                    <a
+                                        href="#recommendation"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="text-base py-2 border-b border-white/5 hover:text-gold"
+                                    >
+                                        AI Tea Sommelier
+                                    </a>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => {
