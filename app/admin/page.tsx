@@ -173,6 +173,7 @@ export default function AdminPage() {
 
     // Confirm modals
     const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+    const [confirmDeleteIng, setConfirmDeleteIng] = useState<{ id: string; name: string; usedCount: number } | null>(null);
     const [confirmReset, setConfirmReset] = useState(false);
     const [confirmCancelOrder, setConfirmCancelOrder] = useState<string | null>(null);
 
@@ -2324,14 +2325,9 @@ export default function AdminPage() {
                                                             </button>
                                                             <button onClick={() => openEditIng(ing)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition"><Edit size={15} /></button>
                                                             <button
-                                                                onClick={() => {
-                                                                    if (usedIn.length > 0 && !confirm(`Bahan "${ing.name}" dipakai di ${usedIn.length} resep menu. Tetap hapus?`)) return;
-                                                                    if (usedIn.length === 0 && !confirm(`Hapus bahan "${ing.name}"?`)) return;
-                                                                    deleteIngredient(ing.id);
-                                                                    addLog("DELETE_INGREDIENT", `Hapus bahan baku: ${ing.name}`, user.name);
-                                                                    toast.success(`Bahan "${ing.name}" dihapus.`);
-                                                                }}
+                                                                onClick={() => setConfirmDeleteIng({ id: ing.id, name: ing.name, usedCount: usedIn.length })}
                                                                 className="p-1.5 text-red-600 hover:bg-red-50 rounded transition"
+                                                                title="Hapus Bahan Baku"
                                                             >
                                                                 <Trash size={15} />
                                                             </button>
@@ -3075,6 +3071,26 @@ export default function AdminPage() {
                 danger
                 onConfirm={doDelete}
                 onCancel={() => setConfirmDelete(null)}
+            />
+            <ConfirmModal
+                isOpen={!!confirmDeleteIng}
+                title="Hapus Bahan Baku Inventaris?"
+                message={
+                    confirmDeleteIng && confirmDeleteIng.usedCount > 0
+                        ? `Bahan "${confirmDeleteIng.name}" saat ini terhubung ke ${confirmDeleteIng.usedCount} resep menu BOM. Jika dihapus, bahan ini juga otomatis dilepas dari resep menu & daftar suplier secara permanen.`
+                        : `Bahan baku "${confirmDeleteIng?.name}" akan dihapus permanen dari inventaris gudang.`
+                }
+                confirmLabel="Ya, Hapus Bahan"
+                danger
+                onConfirm={() => {
+                    if (confirmDeleteIng) {
+                        deleteIngredient(confirmDeleteIng.id);
+                        addLog("DELETE_INGREDIENT", `Hapus bahan baku: ${confirmDeleteIng.name}`, user.name);
+                        toast.success(`Bahan "${confirmDeleteIng.name}" berhasil dihapus permanen.`);
+                        setConfirmDeleteIng(null);
+                    }
+                }}
+                onCancel={() => setConfirmDeleteIng(null)}
             />
             <ConfirmModal
                 isOpen={confirmReset}

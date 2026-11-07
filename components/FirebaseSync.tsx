@@ -131,21 +131,39 @@ export default function FirebaseSync() {
             setErrorMsg(error.message);
         });
 
+        // Pantau daftar ID bahan baku yang sengaja dihapus agar tidak di-seed ulang otomatis
+        const deletedIngRef = ref(rtdb, 'deletedIngredients');
+        let remoteDeletedIds = new Set<string>(useInventoryStore.getState().deletedIngredientIds || []);
+        const unsubDeletedIng = onValue(deletedIngRef, (snapshot) => {
+            const val = snapshot.val();
+            const fromRemote = val && typeof val === 'object' ? Object.keys(val).filter(k => val[k]) : [];
+            const localDel = useInventoryStore.getState().deletedIngredientIds || [];
+            remoteDeletedIds = new Set([...fromRemote, ...localDel]);
+            useInventoryStore.setState((s) => ({
+                ingredients: s.ingredients.filter(i => !remoteDeletedIds.has(i.id)),
+                deletedIngredientIds: Array.from(remoteDeletedIds),
+            }));
+        }, () => {});
+
         const productsRef = ref(rtdb, 'products');
         const unsubProducts = onValue(productsRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 const rawProducts: ExtendedProduct[] = Object.values(data);
-                // Auto-hydrate missing BOM recipes from initialProducts
+                // Auto-hydrate missing BOM recipes hanya jika produk belum pernah diedit resepnya (hasCustomRecipe !== true)
                 const hydratedProducts = rawProducts.map(p => {
-                    if (!p.recipe || p.recipe.length === 0) {
+                    if ((!p.recipe || p.recipe.length === 0) && !p.hasCustomRecipe) {
                         const defaultProd = initialProducts.find(ip => ip.id === p.id);
-                        if (defaultProd?.recipe && defaultProd.recipe.length > 0) {
-                            firebaseUpdate(ref(rtdb, `products/${p.id}`), { recipe: defaultProd.recipe }).catch(() => {});
-                            return { ...p, recipe: defaultProd.recipe };
+                        const filteredDefaultRecipe = (defaultProd?.recipe || []).filter(
+                            r => !remoteDeletedIds.has(r.ingredientId)
+                        );
+                        if (filteredDefaultRecipe.length > 0) {
+                            firebaseUpdate(ref(rtdb, `products/${p.id}`), { recipe: filteredDefaultRecipe }).catch(() => {});
+                            return { ...p, recipe: filteredDefaultRecipe };
                         }
+                        return { ...p, recipe: [] };
                     }
-                    return p;
+                    return { ...p, recipe: p.recipe || [] };
                 });
                 useProductStore.setState({ products: hydratedProducts });
             } else {
@@ -153,8 +171,8 @@ export default function FirebaseSync() {
                 if (localProducts.length > 0) {
                     localProducts.forEach(p => {
                         const defaultProd = initialProducts.find(ip => ip.id === p.id);
-                        const withRecipe = (!p.recipe || p.recipe.length === 0) && defaultProd?.recipe
-                            ? { ...p, recipe: defaultProd.recipe }
+                        const withRecipe = (!p.recipe || p.recipe.length === 0) && !p.hasCustomRecipe && defaultProd?.recipe
+                            ? { ...p, recipe: defaultProd.recipe.filter(r => !remoteDeletedIds.has(r.ingredientId)) }
                             : p;
                         firebaseSet(ref(rtdb, `products/${p.id}`), JSON.parse(JSON.stringify(withRecipe))).catch(console.warn);
                     });
@@ -165,18 +183,24 @@ export default function FirebaseSync() {
         const ingredientsRef = ref(rtdb, 'ingredients');
         const unsubIngredients = onValue(ingredientsRef, (snapshot) => {
             const data = snapshot.val();
+            const currentDeleted = new Set([
+                ...remoteDeletedIds,
+                ...(useInventoryStore.getState().deletedIngredientIds || []),
+            ]);
+
             if (data) {
-                const loadedIngredients = Object.values(data) as Ingredient[];
-                // Ensure any new default BOM ingredients exist
-                const existingIds = new Set(loadedIngredients.map(i => i.id));
-                const missingDefaults = DEFAULT_INGREDIENTS.filter(di => !existingIds.has(di.id));
-                if (missingDefaults.length > 0) {
-                    missingDefaults.forEach(mi => {
-                        firebaseSet(ref(rtdb, `ingredients/${mi.id}`), mi).catch(() => {});
-                    });
-                }
-                useInventoryStore.setState({ ingredients: [...loadedIngredients, ...missingDefaults] });
+                // Gunakan data dari Firebase apa adanya (tanpa memaksa memasukkan kembali bahan default yang sudah dihapus)
+                const loadedIngredients = (Object.values(data) as Ingredient[]).filter(
+                    i => i && i.id && !currentDeleted.has(i.id)
+                );
+                useInventoryStore.setState({ ingredients: loadedIngredients });
             } else {
+                // Jika seluruh bahan sengaja dihapus oleh admin, biarkan kosong
+                if (currentDeleted.size > 0) {
+                    useInventoryStore.setState({ ingredients: [] });
+                    return;
+                }
+                // Hanya lakukan initial seed pada database baru yang benar-benar belum pernah diinisialisasi
                 const localIngredients = useInventoryStore.getState().ingredients;
                 const existingIds = new Set(localIngredients.map(i => i.id));
                 const merged = [...localIngredients, ...DEFAULT_INGREDIENTS.filter(di => !existingIds.has(di.id))];
@@ -356,6 +380,7 @@ export default function FirebaseSync() {
 
         return () => {
             unsubscribe();
+            unsubDeletedIng();
             unsubProducts();
             unsubIngredients();
             unsubOpname();

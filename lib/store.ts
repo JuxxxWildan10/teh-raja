@@ -116,6 +116,7 @@ export interface ExtendedProduct extends Product {
     stock: number; // for direct stock (e.g. snacks)
     minStockThreshold?: number;
     recipe?: RecipeItem[]; // BOM
+    hasCustomRecipe?: boolean; // Menandai resep sudah pernah diedit/dihapus agar tidak ditimpa ulang oleh default seed
 }
 
 export interface ActivityLog {
@@ -436,10 +437,13 @@ export const useProductStore = create<ProductState>()(
                 firebaseSet(ref(rtdb, `products/${product.id}`), JSON.parse(JSON.stringify(product))).catch(err => console.warn(err));
             },
             updateProduct: (id, updated) => {
+                const payload = updated.recipe !== undefined
+                    ? { ...updated, hasCustomRecipe: true }
+                    : updated;
                 set((state) => ({
-                    products: state.products.map((p) => (p.id === id ? { ...p, ...updated } : p))
+                    products: state.products.map((p) => (p.id === id ? { ...p, ...payload } : p))
                 }));
-                firebaseUpdate(ref(rtdb, `products/${id}`), JSON.parse(JSON.stringify(updated))).catch(err => console.warn(err));
+                firebaseUpdate(ref(rtdb, `products/${id}`), JSON.parse(JSON.stringify(payload))).catch(err => console.warn(err));
             },
             deleteProduct: (id) => {
                 set((state) => ({
@@ -959,6 +963,7 @@ export interface OpnameLog {
 
 interface InventoryState {
     ingredients: Ingredient[];
+    deletedIngredientIds: string[];
     opnameLogs: OpnameLog[];
     addIngredient: (ingredient: Ingredient) => void;
     updateIngredient: (id: string, updated: Partial<Ingredient>) => void;
@@ -1004,6 +1009,7 @@ export const useInventoryStore = create<InventoryState>()(
     persist(
         (set) => ({
             ingredients: DEFAULT_INGREDIENTS,
+            deletedIngredientIds: [],
             opnameLogs: [],
             recordOpname: (data) => {
                 const newLog: OpnameLog = {
@@ -1019,16 +1025,69 @@ export const useInventoryStore = create<InventoryState>()(
                 firebaseSet(ref(rtdb, `opnameLogs/${newLog.id}`), JSON.parse(JSON.stringify(newLog))).catch(console.warn);
             },
             addIngredient: (ingredient) => {
-                set((s) => ({ ingredients: [...s.ingredients, ingredient] }));
-                firebaseSet(ref(rtdb, `ingredients/${ingredient.id}`), ingredient).catch(err => console.warn(err));
+                set((s) => ({
+                    ingredients: [...s.ingredients.filter(i => i.id !== ingredient.id), ingredient],
+                    deletedIngredientIds: (s.deletedIngredientIds || []).filter(delId => delId !== ingredient.id),
+                }));
+                firebaseUpdate(ref(rtdb), {
+                    [`ingredients/${ingredient.id}`]: ingredient,
+                    [`deletedIngredients/${ingredient.id}`]: null,
+                }).catch(err => console.warn(err));
             },
             updateIngredient: (id, updated) => {
                 set((s) => ({ ingredients: s.ingredients.map(i => i.id === id ? { ...i, ...updated } : i) }));
                 firebaseUpdate(ref(rtdb, `ingredients/${id}`), updated).catch(err => console.warn(err));
             },
+            // Menghapus bahan baku secara permanen (termasuk bahan default seperti Susu Segar / Kentang Beku)
+            // dan membersihkan referensinya dari resep BOM produk serta daftar suplier agar tidak muncul kembali
             deleteIngredient: (id) => {
-                set((s) => ({ ingredients: s.ingredients.filter(i => i.id !== id) }));
-                firebaseSet(ref(rtdb, `ingredients/${id}`), null).catch(err => console.warn(err));
+                set((s) => {
+                    const prevDeleted = s.deletedIngredientIds || [];
+                    return {
+                        ingredients: s.ingredients.filter(i => i.id !== id),
+                        deletedIngredientIds: prevDeleted.includes(id) ? prevDeleted : [...prevDeleted, id],
+                    };
+                });
+
+                const rtdbUpdates: Record<string, any> = {
+                    [`ingredients/${id}`]: null,
+                    [`deletedIngredients/${id}`]: true,
+                };
+
+                // Bersihkan bahan baku yang dihapus dari resep BOM pada setiap produk
+                const prodState = useProductStore.getState();
+                let productsChanged = false;
+                const updatedProducts = prodState.products.map(p => {
+                    if (p.recipe && p.recipe.some(r => r.ingredientId === id)) {
+                        productsChanged = true;
+                        const nextRecipe = p.recipe.filter(r => r.ingredientId !== id);
+                        rtdbUpdates[`products/${p.id}/recipe`] = nextRecipe.length > 0 ? nextRecipe : null;
+                        rtdbUpdates[`products/${p.id}/hasCustomRecipe`] = true;
+                        return { ...p, recipe: nextRecipe, hasCustomRecipe: true };
+                    }
+                    return p;
+                });
+                if (productsChanged) {
+                    useProductStore.setState({ products: updatedProducts });
+                }
+
+                // Bersihkan bahan baku yang dihapus dari daftar item suplier
+                const supState = useSupplierStore.getState();
+                let suppliersChanged = false;
+                const updatedSuppliers = supState.suppliers.map(sup => {
+                    if (sup.itemsSupplied && sup.itemsSupplied.includes(id)) {
+                        suppliersChanged = true;
+                        const nextSupplied = sup.itemsSupplied.filter(itemId => itemId !== id);
+                        rtdbUpdates[`suppliers/${sup.id}/itemsSupplied`] = nextSupplied;
+                        return { ...sup, itemsSupplied: nextSupplied };
+                    }
+                    return sup;
+                });
+                if (suppliersChanged) {
+                    useSupplierStore.setState({ suppliers: updatedSuppliers });
+                }
+
+                firebaseUpdate(ref(rtdb), rtdbUpdates).catch(err => console.warn(err));
             },
             decrementIngredientsForOrder: (items, products) => {
                 set((state) => {
