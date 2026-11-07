@@ -53,7 +53,7 @@ export default function ConfirmModal({
                         exit={{ scale: 0.9, opacity: 0, y: 10 }}
                         transition={{ type: "spring", stiffness: 300, damping: 25 }}
                         onClick={e => e.stopPropagation()}
-                        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto"
                     >
                         {/* Header */}
                         <div className={`p-5 flex items-start gap-4 ${danger ? "bg-red-50" : "bg-amber-50"}`}>

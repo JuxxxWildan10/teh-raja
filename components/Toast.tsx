@@ -75,7 +75,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     return (
         <ToastContext.Provider value={ctx}>
             {children}
-            <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none" aria-live="polite">
+            <div className="fixed top-3 right-3 left-3 sm:left-auto sm:top-4 sm:right-4 z-[9999] flex flex-col items-end gap-2 pointer-events-none" aria-live="polite">
                 <AnimatePresence initial={false}>
                     {toasts.map(t => (
                         <motion.div
@@ -84,7 +84,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             exit={{ opacity: 0, x: 80, scale: 0.9 }}
                             transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                            className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl border shadow-2xl max-w-xs text-sm font-medium ${styles[t.type]}`}
+                            className={`pointer-events-auto flex items-start gap-2.5 sm:gap-3 px-3.5 sm:px-4 py-3 rounded-xl border shadow-2xl w-full sm:w-auto sm:max-w-xs text-xs sm:text-sm font-medium ${styles[t.type]}`}
                         >
                             {icons[t.type]}
                             <span className="flex-1 leading-snug">{t.message}</span>

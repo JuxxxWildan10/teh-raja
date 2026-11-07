@@ -97,7 +97,7 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-white text-black w-full max-w-[320px] rounded-lg overflow-hidden shadow-2xl relative"
+            className="bg-white text-black w-full max-w-[340px] max-h-[90dvh] flex flex-col rounded-xl overflow-hidden shadow-2xl relative"
         >
             {/* Close button (top-right) */}
             <div className="absolute top-2 right-2 print:hidden z-10">
@@ -107,7 +107,7 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
             </div>
 
             {/* Receipt Content — id used by @media print */}
-            <div id="print-receipt" ref={receiptRef} className="p-6 bg-white font-mono text-[11px] relative max-h-[85vh] overflow-y-auto scrollbar-hide">
+            <div id="print-receipt" ref={receiptRef} className="p-5 sm:p-6 bg-white font-mono text-[11px] relative flex-1 min-h-0 overflow-y-auto print:max-h-none print:overflow-visible scrollbar-hide">
                 {/* Paper top edge */}
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-b from-gray-200 to-transparent opacity-20" />
 
@@ -243,31 +243,31 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
             </div>
 
             {/* Footer Actions (Hidden in Print) */}
-            <div className="bg-gray-50 p-3 border-t border-gray-100 space-y-2 print:hidden">
+            <div className="bg-gray-50 p-3 border-t border-gray-100 space-y-2 print:hidden flex-shrink-0">
                 {/* WhatsApp — prominent full-width */}
                 <button
                     onClick={handleWhatsApp}
-                    className="w-full py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 flex items-center justify-center gap-2 text-sm transition shadow-lg shadow-green-500/20"
+                    className="w-full py-2.5 sm:py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 flex items-center justify-center gap-2 text-xs sm:text-sm transition shadow-lg shadow-green-500/20"
                 >
-                    <Share2 size={16} /> Kirim via WhatsApp
+                    <Share2 size={15} /> Kirim via WhatsApp
                 </button>
                 {/* Print row */}
-                <div className="flex gap-2">
+                <div className="flex gap-1.5 sm:gap-2">
                     <button
                         onClick={handlePrint}
-                        className="flex-1 py-2.5 bg-forest text-gold rounded-lg font-bold hover:bg-forest-light flex items-center justify-center gap-1.5 text-xs transition"
+                        className="flex-1 py-2.5 px-2 bg-forest text-gold rounded-lg font-bold hover:bg-forest-light flex items-center justify-center gap-1 text-[11px] sm:text-xs transition whitespace-nowrap"
                     >
-                        <Printer size={14} /> Cetak (Browser)
+                        <Printer size={13} /> Cetak
                     </button>
                     <button
                         onClick={handleBluetoothPrint}
-                        className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center justify-center gap-1.5 text-xs transition shadow-lg shadow-blue-500/20"
+                        className="flex-1 py-2.5 px-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center justify-center gap-1 text-[11px] sm:text-xs transition shadow-lg shadow-blue-500/20 whitespace-nowrap"
                     >
-                        <Bluetooth size={14} /> Thermal
+                        <Bluetooth size={13} /> Thermal
                     </button>
                     <button
                         onClick={onClose}
-                        className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-xs transition font-medium"
+                        className="px-3 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-[11px] sm:text-xs transition font-medium whitespace-nowrap"
                     >
                         Tutup
                     </button>

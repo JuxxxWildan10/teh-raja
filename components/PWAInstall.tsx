@@ -73,15 +73,15 @@ export default function PWAInstall() {
                     initial={{ y: 100, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: 20, opacity: 0 }}
-                    className="fixed bottom-6 right-6 z-[100] group"
+                    className="fixed bottom-24 sm:bottom-6 right-3 sm:right-6 z-30 group"
                 >
-                    <div className="flex flex-col items-end gap-2">
+                    <div className="flex flex-col items-end gap-1.5 sm:gap-2">
                         {/* Tooltip-like message */}
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.5 }}
-                            className="bg-white text-[#0D2B20] text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg border border-amber-100 flex items-center gap-2 whitespace-nowrap"
+                            className="bg-white text-[#0D2B20] text-[10px] font-bold px-3 py-1 rounded-full shadow-lg border border-amber-100 flex items-center gap-2 whitespace-nowrap"
                         >
                             <span>Install App Teh Raja</span>
                             <button
@@ -95,10 +95,10 @@ export default function PWAInstall() {
                         {/* Main Floating Button */}
                         <button
                             onClick={handleInstallClick}
-                            className="bg-amber-400 text-[#0D2B20] p-4 rounded-2xl shadow-2xl hover:bg-amber-300 transition-all transform hover:scale-110 active:scale-95 flex items-center gap-2 border-2 border-white"
+                            className="bg-amber-400 text-[#0D2B20] px-3 py-2.5 sm:p-4 rounded-2xl shadow-2xl hover:bg-amber-300 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-1.5 sm:gap-2 border-2 border-white"
                         >
-                            <Download size={24} className="animate-bounce" />
-                            <span className="font-black text-sm pr-2">PASANG APLIKASI</span>
+                            <Download size={18} className="sm:w-6 sm:h-6 animate-bounce flex-shrink-0" />
+                            <span className="font-black text-xs sm:text-sm pr-1 whitespace-nowrap">PASANG APLIKASI</span>
                         </button>
                     </div>
                 </motion.div>

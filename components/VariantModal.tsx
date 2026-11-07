@@ -105,7 +105,7 @@ export default function VariantModal({ product, onConfirm, onClose }: VariantMod
                     exit={{ y: 60, opacity: 0 }}
                     transition={{ type: 'spring', damping: 25, stiffness: 260 }}
                     onClick={e => e.stopPropagation()}
-                    className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl max-h-[92vh] flex flex-col"
+                    className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl max-h-[90dvh] flex flex-col"
                 >
                     {/* ── Header ───────────────────────────────── */}
                     <div className="relative h-36 sm:h-44 flex-shrink-0 overflow-hidden">
@@ -133,7 +133,7 @@ export default function VariantModal({ product, onConfirm, onClose }: VariantMod
                     </div>
 
                     {/* ── Variant Options (Scrollable) ──────────── */}
-                    <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+                    <div className="overflow-y-auto flex-1 min-h-0 px-4 sm:px-5 py-4 space-y-5">
 
                         {/* Size */}
                         <section>
@@ -223,12 +223,12 @@ export default function VariantModal({ product, onConfirm, onClose }: VariantMod
                                         <Droplets size={14} className="text-blue-500" />
                                         <h3 className="text-xs font-black text-gray-700 uppercase tracking-wider">Level Es</h3>
                                     </div>
-                                    <div className="grid grid-cols-4 gap-1.5">
+                                    <div className="grid grid-cols-4 gap-1 sm:gap-1.5">
                                         {ICE_LEVELS.map(lvl => (
                                             <button
                                                 key={lvl.value}
                                                 onClick={() => setIce(lvl.value)}
-                                                className={`py-2 rounded-xl border-2 text-[11px] font-bold transition ${ice === lvl.value
+                                                className={`px-1 py-2 rounded-xl border-2 text-[10px] sm:text-[11px] font-bold transition leading-tight ${ice === lvl.value
                                                     ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
                                                     : 'border-gray-200 text-gray-500 bg-gray-50 hover:border-blue-200'
                                                     }`}
@@ -269,11 +269,11 @@ export default function VariantModal({ product, onConfirm, onClose }: VariantMod
                     </div>
 
                     {/* ── Footer CTA ───────────────────────────── */}
-                    <div className="px-5 pb-5 pt-3 bg-white border-t border-gray-100 flex-shrink-0">
+                    <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-3 bg-white border-t border-gray-100 flex-shrink-0">
                         <div className="flex items-center justify-between mb-3 bg-[#0D2B20]/5 rounded-xl p-3">
                             <div>
                                 <p className="text-[10px] text-gray-500 uppercase tracking-wider">Total ({qty}x)</p>
-                                <p className="text-xl font-black text-[#0D2B20]">{formatRp(totalPrice)}</p>
+                                <p className="text-lg sm:text-xl font-black text-[#0D2B20]">{formatRp(totalPrice)}</p>
                             </div>
                             {sizeUpcharge > 0 && (
                                 <div className="text-right">
@@ -285,10 +285,10 @@ export default function VariantModal({ product, onConfirm, onClose }: VariantMod
                         </div>
                         <button
                             onClick={handleConfirm}
-                            className="w-full py-4 bg-[#0D2B20] text-amber-400 font-black text-sm rounded-xl hover:bg-[#1a4433] transition hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-[#0D2B20]/20 flex items-center justify-center gap-2"
+                            className="w-full py-3.5 sm:py-4 px-3 bg-[#0D2B20] text-amber-400 font-black text-xs sm:text-sm rounded-xl hover:bg-[#1a4433] transition hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-[#0D2B20]/20 flex items-center justify-center gap-2"
                         >
-                            <ShoppingCart size={18} />
-                            Masukkan ke Tray — {formatRp(totalPrice)}
+                            <ShoppingCart size={17} className="flex-shrink-0" />
+                            <span>Masukkan ke Tray — {formatRp(totalPrice)}</span>
                         </button>
                     </div>
                 </motion.div>

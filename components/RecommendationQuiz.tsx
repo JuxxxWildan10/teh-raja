@@ -79,8 +79,8 @@ export default function RecommendationQuiz() {
     if (!isClient) return null;
 
     return (
-        <div className="w-full max-w-2xl mx-auto p-8 rounded-2xl glass text-cream shadow-2xl border border-gold/20">
-            <h2 className="text-3xl font-serif text-center text-gold mb-6">Temukan Teh Idealmu</h2>
+        <div className="w-full max-w-2xl mx-auto p-5 sm:p-8 rounded-2xl glass text-cream shadow-2xl border border-gold/20">
+            <h2 className="text-2xl sm:text-3xl font-serif text-center text-gold mb-6">Temukan Teh Idealmu</h2>
 
             <div className="min-h-[300px] flex flex-col justify-center">
                 {/* AnimatePresence menangani animasi elemen yang masuk dan keluar di dalam DOM */}

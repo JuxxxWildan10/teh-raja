@@ -1203,35 +1203,35 @@ export default function AdminPage() {
         <div className="min-h-screen bg-gray-50 text-forest relative flex flex-col">
             {/* ============ ADMIN NAVBAR ============ */}
             <nav className="bg-forest text-cream shadow-lg sticky top-0 z-30">
-                <div className="px-4 sm:px-6 py-3 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
+                <div className="px-3 sm:px-6 py-2.5 sm:py-3 flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <button
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            className="md:hidden p-2 hover:bg-white/10 rounded-lg transition"
+                            className="md:hidden p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition flex-shrink-0"
                             aria-label="Toggle menu"
                         >
                             {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
                         </button>
-                        <Link href="/" className="text-lg sm:text-xl font-serif font-bold text-gold">TEH RAJA</Link>
+                        <Link href="/" className="text-base sm:text-xl font-serif font-bold text-gold whitespace-nowrap">TEH RAJA</Link>
                         <span className="opacity-30 hidden sm:block">|</span>
-                        <span className="text-xs opacity-60 hidden sm:block uppercase tracking-wider">
+                        <span className="text-xs opacity-60 hidden sm:block uppercase tracking-wider truncate">
                             {isAdvancedUnlocked ? `Admin ERP · ${branchName || 'Cabang Utama'}` : 'Admin POS & Bahan Baku BOM'}
                         </span>
                     </div>
-                    <div className="flex gap-2 sm:gap-2.5 items-center">
+                    <div className="flex gap-1.5 sm:gap-2.5 items-center flex-shrink-0">
                         {/* Tombol Lock / Unlock Buka-Tutup Kedai Online Pelanggan */}
                         {user.role === 'admin' ? (
                             <button
                                 type="button"
                                 onClick={openStoreLockModal}
-                                className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition ${
+                                className={`flex items-center gap-1 sm:gap-1.5 text-[11px] font-bold px-2 sm:px-2.5 py-1.5 rounded-lg border transition whitespace-nowrap ${
                                     isOnlineOrderOpen
                                         ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/30'
                                         : 'bg-red-500/30 text-red-200 border-red-400/60 hover:bg-red-500/40 animate-pulse'
                                 }`}
                                 title={isOnlineOrderOpen ? 'Kedai Online sedang Buka. Klik untuk menutup/meliburkan kedai.' : `Kedai Online sedang Tutup (${closedBadge}). Klik untuk membuka kembali.`}
                             >
-                                {isOnlineOrderOpen ? <Store size={13} className="text-emerald-300" /> : <Lock size={13} className="text-red-300" />}
+                                {isOnlineOrderOpen ? <Store size={13} className="text-emerald-300 flex-shrink-0" /> : <Lock size={13} className="text-red-300 flex-shrink-0" />}
                                 <span className="hidden lg:inline">
                                     {isOnlineOrderOpen ? 'Kedai Online: BUKA' : `Kedai Tutup (${closedBadge})`}
                                 </span>
@@ -1241,7 +1241,7 @@ export default function AdminPage() {
                             </button>
                         ) : (
                             <span
-                                className={`hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border ${
+                                className={`hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${
                                     isOnlineOrderOpen
                                         ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
                                         : 'bg-red-500/25 text-red-200 border-red-400/50'
@@ -1253,7 +1253,7 @@ export default function AdminPage() {
                         <button
                             type="button"
                             onClick={handleToggleAdvancedMode}
-                            className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition ${
+                            className={`flex items-center gap-1.5 text-[11px] font-bold px-2 sm:px-2.5 py-1.5 rounded-lg border transition whitespace-nowrap ${
                                 isAdvancedUnlocked
                                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/30'
                                     : 'bg-white/10 text-amber-300 border-amber-400/30 hover:bg-white/20'
@@ -1264,23 +1264,24 @@ export default function AdminPage() {
                             <span className="hidden md:inline">{isAdvancedUnlocked ? 'Mode Full (Unlocked)' : 'Mode PKL (POS & BOM)'}</span>
                         </button>
                         <div className="h-6 w-[1px] bg-white/10 hidden lg:block"></div>
-                        <Link href="/menu" className="hidden sm:flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition">
+                        <Link href="/menu" className="hidden sm:flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition whitespace-nowrap">
                             <Coffee size={13} className="text-gold" /> Web Menu
                         </Link>
                         {isAdvancedUnlocked && (
-                            <Link href="/kds" className="hidden sm:flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition">
+                            <Link href="/kds" className="hidden sm:flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition whitespace-nowrap">
                                 <ChefHat size={13} className="text-amber-400" /> Dapur KDS
                             </Link>
                         )}
-                        <Link href="/pos" className="flex items-center gap-1.5 text-xs bg-amber-400 text-forest font-bold px-3 py-1.5 rounded-lg hover:bg-amber-300 transition shadow">
-                            <span>Buka Kasir POS</span>
+                        <Link href="/pos" className="flex items-center gap-1.5 text-xs bg-amber-400 text-forest font-bold px-2.5 sm:px-3 py-1.5 rounded-lg hover:bg-amber-300 transition shadow whitespace-nowrap">
+                            <span className="hidden sm:inline">Buka Kasir </span>
+                            <span>POS</span>
                             <span className="w-2 h-2 bg-green-600 rounded-full animate-pulse flex-shrink-0"></span>
                         </Link>
                         <a
                             href="/presentasi_pkl_tehraja.html"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hidden xl:flex items-center gap-1 text-xs bg-white/10 hover:bg-white/20 text-amber-300 px-2.5 py-1.5 rounded-lg transition"
+                            className="hidden xl:flex items-center gap-1 text-xs bg-white/10 hover:bg-white/20 text-amber-300 px-2.5 py-1.5 rounded-lg transition whitespace-nowrap"
                             title="Slide Presentasi Laporan Akhir Pembuatan POS"
                         >
                             <Presentation size={13} /> Slide Laporan Akhir
@@ -1289,13 +1290,13 @@ export default function AdminPage() {
                             href="/presentasi_sempro_tehraja.html"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hidden xl:flex items-center gap-1 text-xs bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 px-2.5 py-1.5 rounded-lg transition font-bold"
+                            className="hidden xl:flex items-center gap-1 text-xs bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 px-2.5 py-1.5 rounded-lg transition font-bold whitespace-nowrap"
                             title="Slide Presentasi Seminar Proposal (Sempro)"
                         >
                             <Sparkles size={13} /> Slide Sempro
                         </a>
-                        <button onClick={handleLogout} className="p-2 hover:bg-red-500/20 text-red-300 rounded-full transition" title="Logout">
-                            <LogOut size={18} />
+                        <button onClick={handleLogout} className="p-1.5 sm:p-2 hover:bg-red-500/20 text-red-300 rounded-full transition flex-shrink-0" title="Logout">
+                            <LogOut size={17} />
                         </button>
                     </div>
                 </div>
@@ -1326,20 +1327,22 @@ export default function AdminPage() {
 
                 {/* Mobile Dropdown */}
                 {isMobileMenuOpen && (
-                    <div className="md:hidden border-t border-white/10 bg-forest-light">
-                        <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center">
+                    <div className="md:hidden border-t border-white/10 bg-forest-light max-h-[calc(100dvh-56px)] overflow-y-auto">
+                        <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center flex-shrink-0">
                                     <span className="text-gold font-bold text-sm">{user.name.charAt(0)}</span>
                                 </div>
-                                <div>
-                                    <p className="font-bold text-sm text-gold">{user.name}</p>
+                                <div className="min-w-0">
+                                    <p className="font-bold text-sm text-gold truncate">{user.name}</p>
                                     <p className="text-xs opacity-60 uppercase tracking-wider">{user.role}</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <Link href="/menu" className="text-xs bg-white/10 px-2.5 py-1.5 rounded text-gold">Menu</Link>
-                                <Link href="/kds" className="text-xs bg-white/10 px-2.5 py-1.5 rounded text-amber-300">KDS</Link>
+                            <div className="flex gap-2 flex-shrink-0">
+                                <Link href="/menu" className="text-xs bg-white/10 px-2.5 py-1.5 rounded text-gold whitespace-nowrap">Menu</Link>
+                                {isAdvancedUnlocked && (
+                                    <Link href="/kds" className="text-xs bg-white/10 px-2.5 py-1.5 rounded text-amber-300 whitespace-nowrap">KDS</Link>
+                                )}
                             </div>
                         </div>
                         {tabs.map(tab => (
@@ -2410,7 +2413,7 @@ export default function AdminPage() {
                                                 ))}
                                             </div>
 
-                                            <div className="flex justify-between items-center pt-1 border-t border-gray-50">
+                                            <div className="flex flex-wrap justify-between items-center gap-2 pt-2 border-t border-gray-50">
                                                 <div>
                                                     <span className="text-xs text-gray-400 block font-mono uppercase">{order.paymentMethod || 'TUNAI'}</span>
                                                     <span className="font-black text-forest text-sm">Rp {order.total.toLocaleString('id-ID')}</span>
@@ -3186,7 +3189,7 @@ export default function AdminPage() {
             {/* ============ MODAL: PRODUK + RESEP BOM ============ */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white text-forest rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl animate-scale-in">
+                    <div className="bg-white text-forest rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[90dvh] overflow-y-auto shadow-2xl animate-scale-in">
                         <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
                             <h3 className="text-lg sm:text-xl font-bold font-serif">{editingId ? 'Edit Produk & Resep' : 'Tambah Produk Baru'}</h3>
                             <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
@@ -3269,9 +3272,9 @@ export default function AdminPage() {
                                     {(formData.recipe || []).map(r => {
                                         const ing = ingredients.find(i => i.id === r.ingredientId);
                                         return (
-                                            <div key={r.ingredientId} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-emerald-100 text-sm">
-                                                <span className="font-bold text-gray-800">{ing?.name || r.ingredientId}</span>
-                                                <div className="flex items-center gap-2">
+                                            <div key={r.ingredientId} className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2 border border-emerald-100 text-sm">
+                                                <span className="font-bold text-gray-800 min-w-0 truncate">{ing?.name || r.ingredientId}</span>
+                                                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                                                     <input
                                                         type="number"
                                                         min={0}
@@ -3281,9 +3284,9 @@ export default function AdminPage() {
                                                             ...formData,
                                                             recipe: (formData.recipe || []).map(x => x.ingredientId === r.ingredientId ? { ...x, quantity: Number(e.target.value) } : x),
                                                         })}
-                                                        className="w-20 px-2 py-1 border border-gray-200 rounded text-right font-mono text-xs text-gray-900"
+                                                        className="w-16 sm:w-20 px-2 py-1 border border-gray-200 rounded text-right font-mono text-xs text-gray-900"
                                                     />
-                                                    <span className="text-xs text-gray-500 w-10">{ing?.unit || ''}</span>
+                                                    <span className="text-xs text-gray-500 w-9 sm:w-10">{ing?.unit || ''}</span>
                                                     <button onClick={() => handleRemoveRecipeItem(r.ingredientId)} className="p-1 text-red-500 hover:bg-red-50 rounded"><X size={14} /></button>
                                                 </div>
                                             </div>
@@ -3293,11 +3296,11 @@ export default function AdminPage() {
                                         <p className="text-xs text-gray-500 italic bg-white rounded-lg px-3 py-2 border border-dashed border-emerald-200">Belum ada bahan. Tanpa resep, stok bahan baku tidak akan terpotong saat produk dijual.</p>
                                     )}
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap sm:flex-nowrap gap-2">
                                     <select
                                         value={newRecipeIngId}
                                         onChange={e => setNewRecipeIngId(e.target.value)}
-                                        className="flex-1 px-2 py-2 border border-gray-300 rounded-lg text-xs bg-white text-gray-900"
+                                        className="min-w-[140px] flex-1 px-2 py-2 border border-gray-300 rounded-lg text-xs bg-white text-gray-900"
                                     >
                                         <option value="">-- Pilih bahan --</option>
                                         {ingredients.map(i => (
@@ -3312,7 +3315,7 @@ export default function AdminPage() {
                                         onChange={e => setNewRecipeQty(e.target.value)}
                                         className="w-20 px-2 py-2 border border-gray-300 rounded-lg text-xs text-right font-mono text-gray-900"
                                     />
-                                    <button onClick={handleAddRecipeItem} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1">
+                                    <button onClick={handleAddRecipeItem} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1 flex-shrink-0">
                                         <Plus size={13} /> Bahan
                                     </button>
                                 </div>
@@ -3358,18 +3361,18 @@ export default function AdminPage() {
             {/* ============ MODAL: RESTOK BAHAN / PURCHASE ORDER ============ */}
             {restockModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <form onSubmit={handleSaveRestock} className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-                        <div className="bg-emerald-600 text-white px-6 py-4 flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <PackagePlus size={20} />
-                                <div>
-                                    <h3 className="font-serif font-bold">Restok Bahan / Purchase Order</h3>
+                    <form onSubmit={handleSaveRestock} className="bg-white w-full max-w-md max-h-[90dvh] flex flex-col rounded-2xl shadow-2xl overflow-hidden">
+                        <div className="bg-emerald-600 text-white px-4 sm:px-6 py-4 flex justify-between items-center flex-shrink-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <PackagePlus size={20} className="flex-shrink-0" />
+                                <div className="min-w-0">
+                                    <h3 className="font-serif font-bold text-sm sm:text-base">Restok Bahan / Purchase Order</h3>
                                     <p className="text-xs text-emerald-100">Stok bertambah &amp; biaya otomatis masuk Laba Rugi</p>
                                 </div>
                             </div>
-                            <button type="button" onClick={() => setRestockModalOpen(false)} className="p-1 hover:bg-white/10 rounded-lg"><X size={20} /></button>
+                            <button type="button" onClick={() => setRestockModalOpen(false)} className="p-1 hover:bg-white/10 rounded-lg flex-shrink-0"><X size={20} /></button>
                         </div>
-                        <div className="p-6 space-y-3">
+                        <div className="p-4 sm:p-6 space-y-3 overflow-y-auto flex-1">
                             <div>
                                 <label className="text-xs font-bold text-gray-600 mb-1 block">Bahan Baku *</label>
                                 <select required value={restockForm.ingredientId} onChange={e => setRestockForm(f => ({ ...f, ingredientId: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900">
@@ -3379,7 +3382,7 @@ export default function AdminPage() {
                                     ))}
                                 </select>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="text-xs font-bold text-gray-600 mb-1 block">Jumlah Tambahan *</label>
                                     <input required type="number" min={0} step="any" value={restockForm.addQty} onChange={e => setRestockForm(f => ({ ...f, addQty: e.target.value }))} placeholder={ingredients.find(i => i.id === restockForm.ingredientId)?.unit || ''} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900" />
@@ -3389,7 +3392,7 @@ export default function AdminPage() {
                                     <input type="number" min={0} value={restockForm.costAmount} onChange={e => setRestockForm(f => ({ ...f, costAmount: e.target.value }))} placeholder="0 = tanpa biaya" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="text-xs font-bold text-gray-600 mb-1 block">Suplier</label>
                                     <select value={restockForm.supplierName} onChange={e => setRestockForm(f => ({ ...f, supplierName: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900">
@@ -3406,7 +3409,7 @@ export default function AdminPage() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex gap-2 px-6 pb-6">
+                        <div className="flex gap-2 px-4 sm:px-6 pb-4 sm:pb-6 pt-2 flex-shrink-0 border-t border-gray-100">
                             <button type="button" onClick={() => setRestockModalOpen(false)} className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-lg font-bold text-sm hover:bg-gray-50">Batal</button>
                             <button type="submit" className="flex-1 py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 flex items-center justify-center gap-2"><Save size={14} /> Simpan Restok</button>
                         </div>
@@ -3417,7 +3420,7 @@ export default function AdminPage() {
             {/* ============ MODAL: SUPLIER ============ */}
             {supModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 sm:p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
                         <div className="flex justify-between items-center">
                             <h3 className="text-lg font-bold font-serif">{editingSupId ? 'Edit Suplier' : 'Tambah Suplier'}</h3>
                             <button onClick={() => setSupModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
@@ -3472,7 +3475,7 @@ export default function AdminPage() {
             {/* ============ MODAL: MEMBER LOYALTY ============ */}
             {custModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 sm:p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
                         <div className="flex justify-between items-center">
                             <h3 className="text-lg font-bold font-serif">{editingCustId ? 'Edit Member' : 'Tambah Member Loyalty'}</h3>
                             <button onClick={() => setCustModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
@@ -3508,7 +3511,7 @@ export default function AdminPage() {
             {/* ============ MODAL: KARYAWAN ============ */}
             {staffModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 sm:p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
                         <div className="flex justify-between items-center">
                             <h3 className="text-lg font-bold font-serif">{editingStaffId ? 'Edit Akun Karyawan' : 'Tambah Karyawan'}</h3>
                             <button onClick={() => setStaffModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
@@ -3613,7 +3616,7 @@ export default function AdminPage() {
             {/* ============ MODAL: INVENTORY BAHAN BAKU ============ */}
             {ingModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 sm:p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
                         <div className="flex justify-between items-center">
                             <h3 className="text-lg font-bold font-serif">{editingIngId ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}</h3>
                             <button onClick={() => setIngModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
@@ -3662,7 +3665,7 @@ export default function AdminPage() {
             {/* ============ MODAL: PROMO ENGINE ============ */}
             {promoModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 sm:p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
                         <div className="flex justify-between items-center">
                             <h3 className="text-lg font-bold font-serif">{editingPromoId ? 'Edit Promo' : 'Buat Promo Baru'}</h3>
                             <button onClick={() => setPromoModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
@@ -3740,26 +3743,26 @@ export default function AdminPage() {
             {/* ============ MODAL: PENGELUARAN TOKO (PETTY CASH) ============ */}
             {expenseModalOpen && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100 animate-scale-up">
-                        <div className="bg-[#0D2B20] text-cream px-6 py-4 flex justify-between items-center border-b border-gold/20">
-                            <div className="flex items-center gap-2">
-                                <div className="p-2 bg-gold/20 rounded-lg text-gold">
+                    <div className="bg-white rounded-2xl w-full max-w-md max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border border-gray-100 animate-scale-up">
+                        <div className="bg-[#0D2B20] text-cream px-4 sm:px-6 py-4 flex justify-between items-center border-b border-gold/20 flex-shrink-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="p-2 bg-gold/20 rounded-lg text-gold flex-shrink-0">
                                     <Wallet size={18} />
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                     <h3 className="font-serif font-bold text-gold text-base">Catat Pengeluaran Toko</h3>
                                     <p className="text-xs text-cream/70">Petty Cash &amp; Operasional Kedai</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setExpenseModalOpen(false)}
-                                className="text-cream/70 hover:text-white p-1 hover:bg-white/10 rounded-lg transition"
+                                className="text-cream/70 hover:text-white p-1 hover:bg-white/10 rounded-lg transition flex-shrink-0"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveExpense} className="p-6 space-y-4">
+                        <form onSubmit={handleSaveExpense} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
                                     Nominal Pengeluaran (Rp) <span className="text-red-500">*</span>
@@ -3792,7 +3795,7 @@ export default function AdminPage() {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
                                         Kategori
@@ -3869,26 +3872,26 @@ export default function AdminPage() {
             {/* ============ MODAL: STOCK OPNAME FISIK ============ */}
             {opnameModalOpen && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100 animate-scale-up">
-                        <div className="bg-amber-600 text-white px-6 py-4 flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <div className="p-2 bg-white/20 rounded-lg">
+                    <div className="bg-white rounded-2xl w-full max-w-md max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border border-gray-100 animate-scale-up">
+                        <div className="bg-amber-600 text-white px-4 sm:px-6 py-4 flex justify-between items-center flex-shrink-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="p-2 bg-white/20 rounded-lg flex-shrink-0">
                                     <ClipboardCheck size={18} />
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                     <h3 className="font-serif font-bold text-base">Input Stock Opname Fisik</h3>
                                     <p className="text-xs text-amber-100">Penghitungan fisik riil bahan &amp; penyesuaian selisih</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setOpnameModalOpen(false)}
-                                className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition"
+                                className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-lg transition flex-shrink-0"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveOpname} className="p-6 space-y-4">
+                        <form onSubmit={handleSaveOpname} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
                                     Pilih Bahan Baku <span className="text-red-500">*</span>
@@ -4011,14 +4014,14 @@ export default function AdminPage() {
             {/* Modal Pengaturan Buka / Tutup (Lock / Unlock) Kedai & Menu Online Pelanggan */}
             {storeLockModalOpen && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 animate-fade-in">
-                        <div className="bg-[#0D2B20] text-white p-5 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isOnlineOrderOpen ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/25 text-red-300'}`}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90dvh] flex flex-col overflow-hidden border border-gray-100 animate-fade-in">
+                        <div className="bg-[#0D2B20] text-white p-4 sm:p-5 flex items-center justify-between gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isOnlineOrderOpen ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/25 text-red-300'}`}>
                                     {isOnlineOrderOpen ? <Store size={20} /> : <Lock size={20} />}
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-base text-amber-400">
+                                <div className="min-w-0">
+                                    <h3 className="font-bold text-sm sm:text-base text-amber-400">
                                         Kontrol Buka / Tutup Kedai Online
                                     </h3>
                                     <p className="text-xs text-white/70">
@@ -4029,15 +4032,15 @@ export default function AdminPage() {
                             <button
                                 type="button"
                                 onClick={() => setStoreLockModalOpen(false)}
-                                className="p-1.5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition"
+                                className="p-1.5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition flex-shrink-0"
                             >
                                 <X size={18} />
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveLockOnlineStore} className="p-5 space-y-4">
+                        <form onSubmit={handleSaveLockOnlineStore} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
                             {/* Status Saat Ini + Tombol Buka Cepat jika sedang tutup */}
-                            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${isOnlineOrderOpen ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                            <div className={`p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-3 ${isOnlineOrderOpen ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
                                 <div>
                                     <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Status Kedai Saat Ini</p>
                                     <p className={`text-sm font-black mt-0.5 ${isOnlineOrderOpen ? 'text-emerald-700' : 'text-red-700'}`}>
@@ -4148,10 +4151,12 @@ export default function AdminPage() {
 
             {/* Modal Detail & Cetak Struk Pesanan */}
             {viewReceiptOrder && (
-                <ReceiptModal
-                    order={viewReceiptOrder}
-                    onClose={() => setViewReceiptOrder(null)}
-                />
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                    <ReceiptModal
+                        order={viewReceiptOrder}
+                        onClose={() => setViewReceiptOrder(null)}
+                    />
+                </div>
             )}
         </div>
     );
@@ -4212,7 +4217,7 @@ function DayShiftFilterBar({
                             {opt.label}
                         </button>
                     ))}
-                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs transition ${
+                    <div className={`flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs transition ${
                         filterDateMode === 'custom'
                             ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20] shadow-xs'
                             : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'

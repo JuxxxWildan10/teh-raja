@@ -53,7 +53,7 @@ type NotifPerm = 'default' | 'granted' | 'denied';
 
 export default function FirebaseSync() {
     const { orders } = useSalesStore();
-    const { activeOrderId } = useCartStore();
+    const { activeOrderId, items: cartItems } = useCartStore();
 
     const prevOrdersLength = useRef(orders.length);
     const prevStatus = useRef<string | null>(null);
@@ -479,7 +479,7 @@ export default function FirebaseSync() {
         <>
             {/* Notification Permission Banner */}
             {showNotifBanner && notifPerm === 'default' && (
-                <div className="fixed bottom-16 left-4 z-[9998] max-w-xs bg-[#0D2B20] text-white border border-amber-400/30 rounded-2xl shadow-2xl p-4 animate-fade-in">
+                <div className={`fixed left-3 right-3 sm:left-4 sm:right-auto sm:max-w-xs z-40 bg-[#0D2B20] text-white border border-amber-400/30 rounded-2xl shadow-2xl p-4 animate-fade-in ${cartItems.length > 0 ? 'bottom-28 sm:bottom-16' : 'bottom-16'}`}>
                     <div className="flex items-start gap-3">
                         <div className="p-2 bg-amber-400/20 rounded-xl flex-shrink-0">
                             <Bell size={18} className="text-amber-400" />
@@ -506,15 +506,15 @@ export default function FirebaseSync() {
                 </div>
             )}
 
-            {/* Connection Status Indicator */}
-            <div className="fixed bottom-4 left-4 z-[9999] pointer-events-none flex flex-col gap-1.5">
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${errorMsg
-                    ? 'bg-red-900/80 text-white border-red-500'
+            {/* Connection Status Indicator — otomatis naik di mobile saat tombol Tray muncul agar tidak menutupi tombol */}
+            <div className={`fixed left-3 sm:left-4 z-10 pointer-events-none flex flex-col gap-1.5 transition-all duration-200 ${cartItems.length > 0 ? 'bottom-24 lg:bottom-4' : 'bottom-9 lg:bottom-4'}`}>
+                <div className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold border shadow-md ${errorMsg
+                    ? 'bg-red-900/85 text-white border-red-500'
                     : isConnected
-                        ? 'bg-green-900/80 text-green-100 border-green-500'
-                        : 'bg-yellow-900/80 text-yellow-100 border-yellow-500'
+                        ? 'bg-green-900/80 text-green-100 border-green-500/70'
+                        : 'bg-yellow-900/85 text-yellow-100 border-yellow-500'
                     }`}>
-                    <div className={`w-2 h-2 rounded-full ${errorMsg ? 'bg-red-500 animate-pulse' : isConnected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
+                    <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${errorMsg ? 'bg-red-500 animate-pulse' : isConnected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
                     {errorMsg ? "Sync Error" : isConnected ? "Realtime On" : "Connecting..."}
 
                     {/* Notification status icon */}

@@ -87,23 +87,23 @@ export default function Navbar() {
             <nav
                 className={`fixed top-0 left-0 right-0 z-30 transition-all duration-300 ${
                     isScrolled
-                        ? "py-4 bg-forest/90 backdrop-blur-md border-b border-white/5"
-                        : "py-6 bg-transparent"
+                        ? "py-3 sm:py-4 bg-forest/90 backdrop-blur-md border-b border-white/5"
+                        : "py-4 sm:py-6 bg-transparent"
                 }`}
             >
-                <div className="container mx-auto px-6 flex justify-between items-center">
+                <div className="container mx-auto px-3.5 sm:px-6 flex justify-between items-center gap-2">
                     {/* Logo: Tap 5x for Secret Admin Login & Portal */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                         <button
                             type="button"
                             onClick={handleLogoTap}
-                            className="font-serif text-2xl font-bold tracking-widest text-gradient-gold select-none cursor-pointer active:scale-95 transition-transform focus:outline-none"
+                            className="font-serif text-xl sm:text-2xl font-bold tracking-wider sm:tracking-widest text-gradient-gold select-none cursor-pointer active:scale-95 transition-transform focus:outline-none whitespace-nowrap"
                             title="TEH RAJA"
                         >
                             TEH RAJA
                         </button>
                         <span
-                            className={`hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                            className={`hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border whitespace-nowrap ${
                                 isOnlineOrderOpen
                                     ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                                     : "bg-red-500/20 text-red-300 border-red-500/40"
@@ -123,7 +123,7 @@ export default function Navbar() {
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-3 md:gap-5">
+                    <div className="flex items-center gap-1.5 sm:gap-3 md:gap-5">
                         {/* Desktop Menu (Customer-only links) */}
                         <div className="hidden md:flex items-center gap-6 text-sm">
                             <Link href="/" className="hover:text-gold transition flex items-center gap-1.5">
@@ -163,11 +163,11 @@ export default function Navbar() {
                                 onClick={() => {
                                     window.dispatchEvent(new CustomEvent("tehraja:open-order-overlay"));
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-400/20 border border-amber-400/50 text-amber-300 text-xs font-bold hover:bg-amber-400/30 transition animate-pulse"
+                                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-amber-400/20 border border-amber-400/50 text-amber-300 text-[11px] sm:text-xs font-bold hover:bg-amber-400/30 transition animate-pulse whitespace-nowrap"
                                 title="Lihat Status Pesanan Aktif"
                             >
-                                <Clock size={13} />
-                                <span className="hidden sm:inline">Pesanan</span> #{activeOrder.id.slice(0, 5).toUpperCase()}
+                                <Clock size={12} />
+                                <span className="hidden sm:inline">Pesanan</span> #{activeOrder.id.slice(0, 4).toUpperCase()}
                             </button>
                         )}
 
@@ -175,11 +175,11 @@ export default function Navbar() {
                         <button
                             type="button"
                             onClick={() => setIsTrackerModalOpen(true)}
-                            className="md:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/10 border border-white/15 text-gold text-xs font-bold hover:bg-white/15 transition"
+                            className="md:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/10 border border-white/15 text-gold text-[11px] font-bold hover:bg-white/15 transition whitespace-nowrap"
                             title="Lacak Pesanan & Struk"
                         >
                             <Receipt size={13} />
-                            <span className="hidden xs:inline">Struk</span>
+                            <span>Struk</span>
                         </button>
 
                         {/* Cart Button (Hanya tampil jika kedai sedang buka) */}

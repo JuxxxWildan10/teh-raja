@@ -148,12 +148,12 @@ export default function OrderStatusOverlay() {
         return (
             <button
                 onClick={() => setIsMinimized(false)}
-                className="fixed bottom-20 right-4 z-[95] bg-[#0D2B20] text-amber-400 border-2 border-amber-400 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 font-bold text-xs hover:scale-105 transition"
+                className="fixed bottom-24 sm:bottom-20 right-3 left-3 sm:left-auto sm:right-4 z-[95] bg-[#0D2B20] text-amber-400 border-2 border-amber-400 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 font-bold text-xs hover:scale-105 transition sm:max-w-xs"
             >
-                <Clock size={16} className="animate-spin" />
-                <div className="text-left">
-                    <p className="text-[10px] text-white/60 uppercase">Status Pesanan #{activeOrder.id.slice(0, 5).toUpperCase()}</p>
-                    <p className="text-xs font-black text-amber-400">
+                <Clock size={16} className="animate-spin flex-shrink-0" />
+                <div className="text-left min-w-0">
+                    <p className="text-[10px] text-white/60 uppercase truncate">Status Pesanan #{activeOrder.id.slice(0, 5).toUpperCase()}</p>
+                    <p className="text-xs font-black text-amber-400 truncate">
                         {currentStatus === 'pending' ? 'Pilih Pembayaran' :
                          currentStatus === 'awaiting_payment' ? 'Menunggu Verifikasi Kasir' :
                          currentStatus === 'processing' ? 'Sedang Diracik Barista ✨' :
@@ -266,17 +266,17 @@ export default function OrderStatusOverlay() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[100] bg-[#07221B]/95 backdrop-blur-md flex flex-col items-center justify-center p-4 overflow-y-auto"
+                className="fixed inset-0 z-[100] bg-[#07221B]/95 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-4"
             >
                 <motion.div
                     initial={{ scale: 0.85, y: 30 }}
                     animate={{ scale: 1, y: 0 }}
-                    className="bg-white text-forest w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden my-4"
+                    className="bg-white text-forest w-full max-w-sm max-h-[90dvh] flex flex-col rounded-3xl shadow-2xl overflow-hidden"
                 >
-                    <div className={`h-1.5 w-full bg-gradient-to-r ${config.gradient}`} />
+                    <div className={`h-1.5 w-full flex-shrink-0 bg-gradient-to-r ${config.gradient}`} />
 
                     {/* Top actions */}
-                    <div className="flex justify-between items-center px-5 pt-4 pb-0">
+                    <div className="flex justify-between items-center px-4 sm:px-5 pt-3.5 sm:pt-4 pb-2 flex-shrink-0">
                         <div className="flex items-center gap-1.5">
                             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                             <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Live Order Tracker</span>
@@ -299,7 +299,7 @@ export default function OrderStatusOverlay() {
                         </div>
                     </div>
 
-                    <div className="px-5 pt-4 pb-5">
+                    <div className="px-4 sm:px-5 pt-2 pb-5 overflow-y-auto flex-1 min-h-0">
                         {/* Stepper */}
                         {!isCancelled && (
                             <div className="flex items-start justify-between mb-5">

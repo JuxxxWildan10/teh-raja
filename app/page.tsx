@@ -215,28 +215,27 @@ export default function LandingPage() {
     return (
         <div className="min-h-screen bg-[#07221B] text-white overflow-x-hidden">
             {/* ── NAVBAR ─────────────────────────────────── */}
-            <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 glass">
+            <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-3.5 sm:px-6 py-3 sm:py-4 gap-2 glass">
                 {/* Logo: Tap 5x to open Secret Admin Login / Portal */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 flex-shrink-0">
                     <button
                         type="button"
                         onClick={handleLogoTap}
-                        className="flex items-center gap-2.5 cursor-pointer select-none focus:outline-none group"
+                        className="flex items-center gap-2 cursor-pointer select-none focus:outline-none group whitespace-nowrap"
                         title="Teh Raja"
                     >
-                        <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center transition-transform group-active:scale-90">
-                            <Leaf size={16} className="text-[#07221B]" />
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-400 flex items-center justify-center transition-transform group-active:scale-90 flex-shrink-0">
+                            <Leaf size={15} className="text-[#07221B]" />
                         </div>
-                        <span className="font-bold text-amber-400 tracking-widest text-sm uppercase font-sans select-none">
+                        <span className="font-bold text-amber-400 tracking-wider sm:tracking-widest text-xs sm:text-sm uppercase font-sans select-none">
                             Teh Raja
                         </span>
                     </button>
                     <span
-                        className={`hidden md:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                            isOnlineOrderOpen
+                        className={`hidden md:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border whitespace-nowrap ${isOnlineOrderOpen
                                 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                                 : "bg-red-500/20 text-red-300 border-red-500/40"
-                        }`}
+                            }`}
                     >
                         {isOnlineOrderOpen ? (
                             <>
@@ -252,12 +251,12 @@ export default function LandingPage() {
                     </span>
                 </div>
 
-                <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
                     {user && (
                         <button
                             type="button"
                             onClick={() => setIsSecretModalOpen(true)}
-                            className="flex items-center gap-1.5 text-xs font-bold bg-emerald-500/20 text-emerald-300 px-3.5 py-2 rounded-full hover:bg-emerald-500/30 transition border border-emerald-500/40"
+                            className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-bold bg-emerald-500/20 text-emerald-300 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full hover:bg-emerald-500/30 transition border border-emerald-500/40 whitespace-nowrap flex-shrink-0"
                         >
                             <ShieldCheck size={13} />
                             <span className="hidden sm:inline">Portal Admin ({user.name})</span>
@@ -268,41 +267,47 @@ export default function LandingPage() {
                     <button
                         type="button"
                         onClick={() => setIsTrackerModalOpen(true)}
-                        className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-full transition border ${
-                            activeOrder
+                        className={`flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-bold px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full transition border whitespace-nowrap flex-shrink-0 ${activeOrder
                                 ? "bg-amber-400/20 text-amber-300 border-amber-400/50 animate-pulse"
                                 : "bg-white/10 text-white border-white/15 hover:bg-white/20"
-                        }`}
+                            }`}
                     >
                         {activeOrder ? <Clock size={13} /> : <Receipt size={13} className="text-amber-400" />}
-                        <span>
-                            {activeOrder
-                                ? `Pesanan #${activeOrder.id.slice(0, 5).toUpperCase()}`
-                                : "Lacak Pesanan & Struk"}
-                        </span>
+                        {activeOrder ? (
+                            <>
+                                <span className="hidden sm:inline">Pesanan #{activeOrder.id.slice(0, 5).toUpperCase()}</span>
+                                <span className="sm:hidden">#{activeOrder.id.slice(0, 4).toUpperCase()}</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="hidden sm:inline">Lacak Pesanan &amp; Struk</span>
+                                <span className="sm:hidden">Struk</span>
+                            </>
+                        )}
                     </button>
 
                     {isOnlineOrderOpen ? (
                         <button
                             onClick={handleCustomerOpenMenu}
-                            className="flex items-center gap-1.5 text-xs font-bold bg-amber-400 text-[#07221B] px-4 py-2 rounded-full hover:bg-amber-300 transition hover:scale-105 active:scale-95 shadow-lg shadow-amber-400/20"
+                            className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-bold bg-amber-400 text-[#07221B] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-amber-300 transition hover:scale-105 active:scale-95 shadow-lg shadow-amber-400/20 whitespace-nowrap flex-shrink-0"
                         >
-                            <Coffee size={13} /> Pesan Menu
+                            <Coffee size={13} />
+                            <span className="hidden xs:inline">Pesan </span>Menu
                         </button>
                     ) : (
                         <button
                             onClick={handleCustomerOpenMenu}
-                            className="flex items-center gap-1.5 text-xs font-bold bg-red-500/20 text-red-200 border border-red-500/40 px-3.5 py-2 rounded-full hover:bg-red-500/30 transition"
+                            className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-bold bg-red-500/20 text-red-200 border border-red-500/40 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full hover:bg-red-500/30 transition whitespace-nowrap flex-shrink-0"
                             title={closedMessage}
                         >
-                            <Lock size={12} /> Kedai Tutup
+                            <Lock size={12} /> <span className="hidden sm:inline">Kedai </span>Tutup
                         </button>
                     )}
                 </div>
             </nav>
 
             {/* ── HERO SECTION ──────────────────────────── */}
-            <section className="min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16 relative overflow-hidden">
+            <section className="min-h-[100dvh] flex flex-col items-center justify-center px-4 sm:px-6 pt-24 pb-16 relative overflow-hidden">
                 {/* Background orbs */}
                 <div className="absolute top-1/4 -left-32 w-96 h-96 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-green-400/10 rounded-full blur-3xl pointer-events-none" />
@@ -332,21 +337,21 @@ export default function LandingPage() {
                         )}
                     </div>
 
-                    <h1 className="text-5xl sm:text-6xl md:text-7xl font-serif font-bold leading-tight mb-6">
+                    <h1 className="text-4xl sm:text-6xl md:text-7xl font-serif font-bold leading-tight mb-6">
                         <span className="text-gradient-gold">Teh Raja</span>
                         <br />
-                        <span className="text-white/80 text-3xl sm:text-4xl md:text-5xl">
+                        <span className="text-white/80 text-2xl sm:text-4xl md:text-5xl">
                             Kemewahan dalam Setiap Tegukan
                         </span>
                     </h1>
 
-                    <p className="text-white/60 text-base sm:text-lg leading-relaxed mb-8 max-w-xl mx-auto">
+                    <p className="text-white/60 text-sm sm:text-lg leading-relaxed mb-8 max-w-xl mx-auto">
                         Nikmati racikan teh melati autentik, matcha pilihan, dan teh buah segar. Pesan langsung dari meja Anda, pantau proses peracikan secara live, dan unduh struk digital dengan mudah.
                     </p>
 
                     {/* Pengumuman Resmi Saat Kedai Libur / Tutup */}
                     {!isOnlineOrderOpen && (
-                        <div className="max-w-xl mx-auto mb-8 p-5 rounded-2xl bg-red-500/15 border border-red-400/35 text-left flex items-start gap-3.5 shadow-xl">
+                        <div className="max-w-xl mx-auto mb-8 p-4 sm:p-5 rounded-2xl bg-red-500/15 border border-red-400/35 text-left flex items-start gap-3 sm:gap-3.5 shadow-xl">
                             <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-400/30 flex items-center justify-center text-red-300 flex-shrink-0 mt-0.5">
                                 <CalendarX2 size={20} />
                             </div>
@@ -359,22 +364,22 @@ export default function LandingPage() {
                                 </p>
                                 {reopenInfo && (
                                     <p className="text-xs text-amber-300 font-semibold mt-2 flex items-center gap-1.5">
-                                        <Clock size={12} /> {reopenInfo}
+                                        <Clock size={12} className="flex-shrink-0" /> <span>{reopenInfo}</span>
                                     </p>
                                 )}
                             </div>
                         </div>
                     )}
 
-                    <div className="flex flex-wrap gap-3 justify-center">
+                    <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center">
                         {isOnlineOrderOpen ? (
                             <motion.button
                                 whileHover={{ scale: 1.04 }}
                                 whileTap={{ scale: 0.97 }}
                                 onClick={handleCustomerOpenMenu}
-                                className="flex items-center justify-center gap-2 bg-amber-400 text-[#07221B] font-black text-base px-8 py-4 rounded-2xl shadow-2xl shadow-amber-400/30 hover:bg-amber-300 transition"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-amber-400 text-[#07221B] font-black text-sm sm:text-base px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl shadow-2xl shadow-amber-400/30 hover:bg-amber-300 transition"
                             >
-                                <Coffee size={20} />
+                                <Coffee size={18} />
                                 Lihat Menu &amp; Pesan Sekarang
                                 <ChevronRight size={18} />
                             </motion.button>
@@ -382,19 +387,19 @@ export default function LandingPage() {
                             <button
                                 type="button"
                                 onClick={handleCustomerOpenMenu}
-                                className="flex items-center justify-center gap-2 bg-red-500/20 text-red-200 border border-red-400/40 font-bold text-base px-7 py-4 rounded-2xl hover:bg-red-500/25 transition"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-500/20 text-red-200 border border-red-400/40 font-bold text-sm sm:text-base px-5 sm:px-7 py-3.5 sm:py-4 rounded-2xl hover:bg-red-500/25 transition"
                             >
-                                <Lock size={18} />
-                                Menu Ditutup ({closedBadge || "Sedang Libur / Tutup"})
+                                <Lock size={16} className="flex-shrink-0" />
+                                <span>Menu Ditutup ({closedBadge || "Sedang Libur / Tutup"})</span>
                             </button>
                         )}
                         <motion.button
                             whileHover={{ scale: 1.04 }}
                             whileTap={{ scale: 0.97 }}
                             onClick={() => setIsTrackerModalOpen(true)}
-                            className="flex items-center justify-center gap-2 bg-white/10 text-white border border-white/20 font-bold text-base px-6 py-4 rounded-2xl hover:bg-white/15 transition"
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white/10 text-white border border-white/20 font-bold text-sm sm:text-base px-5 sm:px-6 py-3.5 sm:py-4 rounded-2xl hover:bg-white/15 transition"
                         >
-                            <Receipt size={18} className="text-amber-400" />
+                            <Receipt size={18} className="text-amber-400 flex-shrink-0" />
                             Lacak Pesanan &amp; Struk
                         </motion.button>
                     </div>
@@ -450,9 +455,8 @@ export default function LandingPage() {
                                 <button
                                     key={i}
                                     onClick={() => setCurrentTea(i)}
-                                    className={`w-1.5 h-1.5 rounded-full transition-all ${
-                                        i === currentTea ? "bg-amber-400 w-4" : "bg-white/40"
-                                    }`}
+                                    className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentTea ? "bg-amber-400 w-4" : "bg-white/40"
+                                        }`}
                                 />
                             ))}
                         </div>
@@ -487,19 +491,17 @@ export default function LandingPage() {
                         {/* Kontrol Cepat Buka / Tutup Kedai Online (Khusus Admin) */}
                         {user.role === "admin" && (
                             <div
-                                className={`mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                                    isOnlineOrderOpen
+                                className={`mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isOnlineOrderOpen
                                         ? "bg-emerald-500/10 border-emerald-500/30"
                                         : "bg-red-500/15 border-red-500/40"
-                                }`}
+                                    }`}
                             >
                                 <div className="flex items-center gap-3">
                                     <div
-                                        className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                                            isOnlineOrderOpen
+                                        className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isOnlineOrderOpen
                                                 ? "bg-emerald-400/20 text-emerald-300"
                                                 : "bg-red-500/25 text-red-300"
-                                        }`}
+                                            }`}
                                     >
                                         {isOnlineOrderOpen ? <Unlock size={20} /> : <Lock size={20} />}
                                     </div>
@@ -521,11 +523,10 @@ export default function LandingPage() {
                                     <button
                                         type="button"
                                         onClick={handleQuickToggleOnlineStore}
-                                        className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-lg ${
-                                            isOnlineOrderOpen
+                                        className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-lg ${isOnlineOrderOpen
                                                 ? "bg-red-500 hover:bg-red-600 text-white"
                                                 : "bg-emerald-400 hover:bg-emerald-300 text-[#07221B]"
-                                        }`}
+                                            }`}
                                     >
                                         {isOnlineOrderOpen ? (
                                             <>
@@ -650,12 +651,12 @@ export default function LandingPage() {
             </section>
 
             {/* ── CTA SECTION ───────────────────────────── */}
-            <section className="px-6 py-20 text-center">
+            <section className="px-4 sm:px-6 py-16 sm:py-20 text-center">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
-                    className="max-w-lg mx-auto bg-gradient-to-br from-amber-400/10 to-green-900/30 border border-amber-400/20 rounded-3xl p-10"
+                    className="max-w-lg mx-auto bg-gradient-to-br from-amber-400/10 to-green-900/30 border border-amber-400/20 rounded-3xl p-6 sm:p-10"
                 >
                     <button
                         type="button"

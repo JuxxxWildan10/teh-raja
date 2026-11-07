@@ -26,7 +26,7 @@ export default function KDSPage() {
     const { orders, updateOrderStatus, addLog } = useSalesStore();
     const [isClient, setIsClient] = useState(false);
     const [authHydrated, setAuthHydrated] = useState(false);
-    const [kdsTab, setKdsTab] = useState<'active' | 'incoming'>('active');
+    const [kdsTab, setKdsTab] = useState<'active' | 'incoming' | 'completed'>('active');
 
     useEffect(() => {
         setIsClient(true);
@@ -69,82 +69,91 @@ export default function KDSPage() {
     if (!isClient || !user) return null;
 
     return (
-        <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden font-sans">
+        <div className="h-[100dvh] bg-gray-900 text-white flex flex-col overflow-hidden font-sans">
             {/* ── HEADER ── */}
-            <header className="bg-black/50 p-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
-                <div className="flex items-center gap-4">
-                    <div className="bg-amber-500 text-black p-2 rounded-lg">
-                        <UtensilsCrossed size={24} />
+            <header className="bg-black/50 px-3 py-2.5 sm:p-4 border-b border-white/10 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+                    <div className="bg-amber-500 text-black p-1.5 sm:p-2 rounded-lg flex-shrink-0">
+                        <UtensilsCrossed size={20} className="sm:w-6 sm:h-6" />
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-black tracking-wider uppercase text-amber-400">Kitchen Display</h1>
-                        <p className="text-gray-400 text-sm">Teh Raja Barista &amp; Dapur System</p>
+                    <div className="min-w-0">
+                        <h1 className="text-base sm:text-2xl font-black tracking-wider uppercase text-amber-400 truncate">Kitchen Display</h1>
+                        <p className="hidden sm:block text-gray-400 text-xs sm:text-sm">Teh Raja Barista &amp; Dapur System</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
                     {pendingOrders.length > 0 && (
                         <button
                             onClick={() => setKdsTab('incoming')}
-                            className="flex items-center gap-2 bg-orange-500/20 text-orange-300 border border-orange-500/40 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-orange-500/30 transition animate-pulse"
+                            className="flex items-center gap-1.5 bg-orange-500/20 text-orange-300 border border-orange-500/40 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold hover:bg-orange-500/30 transition animate-pulse whitespace-nowrap"
                         >
                             <span className="w-2 h-2 rounded-full bg-orange-400 animate-ping" />
-                            <span>{pendingOrders.length} Order Masuk Menunggu</span>
+                            <span className="hidden md:inline">{pendingOrders.length} Order Masuk Menunggu</span>
+                            <span className="md:hidden">{pendingOrders.length} Baru</span>
                         </button>
                     )}
-                    <div className="hidden sm:flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl">
+                    <div className="hidden lg:flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl whitespace-nowrap">
                         <span className="relative flex h-3 w-3">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                         </span>
                         <span className="text-green-400 font-bold text-sm">Live Sync Aktif</span>
                     </div>
-                    <Link href="/pos" className="flex items-center gap-2 text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition px-4 py-2 rounded-xl text-sm font-bold">
-                        <ShoppingCart size={16} />
-                        Kasir POS
+                    <Link href="/pos" className="flex items-center gap-1.5 text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap">
+                        <ShoppingCart size={15} />
+                        <span className="hidden sm:inline">Kasir </span>POS
                     </Link>
-                    <Link href="/admin" className="flex items-center gap-2 text-gray-300 hover:text-white bg-white/10 hover:bg-white/20 transition px-4 py-2 rounded-xl text-sm font-bold">
-                        <LayoutDashboard size={16} />
-                        Admin
+                    <Link href="/admin" className="flex items-center gap-1.5 text-gray-300 hover:text-white bg-white/10 hover:bg-white/20 transition px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap">
+                        <LayoutDashboard size={15} />
+                        <span className="hidden sm:inline">Admin</span>
                     </Link>
                 </div>
             </header>
 
             {/* ── MAIN CONTENT ── */}
-            <div className="flex-1 overflow-hidden flex p-4 gap-6">
-                
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col lg:flex-row p-3 sm:p-4 gap-3 sm:gap-6">
+
                 {/* PANEL UTAMA: SEDANG DIRACIK ATAU ANTREAN MASUK */}
-                <div className="flex-1 flex flex-col bg-gray-800 rounded-2xl border border-gray-700 shadow-xl overflow-hidden">
-                    <div className="bg-gray-800/90 p-3 border-b border-gray-700 flex flex-wrap justify-between items-center gap-2">
-                        <div className="flex items-center gap-2">
+                <div className="flex-1 min-h-0 flex flex-col bg-gray-800 rounded-2xl border border-gray-700 shadow-xl overflow-hidden">
+                    <div className="bg-gray-800/90 p-2.5 sm:p-3 border-b border-gray-700 flex flex-wrap justify-between items-center gap-2">
+                        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-hide max-w-full">
                             <button
                                 onClick={() => setKdsTab('active')}
-                                className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition ${
-                                    kdsTab === 'active'
+                                className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 transition whitespace-nowrap flex-shrink-0 ${kdsTab === 'active'
                                         ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
                                         : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
-                                }`}
+                                    }`}
                             >
-                                <Clock size={16} className={kdsTab === 'active' ? "animate-pulse" : ""} />
-                                Sedang Diracik ({activeOrders.length})
+                                <Clock size={15} className={kdsTab === 'active' ? "animate-pulse" : ""} />
+                                Diracik ({activeOrders.length})
                             </button>
                             <button
                                 onClick={() => setKdsTab('incoming')}
-                                className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition ${
-                                    kdsTab === 'incoming'
+                                className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 transition whitespace-nowrap flex-shrink-0 ${kdsTab === 'incoming'
                                         ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
                                         : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
-                                }`}
+                                    }`}
                             >
                                 <span className={`w-2 h-2 rounded-full bg-orange-400 ${pendingOrders.length > 0 ? 'animate-ping' : ''}`} />
-                                Antrean Masuk ({pendingOrders.length})
+                                Masuk ({pendingOrders.length})
+                            </button>
+                            <button
+                                onClick={() => setKdsTab('completed')}
+                                className={`lg:hidden px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition whitespace-nowrap flex-shrink-0 ${kdsTab === 'completed'
+                                        ? 'bg-green-500 text-black shadow-lg shadow-green-500/20'
+                                        : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
+                                    }`}
+                            >
+                                <CheckCircle2 size={15} />
+                                Selesai ({completedOrders.length})
                             </button>
                         </div>
-                        <div className="text-xs text-gray-400 font-mono">
+                        <div className="hidden sm:block text-xs text-gray-400 font-mono">
                             {kdsTab === 'active' ? 'Urutan: FIFO (Terlama Dahulu)' : 'Urutan: Pesanan Baru Paling Atas'}
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-x-auto p-4 flex gap-4 items-start">
+                    <div className="flex-1 min-h-0 overflow-x-auto p-3 sm:p-4 flex gap-3 sm:gap-4 items-start">
                         {/* TAB 1: SEDANG DIRACIK */}
                         {kdsTab === 'active' && (
                             activeOrders.length === 0 ? (
@@ -166,15 +175,15 @@ export default function KDSPage() {
                                     {activeOrders.map(order => {
                                         const waitTime = Math.floor((Date.now() - new Date(order.date).getTime()) / 60000);
                                         const isLate = waitTime >= 10;
-                                        
+
                                         return (
-                                            <motion.div 
+                                            <motion.div
                                                 key={order.id}
                                                 layout
                                                 initial={{ opacity: 0, scale: 0.8 }}
                                                 animate={{ opacity: 1, scale: 1 }}
                                                 exit={{ opacity: 0, scale: 0.8 }}
-                                                className={`flex-shrink-0 w-80 bg-gray-900 border-2 rounded-2xl overflow-hidden shadow-lg flex flex-col max-h-full ${isLate ? 'border-red-500 shadow-red-900/20' : 'border-amber-500/50'}`}
+                                                className={`flex-shrink-0 w-[82vw] max-w-[320px] sm:w-80 bg-gray-900 border-2 rounded-2xl overflow-hidden shadow-lg flex flex-col max-h-full ${isLate ? 'border-red-500 shadow-red-900/20' : 'border-amber-500/50'}`}
                                             >
                                                 <div className={`p-3 border-b flex justify-between items-center ${isLate ? 'bg-red-500/20 border-red-500/30' : 'bg-gray-800 border-gray-700'}`}>
                                                     <div>
@@ -219,7 +228,7 @@ export default function KDSPage() {
                                                 </div>
 
                                                 <div className="p-3 bg-gray-800 border-t border-gray-700 mt-auto">
-                                                    <button 
+                                                    <button
                                                         onClick={() => {
                                                             updateOrderStatus(order.id, 'completed');
                                                             addLog("KDS_COMPLETE", `Order #${order.id.slice(0, 6)} selesai diracik`, user?.name || 'Barista');
@@ -252,13 +261,13 @@ export default function KDSPage() {
                                         const isAwaitingPayment = order.status === 'awaiting_payment';
 
                                         return (
-                                            <motion.div 
+                                            <motion.div
                                                 key={order.id}
                                                 layout
                                                 initial={{ opacity: 0, scale: 0.8 }}
                                                 animate={{ opacity: 1, scale: 1 }}
                                                 exit={{ opacity: 0, scale: 0.8 }}
-                                                className="flex-shrink-0 w-80 bg-gray-900 border-2 border-orange-500/60 rounded-2xl overflow-hidden shadow-lg flex flex-col max-h-full"
+                                                className="flex-shrink-0 w-[82vw] max-w-[320px] sm:w-80 bg-gray-900 border-2 border-orange-500/60 rounded-2xl overflow-hidden shadow-lg flex flex-col max-h-full"
                                             >
                                                 <div className="p-3 border-b border-gray-700 bg-gray-800 flex justify-between items-center">
                                                     <div>
@@ -306,7 +315,7 @@ export default function KDSPage() {
                                                 </div>
 
                                                 <div className="p-3 bg-gray-800 border-t border-gray-700 mt-auto flex gap-2">
-                                                    <button 
+                                                    <button
                                                         onClick={() => {
                                                             updateOrderStatus(order.id, 'processing');
                                                             addLog("KDS_START", `Barista mulai racik order #${order.id.slice(0, 6)}`, user?.name || 'Barista');
@@ -323,11 +332,44 @@ export default function KDSPage() {
                                 </AnimatePresence>
                             )
                         )}
+
+                        {/* TAB 3 (MOBILE): SELESAI HARI INI */}
+                        {kdsTab === 'completed' && (
+                            completedOrders.length === 0 ? (
+                                <div className="flex-1 flex flex-col items-center justify-center text-gray-500 h-full text-center">
+                                    <CheckCircle2 size={56} className="mb-3 opacity-20 text-green-400" />
+                                    <p className="text-base font-medium text-gray-300">Belum ada order selesai hari ini</p>
+                                </div>
+                            ) : (
+                                <div className="w-full space-y-2.5 overflow-y-auto max-h-full">
+                                    {completedOrders.map(order => (
+                                        <div
+                                            key={order.id}
+                                            className="bg-gray-900 p-3 rounded-xl border border-green-500/20 border-l-4 border-l-green-500"
+                                        >
+                                            <div className="flex justify-between items-center mb-1">
+                                                <p className="font-bold text-gray-200 truncate">{order.customerName}</p>
+                                                <p className="text-xs text-gray-500 font-mono">#{order.id.slice(0, 5).toUpperCase()}</p>
+                                            </div>
+                                            <div className="flex justify-between items-center mt-1">
+                                                <p className="text-xs text-gray-400">{order.items.reduce((s, i) => s + i.quantity, 0)} cup • {new Date(order.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                <button
+                                                    onClick={() => updateOrderStatus(order.id, 'processing')}
+                                                    className="text-xs text-amber-400 hover:underline flex items-center gap-1"
+                                                >
+                                                    <RotateCcw size={12} /> Racik Ulang
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )
+                        )}
                     </div>
                 </div>
 
-                {/* COMPLETED ORDERS (SELESAI HARI INI) */}
-                <div className="w-80 flex flex-col bg-gray-800/50 rounded-2xl border border-gray-700/50 overflow-hidden">
+                {/* COMPLETED ORDERS (SELESAI HARI INI — Desktop Sidebar) */}
+                <div className="hidden lg:flex w-80 flex-col bg-gray-800/50 rounded-2xl border border-gray-700/50 overflow-hidden flex-shrink-0">
                     <div className="p-4 border-b border-gray-700/50">
                         <h2 className="text-lg font-bold text-gray-300 flex items-center gap-2">
                             <CheckCircle2 size={20} className="text-green-500" /> Selesai Hari Ini ({completedOrders.length})
@@ -341,7 +383,7 @@ export default function KDSPage() {
                         ) : (
                             <AnimatePresence>
                                 {completedOrders.map(order => (
-                                    <motion.div 
+                                    <motion.div
                                         key={order.id}
                                         layout
                                         initial={{ opacity: 0, x: 20 }}

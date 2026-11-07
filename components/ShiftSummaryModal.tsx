@@ -83,29 +83,29 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+                    className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm"
                 >
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0, y: 20 }}
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.9, opacity: 0 }}
                         transition={{ type: "spring", stiffness: 280, damping: 25 }}
-                        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90dvh] overflow-y-auto"
                     >
                         {/* Header */}
-                        <div className="bg-gradient-to-br from-[#0D2B20] to-[#1a4433] p-6 text-white rounded-t-2xl relative">
-                            <button onClick={onClose} className="absolute top-4 right-4 p-1.5 bg-white/10 rounded-full hover:bg-white/20 transition">
+                        <div className="bg-gradient-to-br from-[#0D2B20] to-[#1a4433] p-4 sm:p-6 text-white rounded-t-2xl relative">
+                            <button onClick={onClose} className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 p-1.5 bg-white/10 rounded-full hover:bg-white/20 transition">
                                 <X size={16} />
                             </button>
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2.5 bg-amber-400 rounded-xl">
+                            <div className="flex items-center gap-3 mb-4 pr-7">
+                                <div className="p-2.5 bg-amber-400 rounded-xl flex-shrink-0">
                                     <TrendingUp size={20} className="text-[#0D2B20]" />
                                 </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h2 className="text-lg font-black">Ringkasan {enrichedInfo ? enrichedInfo.shiftBadge : 'Shift'}</h2>
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                        <h2 className="text-base sm:text-lg font-black">Ringkasan {enrichedInfo ? enrichedInfo.shiftBadge : 'Shift'}</h2>
                                         {enrichedInfo && enrichedInfo.totalShiftsOnDay > 1 && (
-                                            <span className="text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full">
+                                            <span className="text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full whitespace-nowrap">
                                                 Sesi {enrichedInfo.shiftNumber} dari {enrichedInfo.totalShiftsOnDay}
                                             </span>
                                         )}
@@ -116,26 +116,26 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
                                 </div>
                             </div>
                             {/* Total Pendapatan */}
-                            <div className="bg-white/10 rounded-xl p-4 text-center border border-white/10">
+                            <div className="bg-white/10 rounded-xl p-3.5 sm:p-4 text-center border border-white/10">
                                 <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Total Pendapatan Shift</p>
-                                <p className="text-3xl font-black text-amber-400">{formatRp(displayTotalSales)}</p>
+                                <p className="text-2xl sm:text-3xl font-black text-amber-400">{formatRp(displayTotalSales)}</p>
                             </div>
                         </div>
 
-                        <div className="p-5 space-y-4">
+                        <div className="p-4 sm:p-5 space-y-4">
                             {/* Statistik Singkat */}
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
-                                    <p className="text-2xl font-black text-green-700">{displayTotalOrders}</p>
-                                    <p className="text-xs text-green-600 font-medium mt-0.5">Transaksi</p>
+                            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                                <div className="bg-green-50 border border-green-100 rounded-xl p-2.5 sm:p-3 text-center">
+                                    <p className="text-xl sm:text-2xl font-black text-green-700">{displayTotalOrders}</p>
+                                    <p className="text-[11px] sm:text-xs text-green-600 font-medium mt-0.5">Transaksi</p>
                                 </div>
-                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
-                                    <p className="text-xs font-black text-blue-700 leading-tight">{formatRp(avgTransaction)}</p>
-                                    <p className="text-xs text-blue-600 font-medium mt-0.5">Rata-rata</p>
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2.5 sm:p-3 text-center flex flex-col justify-center">
+                                    <p className="text-[11px] sm:text-xs font-black text-blue-700 leading-tight">{formatRp(avgTransaction)}</p>
+                                    <p className="text-[11px] sm:text-xs text-blue-600 font-medium mt-0.5">Rata-rata</p>
                                 </div>
-                                <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 text-center">
-                                    <p className="text-2xl font-black text-purple-700">{duration}</p>
-                                    <p className="text-xs text-purple-600 font-medium mt-0.5">Menit</p>
+                                <div className="bg-purple-50 border border-purple-100 rounded-xl p-2.5 sm:p-3 text-center">
+                                    <p className="text-xl sm:text-2xl font-black text-purple-700">{duration}</p>
+                                    <p className="text-[11px] sm:text-xs text-purple-600 font-medium mt-0.5">Menit</p>
                                 </div>
                             </div>
 

@@ -179,25 +179,25 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                <div className="fixed inset-0 z-[250] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="w-full max-w-lg max-h-[90vh] flex flex-col bg-[#07221B] border border-amber-400/30 rounded-3xl shadow-2xl overflow-hidden text-white"
+                        className="w-full max-w-lg max-h-[90dvh] flex flex-col bg-[#07221B] border border-amber-400/30 rounded-3xl shadow-2xl overflow-hidden text-white"
                     >
                         {/* Header */}
-                        <div className="p-5 bg-gradient-to-r from-amber-400/15 via-emerald-900/30 to-transparent border-b border-white/10 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-11 h-11 rounded-2xl bg-amber-400 text-[#07221B] flex items-center justify-center shadow-lg shadow-amber-400/20">
-                                    {user ? <ShieldCheck size={24} /> : <Lock size={22} />}
+                        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-400/15 via-emerald-900/30 to-transparent border-b border-white/10 flex items-center justify-between gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-400 text-[#07221B] flex items-center justify-center shadow-lg shadow-amber-400/20 flex-shrink-0">
+                                    {user ? <ShieldCheck size={22} /> : <Lock size={20} />}
                                 </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h2 className="text-lg font-serif font-bold text-amber-400">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                        <h2 className="text-base sm:text-lg font-serif font-bold text-amber-400">
                                             {user ? "Portal Akses Admin & Staf" : "Akses Rahasia Admin"}
                                         </h2>
-                                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 whitespace-nowrap">
                                             5× Tap Mode
                                         </span>
                                     </div>
@@ -210,7 +210,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                             </div>
                             <button
                                 onClick={onClose}
-                                className="p-2 rounded-full bg-white/5 hover:bg-white/15 text-white/60 hover:text-white transition"
+                                className="p-2 rounded-full bg-white/5 hover:bg-white/15 text-white/60 hover:text-white transition flex-shrink-0"
                                 aria-label="Tutup"
                             >
                                 <X size={18} />
@@ -218,7 +218,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                         </div>
 
                         {/* Body */}
-                        <div className="p-6 overflow-y-auto">
+                        <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0">
                             {!user ? (
                                 <form onSubmit={handleLogin} className="space-y-4">
                                     <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-xs text-white/70 leading-relaxed flex items-start gap-3">
@@ -281,10 +281,10 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                             ) : (
                                 <div className="space-y-4">
                                     {/* Active user status */}
-                                    <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-3">
-                                        <div className="flex items-center gap-2.5">
-                                            <CheckCircle2 size={18} className="text-emerald-400" />
-                                            <div>
+                                    <div className="flex flex-wrap items-center justify-between gap-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-3.5 sm:px-4 py-3">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />
+                                            <div className="min-w-0">
                                                 <p className="text-xs font-bold text-emerald-300">
                                                     {isAdvancedUnlocked
                                                         ? "Mode Pengembangan Lanjutan (Full Fitur Aktif)"
@@ -297,7 +297,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                         </div>
                                         <button
                                             onClick={handleLogout}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-xs font-bold transition"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-xs font-bold transition whitespace-nowrap"
                                         >
                                             <LogOut size={13} /> Kunci Akses
                                         </button>
@@ -386,7 +386,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                                     : "bg-red-500/15 border-red-500/40"
                                             }`}
                                         >
-                                            <div className="flex items-center justify-between gap-3">
+                                            <div className="flex flex-wrap items-center justify-between gap-2.5">
                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                     <div
                                                         className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
@@ -398,13 +398,13 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                                         {isOnlineOrderOpen ? <Store size={15} /> : <CalendarX2 size={15} />}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <p className="text-xs font-bold text-white truncate">
+                                                        <p className="text-xs font-bold text-white">
                                                             Order Online Pelanggan:{" "}
                                                             <span className={isOnlineOrderOpen ? "text-emerald-300" : "text-red-300"}>
                                                                 {isOnlineOrderOpen ? "BUKA (Menu Aktif)" : `DIKUNCI (${closedBadge})`}
                                                             </span>
                                                         </p>
-                                                        <p className="text-[10px] text-white/60 truncate">
+                                                        <p className="text-[10px] text-white/60">
                                                             {isOnlineOrderOpen
                                                                 ? "Pelanggan dapat mengakses /menu & memesan online"
                                                                 : "Pelanggan tidak bisa akses menu (Sedang Tutup / Libur)"}
@@ -421,7 +421,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                                             setDraftReopen(reopenInfo || SHOP_CLOSE_PRESETS[0].reopenHint);
                                                             setShowCloseConfig((v) => !v);
                                                         }}
-                                                        className="px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex-shrink-0 bg-red-500/25 hover:bg-red-500/35 text-red-200 border border-red-400/40"
+                                                        className="px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex-shrink-0 bg-red-500/25 hover:bg-red-500/35 text-red-200 border border-red-400/40 whitespace-nowrap"
                                                     >
                                                         🔒 Tutup Kedai
                                                     </button>
@@ -435,7 +435,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                                                 setDraftReopen(reopenInfo || "");
                                                                 setShowCloseConfig((v) => !v);
                                                             }}
-                                                            className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition bg-white/10 hover:bg-white/20 text-white/80 border border-white/15"
+                                                            className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition bg-white/10 hover:bg-white/20 text-white/80 border border-white/15 whitespace-nowrap"
                                                             title="Ubah pesan libur / tutup"
                                                         >
                                                             ✏️ Pesan
@@ -443,7 +443,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                                         <button
                                                             type="button"
                                                             onClick={handleOpenShopOnline}
-                                                            className="px-3 py-1.5 rounded-xl text-[11px] font-black transition bg-emerald-400 hover:bg-emerald-300 text-[#07221B] shadow"
+                                                            className="px-3 py-1.5 rounded-xl text-[11px] font-black transition bg-emerald-400 hover:bg-emerald-300 text-[#07221B] shadow whitespace-nowrap"
                                                         >
                                                             🔓 Buka Kedai
                                                         </button>
@@ -497,7 +497,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                                         placeholder="Info buka kembali (opsional, misal: Buka Senin 09.00 WIB)"
                                                         className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400"
                                                     />
-                                                    <div className="flex justify-end gap-2">
+                                                    <div className="flex flex-wrap justify-end gap-2">
                                                         <button
                                                             type="button"
                                                             onClick={() => setShowCloseConfig(false)}
@@ -519,18 +519,18 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                     )}
 
                                     {/* Toggle Unlock / Lock Fitur Pengembangan Selanjutnya (Skripsi) */}
-                                    <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between gap-3">
+                                    <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex flex-wrap items-center justify-between gap-2.5">
                                         <div className="flex items-center gap-2.5 min-w-0">
                                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isAdvancedUnlocked ? "bg-amber-400/20 text-amber-300" : "bg-white/10 text-white/60"}`}>
                                                 {isAdvancedUnlocked ? <Unlock size={15} /> : <Lock size={15} />}
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="text-xs font-bold text-white truncate">
+                                                <p className="text-xs font-bold text-white">
                                                     {isAdvancedUnlocked
                                                         ? "Fitur Pengembangan Lanjutan: TERBUKA"
                                                         : "Fitur Pengembangan Lanjutan: TERKUNCI"}
                                                 </p>
-                                                <p className="text-[10px] text-white/50 truncate">
+                                                <p className="text-[10px] text-white/50">
                                                     {isAdvancedUnlocked
                                                         ? "AI Forecasting, KDS Dapur, Voice AI, CRM & Multi-Cabang aktif"
                                                         : "Disembunyikan agar fokus pada POS & BOM untuk PKL"}
@@ -540,7 +540,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                         <button
                                             type="button"
                                             onClick={handleToggleAdvanced}
-                                            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex-shrink-0 border ${
+                                            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex-shrink-0 border whitespace-nowrap ${
                                                 isAdvancedUnlocked
                                                     ? "bg-white/10 hover:bg-white/20 text-white border-white/20"
                                                     : "bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border-amber-400/40"

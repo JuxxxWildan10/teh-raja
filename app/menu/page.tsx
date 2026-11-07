@@ -198,7 +198,7 @@ export default function Home() {
           </div>
         )}
 
-        <section className="flex-1 flex items-center justify-center px-6 pt-28 pb-24 relative overflow-hidden">
+        <section className={`flex-1 flex items-center justify-center px-4 sm:px-6 pt-24 relative overflow-hidden ${user?.role === 'admin' ? 'pb-40 sm:pb-28' : 'pb-20'}`}>
           <div className="absolute inset-0 z-0 pointer-events-none">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--color-gold-light)_0%,_transparent_25%)] opacity-15" />
             <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_bottom_left,_var(--color-forest-light)_0%,_transparent_45%)] opacity-40" />
@@ -208,7 +208,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="relative z-10 max-w-xl w-full bg-black/30 backdrop-blur-xl border border-gold/25 rounded-3xl p-8 md:p-11 text-center shadow-2xl"
+            className="relative z-10 max-w-xl w-full bg-black/30 backdrop-blur-xl border border-gold/25 rounded-3xl p-6 sm:p-8 md:p-11 text-center shadow-2xl"
           >
             {/* Icon & Badge Tutup */}
             <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-red-500/15 border border-red-400/30 flex items-center justify-center text-red-300 shadow-lg">
@@ -295,13 +295,13 @@ export default function Home() {
       )}
 
       {/* HERO SECTION */}
-      <section className="relative h-screen flex items-center justify-center overflow-hidden">
+      <section className="relative min-h-[100dvh] py-24 flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--color-gold-light)_0%,_transparent_20%)] opacity-20" />
           <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_bottom_left,_var(--color-forest-light)_0%,_transparent_40%)] opacity-40" />
         </div>
 
-        <div className="container relative z-10 px-6 text-center">
+        <div className="container relative z-10 px-4 sm:px-6 text-center">
           <div className="mb-4">
             <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -313,7 +313,7 @@ export default function Home() {
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8 }}
             onClick={handleHeroLogoTap}
-            className="text-4xl md:text-6xl lg:text-8xl font-serif font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-b from-gold-light to-gold cursor-pointer select-none inline-block active:scale-95 transition-transform"
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-serif font-bold mb-5 sm:mb-6 text-transparent bg-clip-text bg-gradient-to-b from-gold-light to-gold cursor-pointer select-none inline-block active:scale-95 transition-transform"
           >
             TEH RAJA
           </motion.h1>
@@ -321,7 +321,7 @@ export default function Home() {
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="text-xl md:text-2xl opacity-80 max-w-2xl mx-auto mb-10 font-light"
+            className="text-base sm:text-xl md:text-2xl opacity-80 max-w-2xl mx-auto mb-8 sm:mb-10 font-light"
           >
             Kemewahan dalam Setiap Tegukan. Rasakan perpaduan sempurna tradisi dan presisi.
           </motion.p>
@@ -329,20 +329,20 @@ export default function Home() {
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="flex flex-wrap gap-3 justify-center"
+            className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center items-center"
           >
-            <a href="#menu" className="px-8 py-3 bg-gold text-forest font-bold rounded-full hover:scale-105 transition shadow-lg shadow-gold/20">
+            <a href="#menu" className="w-full sm:w-auto px-8 py-3 bg-gold text-forest font-bold rounded-full hover:scale-105 transition shadow-lg shadow-gold/20">
               Pesan Menu
             </a>
             {isAdvancedUnlocked && (
-              <a href="#recommendation" className="px-6 py-3 border border-white/20 rounded-full hover:bg-white/5 transition backdrop-blur-sm">
+              <a href="#recommendation" className="w-full sm:w-auto px-6 py-3 border border-white/20 rounded-full hover:bg-white/5 transition backdrop-blur-sm">
                 AI Tea Sommelier
               </a>
             )}
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('tehraja:open-tracker-modal'))}
-              className="px-6 py-3 bg-white/10 border border-gold/40 text-gold font-bold rounded-full hover:bg-white/15 transition backdrop-blur-sm flex items-center gap-2"
+              className="w-full sm:w-auto px-6 py-3 bg-white/10 border border-gold/40 text-gold font-bold rounded-full hover:bg-white/15 transition backdrop-blur-sm flex items-center justify-center gap-2"
             >
               <Receipt size={16} /> Lacak Pesanan &amp; Struk
             </button>
@@ -363,7 +363,7 @@ export default function Home() {
         <motion.div
           animate={{ y: [0, 10, 0] }}
           transition={{ repeat: Infinity, duration: 2 }}
-          className="absolute bottom-10 opacity-50"
+          className="hidden sm:block absolute bottom-8 opacity-50"
         >
           <ArrowDown />
         </motion.div>
@@ -428,11 +428,10 @@ export default function Home() {
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-full font-bold text-sm transition flex-shrink-0 ${
-                  activeCategory === cat 
-                  ? 'bg-gold text-forest shadow-lg' 
-                  : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
-                }`}
+                className={`px-4 py-2 rounded-full font-bold text-sm transition flex-shrink-0 ${activeCategory === cat
+                    ? 'bg-gold text-forest shadow-lg'
+                    : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
+                  }`}
               >
                 {CATEGORY_LABELS[cat] || cat}
               </button>
@@ -532,7 +531,7 @@ export default function Home() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-black/40 py-10 border-t border-white/5 text-center text-sm opacity-40">
+      <footer className={`bg-black/40 pt-10 border-t border-white/5 text-center text-sm opacity-40 ${cartItems.length > 0 ? 'pb-28' : 'pb-10'}`}>
         <p>TEH RAJA &copy; 2026 · Authentic Tea &amp; Blends</p>
       </footer>
 
@@ -543,22 +542,22 @@ export default function Home() {
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             exit={{ y: 100 }}
-            className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-forest/95 backdrop-blur-md border-t border-gold/20"
+            className="fixed bottom-0 left-0 right-0 z-50 p-3 sm:p-4 bg-forest/95 backdrop-blur-md border-t border-gold/20"
           >
             <button
               onClick={() => setCartOpen(true)}
-              className="w-full bg-gold text-forest py-3.5 rounded-2xl font-bold flex items-center justify-between px-5 shadow-xl"
+              className="w-full max-w-2xl mx-auto bg-gold text-forest py-3 sm:py-3.5 rounded-2xl font-bold flex items-center justify-between px-4 sm:px-5 text-sm sm:text-base shadow-xl"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3">
                 <div className="relative">
-                  <ShoppingBag size={20} />
+                  <ShoppingBag size={18} />
                   <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
                     {cartItems.reduce((s, i) => s + i.quantity, 0)}
                   </span>
                 </div>
                 <span>{cartItems.reduce((s, i) => s + i.quantity, 0)} item di Tray</span>
               </div>
-              <span className="font-black">Rp {cartTotal().toLocaleString('id-ID')} →</span>
+              <span className="font-black whitespace-nowrap">Rp {cartTotal().toLocaleString('id-ID')} →</span>
             </button>
           </motion.div>
         )}
