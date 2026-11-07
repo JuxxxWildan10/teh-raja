@@ -21,9 +21,10 @@ import { FileText } from "lucide-react";
 
 interface ReportGeneratorProps {
     orders: Order[];
+    periodLabel?: string;
 }
 
-export default function ReportGenerator({ orders }: ReportGeneratorProps) {
+export default function ReportGenerator({ orders, periodLabel }: ReportGeneratorProps) {
 
     const generatePDF = () => {
         const doc = new jsPDF();
@@ -50,10 +51,11 @@ export default function ReportGenerator({ orders }: ReportGeneratorProps) {
         const totalDiscount = validOrders.reduce((acc, curr) => acc + (curr.discount || 0), 0);
 
         doc.setFontSize(10);
-        doc.text(`Tanggal Cetak : ${new Date().toLocaleString('id-ID')}`, 14, 52);
-        doc.text(`Transaksi Valid : ${validOrders.length} pesanan (Dibatalkan: ${orders.length - validOrders.length})`, 14, 58);
-        doc.text(`Total Diskon    : Rp ${totalDiscount.toLocaleString('id-ID')}`, 14, 64);
-        doc.text(`Total Omset     : Rp ${totalOmset.toLocaleString('id-ID')}`, 14, 70);
+        doc.text(`Tanggal Cetak   : ${new Date().toLocaleString('id-ID')}`, 14, 51);
+        doc.text(`Periode / Shift : ${periodLabel || 'Semua Hari — Semua Sesi Shift'}`, 14, 57);
+        doc.text(`Transaksi Valid : ${validOrders.length} pesanan (Dibatalkan: ${orders.length - validOrders.length})`, 14, 63);
+        doc.text(`Total Diskon    : Rp ${totalDiscount.toLocaleString('id-ID')}`, 14, 69);
+        doc.text(`Total Omset     : Rp ${totalOmset.toLocaleString('id-ID')}`, 14, 75);
 
         // --- Table ---
         const tableColumn = ["Order ID", "Waktu", "Pelanggan", "Metode", "Rincian Menu", "Total"];
@@ -75,7 +77,7 @@ export default function ReportGenerator({ orders }: ReportGeneratorProps) {
         autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
-            startY: 76,
+            startY: 81,
             theme: 'grid',
             headStyles: { fillColor: [212, 175, 55], textColor: [13, 43, 32] },
             styles: { fontSize: 8.5 },

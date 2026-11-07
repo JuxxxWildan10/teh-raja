@@ -145,6 +145,7 @@ export interface Order {
     changeAmount?: number;
     tableNumber?: string;
     branchId?: string; // [MULTI-BRANCH] Identifier cabang
+    sessionId?: string; // ID sesi shift kasir saat transaksi dibuat (mendukung multi-shift dalam 1 hari)
     orderType?: 'dine-in' | 'take-away';
     customerPhone?: string; // For CRM lookup
     paymentNote?: string; // e.g. 'qris' | 'cash' - customer self-selected
@@ -164,6 +165,113 @@ export interface StoreSession {
     cashExpenses?: number; // Total pengeluaran kas kecil (petty cash) selama shift
     notes?: string;
     status: 'open' | 'closed';
+}
+
+// ── Helper Tanggal Lokal & Multi-Shift Harian (Shift 1, Shift 2, dst.) ───────
+export interface EnrichedStoreSession extends StoreSession {
+    dateKey: string;          // Format YYYY-MM-DD (zona waktu lokal)
+    shiftNumber: number;      // Urutan sesi pada hari tersebut: 1, 2, 3, ...
+    totalShiftsOnDay: number; // Total sesi shift pada hari yang sama
+    shiftBadge: string;       // Contoh: "Shift 1", "Shift 2"
+    timeRangeLabel: string;   // Contoh: "08.00 – 15.00" atau "15.05 – Sedang Buka"
+}
+
+/**
+ * Mengubah string tanggal ISO menjadi kunci tanggal lokal `YYYY-MM-DD`
+ * agar filter per hari akurat sesuai zona waktu lokal perangkat (WIB/WITA/WIT).
+ */
+export function toLocalDateKey(isoStr?: string | Date): string {
+    const d = isoStr instanceof Date ? isoStr : new Date(isoStr || '');
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+export function getTodayDateKey(): string {
+    return toLocalDateKey(new Date());
+}
+
+export function getYesterdayDateKey(): string {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return toLocalDateKey(d);
+}
+
+/**
+ * Mengecek apakah sebuah pesanan (`Order`) masuk ke dalam sesi shift tertentu.
+ * Memprioritaskan kecocokan `sessionId`, atau menggunakan batas waktu buka-tutup shift
+ * untuk pesanan web/lama yang belum memiliki `sessionId` agar Shift 1 & Shift 2 tidak tercampur.
+ */
+export function isOrderInSession(order: Order, session: StoreSession): boolean {
+    if (order.sessionId) {
+        return order.sessionId === session.id;
+    }
+    const oTime = new Date(order.date).getTime();
+    const sTime = new Date(session.startTime).getTime();
+    if (isNaN(oTime) || isNaN(sTime)) return false;
+    if (session.endTime) {
+        const eTime = new Date(session.endTime).getTime();
+        if (!isNaN(eTime)) {
+            return oTime >= sTime && oTime <= eTime;
+        }
+    }
+    return oTime >= sTime;
+}
+
+/**
+ * Mengecek apakah pencatatan pengeluaran (`Expense`) terjadi pada sesi shift tertentu.
+ */
+export function isExpenseInSession(expense: { date: string; sessionId?: string }, session: StoreSession): boolean {
+    if (expense.sessionId) {
+        return expense.sessionId === session.id;
+    }
+    const expTime = new Date(expense.date).getTime();
+    const sTime = new Date(session.startTime).getTime();
+    if (isNaN(expTime) || isNaN(sTime)) return false;
+    if (session.endTime) {
+        const eTime = new Date(session.endTime).getTime();
+        if (!isNaN(eTime)) {
+            return expTime >= sTime && expTime <= eTime;
+        }
+    }
+    return expTime >= sTime;
+}
+
+/**
+ * Mengurutkan seluruh riwayat sesi secara kronologis dan menomori setiap sesi per hari
+ * (misal sehari ada 2 sesi -> otomatis menjadi Shift 1 dan Shift 2 pada tanggal tersebut).
+ */
+export function getEnrichedSessions(sessions: StoreSession[]): EnrichedStoreSession[] {
+    const sorted = [...sessions].sort(
+        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+    const countsPerDay = new Map<string, number>();
+    sorted.forEach(s => {
+        const key = toLocalDateKey(s.startTime);
+        countsPerDay.set(key, (countsPerDay.get(key) || 0) + 1);
+    });
+
+    const runningIdxPerDay = new Map<string, number>();
+    return sorted.map(s => {
+        const dateKey = toLocalDateKey(s.startTime);
+        const shiftNumber = (runningIdxPerDay.get(dateKey) || 0) + 1;
+        runningIdxPerDay.set(dateKey, shiftNumber);
+        const totalShiftsOnDay = countsPerDay.get(dateKey) || 1;
+        const startFmt = new Date(s.startTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        const endFmt = s.endTime
+            ? new Date(s.endTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+            : 'Sedang Buka';
+        return {
+            ...s,
+            dateKey,
+            shiftNumber,
+            totalShiftsOnDay,
+            shiftBadge: `Shift ${shiftNumber}`,
+            timeRangeLabel: `${startFmt} – ${endFmt}`,
+        };
+    });
 }
 
 // ── Promo Engine ─────────────────────────────────────────────
@@ -562,28 +670,27 @@ export const useSalesStore = create<SalesState>()(
                 if (sessionIndex === -1) return null;
 
                 const session = state.sessions[sessionIndex];
+                const closeTimeIso = new Date().toISOString();
+                const sessionWithEnd: StoreSession = { ...session, endTime: closeTimeIso };
 
-                const sessionOrders = state.orders.filter(o => {
-                    const oTime = new Date(o.date).getTime();
-                    const sTime = new Date(session.startTime).getTime();
-                    return !isNaN(oTime) && oTime >= sTime && o.status !== 'cancelled';
-                });
+                // Isolasi ketat transaksi khusus sesi shift ini (mendukung 2+ shift dalam 1 hari)
+                const sessionOrders = state.orders.filter(
+                    o => o.status !== 'cancelled' && isOrderInSession(o, sessionWithEnd)
+                );
                 const totalSales = sessionOrders.reduce((sum, order) => sum + order.total, 0);
                 const totalOrders = sessionOrders.length;
                 
-                const cashSales = sessionOrders.filter(o => o.paymentMethod === 'cash' || !o.paymentMethod).reduce((sum, order) => sum + order.total, 0);
+                const cashSales = sessionOrders
+                    .filter(o => o.paymentMethod === 'cash' || !o.paymentMethod)
+                    .reduce((sum, order) => sum + order.total, 0);
                 const sessionCashExpenses = (useExpenseStore.getState()?.expenses || [])
-                    .filter(e => {
-                        const eTime = new Date(e.date).getTime();
-                        const sTime = new Date(session.startTime).getTime();
-                        return e.paidVia === 'kas_laci' && !isNaN(eTime) && eTime >= sTime;
-                    })
+                    .filter(e => e.paidVia === 'kas_laci' && isExpenseInSession(e, sessionWithEnd))
                     .reduce((sum, e) => sum + e.amount, 0);
                 const expectedCash = Math.max(0, (session.startingCash || 0) + cashSales - sessionCashExpenses);
 
                 const closedSession: StoreSession = {
                     ...session,
-                    endTime: new Date().toISOString(),
+                    endTime: closeTimeIso,
                     status: 'closed',
                     totalSales,
                     totalOrders,
@@ -609,9 +716,11 @@ export const useSalesStore = create<SalesState>()(
             },
 
             addOrder: (order) => {
+                const activeSessionId = get().isStoreOpen ? (get().currentSessionId || undefined) : undefined;
                 const orderWithBranch: Order = {
                     ...order,
                     branchId: order.branchId || get().branchId || 'main',
+                    sessionId: order.sessionId || activeSessionId,
                 };
                 set((state) => ({ 
                     orders: [orderWithBranch, ...state.orders.filter(o => o.id !== orderWithBranch.id)],
@@ -1302,8 +1411,11 @@ export const useExpenseStore = create<ExpenseState>()(
             ],
             setExpenses: (expenses) => set({ expenses }),
             addExpense: (expenseData) => {
+                const salesState = useSalesStore.getState();
+                const activeSessionId = salesState.isStoreOpen ? (salesState.currentSessionId || undefined) : undefined;
                 const newExp: Expense = {
                     ...expenseData,
+                    sessionId: expenseData.sessionId || activeSessionId,
                     id: nanoid(),
                     date: new Date().toISOString(),
                 };

@@ -17,7 +17,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X, TrendingUp, CreditCard, Banknote, QrCode, Building2, Clock, CheckCircle2, ShoppingBag } from "lucide-react";
-import { StoreSession, Order } from "@/lib/store";
+import { StoreSession, Order, isOrderInSession, getEnrichedSessions, useSalesStore } from "@/lib/store";
 
 interface ShiftSummaryModalProps {
     isOpen: boolean;
@@ -31,12 +31,18 @@ function formatRp(n: number) {
 }
 
 export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: ShiftSummaryModalProps) {
-    // Filter orders during this session (both manual POS and online web orders)
-    const sessionOrders = orders.filter(o => {
-        const oTime = new Date(o.date).getTime();
-        const sTime = new Date(session.startTime).getTime();
-        return !isNaN(oTime) && oTime >= sTime && o.status !== 'cancelled';
-    });
+    const allSessions = useSalesStore(s => s.sessions);
+    const enrichedInfo = getEnrichedSessions(allSessions).find(es => es.id === session.id);
+
+    // Filter pesanan khusus pada sesi shift ini saja (tidak bocor antar Shift 1 & Shift 2 di hari yang sama)
+    const sessionOrders = orders.filter(o => o.status !== 'cancelled' && isOrderInSession(o, session));
+
+    const displayTotalSales = session.status === 'open'
+        ? sessionOrders.reduce((s, o) => s + o.total, 0)
+        : session.totalSales;
+    const displayTotalOrders = session.status === 'open'
+        ? sessionOrders.length
+        : session.totalOrders;
 
     // Breakdown per payment method
     const paymentSummary = {
@@ -45,20 +51,16 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
         transfer: sessionOrders.filter(o => o.paymentMethod === 'transfer').reduce((s, o) => s + o.total, 0),
     };
 
-    const cashCount = sessionOrders.filter(o => o.paymentMethod === 'cash').length;
+    const cashCount = sessionOrders.filter(o => o.paymentMethod === 'cash' || !o.paymentMethod).length;
     const qrisCount = sessionOrders.filter(o => o.paymentMethod === 'qris').length;
     const transferCount = sessionOrders.filter(o => o.paymentMethod === 'transfer').length;
-    const cancelledCount = orders.filter(o => {
-        const oTime = new Date(o.date).getTime();
-        const sTime = new Date(session.startTime).getTime();
-        return !isNaN(oTime) && oTime >= sTime && o.status === 'cancelled';
-    }).length;
+    const cancelledCount = orders.filter(o => o.status === 'cancelled' && isOrderInSession(o, session)).length;
 
-    const avgTransaction = sessionOrders.length > 0 ? session.totalSales / sessionOrders.length : 0;
+    const avgTransaction = displayTotalOrders > 0 ? Math.round(displayTotalSales / displayTotalOrders) : 0;
 
     const duration = session.endTime
         ? Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000)
-        : 0;
+        : Math.max(0, Math.round((Date.now() - new Date(session.startTime).getTime()) / 60000));
 
     const diffCash = (session.actualCash || 0) - (session.expectedCash || 0);
     const diffColor = diffCash === 0 ? 'text-green-600' : diffCash > 0 ? 'text-blue-600' : 'text-red-600';
@@ -89,14 +91,23 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
                                     <TrendingUp size={20} className="text-[#0D2B20]" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black">Ringkasan Shift</h2>
-                                    <p className="text-white/60 text-xs">Kasir: {session.cashierName}</p>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-lg font-black">Ringkasan {enrichedInfo ? enrichedInfo.shiftBadge : 'Shift'}</h2>
+                                        {enrichedInfo && enrichedInfo.totalShiftsOnDay > 1 && (
+                                            <span className="text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full">
+                                                Sesi {enrichedInfo.shiftNumber} dari {enrichedInfo.totalShiftsOnDay}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-white/60 text-xs">
+                                        Kasir: {session.cashierName} · {new Date(session.startTime).toLocaleDateString('id-ID', { dateStyle: 'medium' })}
+                                    </p>
                                 </div>
                             </div>
                             {/* Total Pendapatan */}
                             <div className="bg-white/10 rounded-xl p-4 text-center border border-white/10">
-                                <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Total Pendapatan</p>
-                                <p className="text-3xl font-black text-amber-400">{formatRp(session.totalSales)}</p>
+                                <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Total Pendapatan Shift</p>
+                                <p className="text-3xl font-black text-amber-400">{formatRp(displayTotalSales)}</p>
                             </div>
                         </div>
 
@@ -104,7 +115,7 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
                             {/* Statistik Singkat */}
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
-                                    <p className="text-2xl font-black text-green-700">{session.totalOrders}</p>
+                                    <p className="text-2xl font-black text-green-700">{displayTotalOrders}</p>
                                     <p className="text-xs text-green-600 font-medium mt-0.5">Transaksi</p>
                                 </div>
                                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">

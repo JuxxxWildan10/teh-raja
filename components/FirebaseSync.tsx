@@ -316,8 +316,12 @@ export default function FirebaseSync() {
         const unsubSessions = onValue(sessionsRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const loadedSessions: StoreSession[] = Object.values(data);
-                const activeSession = loadedSessions.find(s => s.status === 'open');
+                const loadedSessions: StoreSession[] = (Object.values(data) as StoreSession[]).sort(
+                    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+                );
+                // Ambil sesi terbaru yang masih berstatus open
+                const openSessions = loadedSessions.filter(s => s.status === 'open');
+                const activeSession = openSessions.length > 0 ? openSessions[openSessions.length - 1] : undefined;
                 useSalesStore.setState({
                     sessions: loadedSessions,
                     isStoreOpen: !!activeSession,

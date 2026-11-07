@@ -30,7 +30,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     useAuthStore, useCartStore, useProductStore, useSalesStore,
     usePromoStore, useCustomerStore, useInventoryStore, useExpenseStore,
-    Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES, POINTS_REDEEM_VALUE
+    Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES, POINTS_REDEEM_VALUE,
+    getEnrichedSessions, isOrderInSession, getTodayDateKey, toLocalDateKey
 } from "@/lib/store";
 import { nanoid } from "nanoid";
 import Image from "next/image";
@@ -75,7 +76,7 @@ export default function POSPage() {
     const { user, logout, isAdvancedUnlocked } = useAuthStore();
     const { items, addToCart, removeFromCart, updateQuantity, updateNote, clearCart, total } = useCartStore();
     const { products, decrementStock } = useProductStore();
-    const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders, updateOrderStatus, branchId, branchName } = useSalesStore();
+    const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders, updateOrderStatus, branchId, branchName, sessions, currentSessionId } = useSalesStore();
     const { getApplicablePromo } = usePromoStore();
     const { findByPhone, addCustomer, addPoints, redeemPoints } = useCustomerStore();
     const { decrementIngredientsForOrder, ingredients } = useInventoryStore();
@@ -135,6 +136,20 @@ export default function POSPage() {
     // Orders Drawer (Masuk, Sedang Diracik, Selesai Hari Ini)
     const [showIncomingOrders, setShowIncomingOrders] = useState(false);
     const [orderDrawerTab, setOrderDrawerTab] = useState<'incoming' | 'processing' | 'completed'>('incoming');
+    // Filter tampilan ringkasan & struk selesai di POS: 'active_shift' | 'all_today' | id sesi spesifik
+    const [posShiftScope, setPosShiftScope] = useState<string>('active_shift');
+
+    // Enriched multi-shift info hari ini (Shift 1, Shift 2, dst.)
+    const enrichedSessions = useMemo(() => getEnrichedSessions(sessions), [sessions]);
+    const todayDateKey = getTodayDateKey();
+    const todaySessions = useMemo(
+        () => enrichedSessions.filter(s => s.dateKey === todayDateKey),
+        [enrichedSessions, todayDateKey]
+    );
+    const activeEnrichedSession = useMemo(
+        () => enrichedSessions.find(s => s.id === currentSessionId) || null,
+        [enrichedSessions, currentSessionId]
+    );
 
     const incomingOrders = useMemo(() => {
         return orders
@@ -149,22 +164,38 @@ export default function POSPage() {
     }, [orders]);
 
     const todayOrders = useMemo(() => {
-        const todayStr = new Date().toDateString();
-        return orders.filter(o => {
-            const d = new Date(o.date);
-            return !isNaN(d.getTime()) && d.toDateString() === todayStr && o.status !== 'cancelled';
-        });
-    }, [orders]);
+        return orders.filter(o => toLocalDateKey(o.date) === todayDateKey && o.status !== 'cancelled');
+    }, [orders, todayDateKey]);
 
+    const activeShiftOrders = useMemo(() => {
+        if (!activeEnrichedSession) return todayOrders;
+        return orders.filter(o => o.status !== 'cancelled' && isOrderInSession(o, activeEnrichedSession));
+    }, [orders, activeEnrichedSession, todayOrders]);
+
+    // Filter pesanan selesai berdasarkan sesi shift yang dipilih pada drawer POS
     const completedTodayOrders = useMemo(() => {
-        return todayOrders
-            .filter(o => o.status === 'completed')
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [todayOrders]);
+        const baseCompleted = orders.filter(o => o.status === 'completed');
+        let filtered = baseCompleted;
+        if (posShiftScope === 'active_shift' && activeEnrichedSession) {
+            filtered = baseCompleted.filter(o => isOrderInSession(o, activeEnrichedSession));
+        } else if (posShiftScope === 'all_today' || !posShiftScope || posShiftScope === 'active_shift') {
+            filtered = baseCompleted.filter(o => toLocalDateKey(o.date) === todayDateKey);
+        } else {
+            const targetSession = enrichedSessions.find(s => s.id === posShiftScope);
+            filtered = targetSession
+                ? baseCompleted.filter(o => isOrderInSession(o, targetSession))
+                : baseCompleted.filter(o => toLocalDateKey(o.date) === todayDateKey);
+        }
+        return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [orders, posShiftScope, activeEnrichedSession, todayDateKey, enrichedSessions]);
 
     const todayRevenue = useMemo(() => {
         return todayOrders.reduce((sum, o) => sum + o.total, 0);
     }, [todayOrders]);
+
+    const activeShiftRevenue = useMemo(() => {
+        return activeShiftOrders.reduce((sum, o) => sum + o.total, 0);
+    }, [activeShiftOrders]);
 
     // Petty Cash / Kas Keluar Modal
     const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -187,6 +218,7 @@ export default function POSPage() {
             category: expenseCategory,
             paidVia: 'kas_laci',
             cashierName: user?.name || 'Kasir',
+            sessionId: currentSessionId || undefined,
         });
         addLog("EXPENSE_ADDED", `Kas Keluar: ${expenseDesc.trim()} (${formatRp(amount)})`, user?.name || 'Kasir');
         toast.success(`Kas keluar ${formatRp(amount)} berhasil dicatat!`);
@@ -540,6 +572,7 @@ export default function POSPage() {
             tableNumber: tableNumber.trim() || undefined,
             orderType,
             branchId: branchId || 'main',
+            sessionId: currentSessionId || undefined,
         };
         addOrder(newOrder);
         addLog('SALE', `Order #${newOrder.id.slice(0, 6)} - ${formatRp(orderTotal)} via ${paymentMethod}`, user?.name || 'Kasir');
@@ -558,7 +591,7 @@ export default function POSPage() {
                 : `Order #${newOrder.id.slice(0, 6)} berhasil! Stok bahan baku (BOM) otomatis dipotong (${formatRp(orderTotal)})`
         );
     }, [isStoreOpen, items, customerName, paymentMethod, cashIn, orderTotal, subtotal,
-        discountAmount, pointsDiscount, pointsToRedeem, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user, branchId,
+        discountAmount, pointsDiscount, pointsToRedeem, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user, branchId, currentSessionId,
         usePoints, customer, customerPhone, redeemPoints, addCustomer, addPoints,
         addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, clearCart, toast, isAdvancedUnlocked]);
 
@@ -604,10 +637,23 @@ export default function POSPage() {
                     <span className="hidden sm:block text-white/40 text-xs border-l border-white/20 pl-3 tracking-wider uppercase">
                         POS · {branchName || 'Cabang Utama'}
                     </span>
-                    <div className="hidden lg:flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg text-xs font-mono text-amber-300 border border-amber-400/20 ml-2">
+                    <button
+                        type="button"
+                        onClick={() => setPosShiftScope(prev => prev === 'active_shift' ? 'all_today' : 'active_shift')}
+                        title="Klik untuk beralih tampilan antara Omzet Shift Aktif vs Gabungan Semua Shift Hari Ini"
+                        className="hidden lg:flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg text-xs font-mono text-amber-300 border border-amber-400/20 ml-2 transition cursor-pointer"
+                    >
                         <ShoppingBag size={12} className="text-amber-400" />
-                        <span>Hari Ini: <strong>{todayOrders.length}</strong> Order · Rp {todayRevenue.toLocaleString('id-ID')}</span>
-                    </div>
+                        {posShiftScope === 'active_shift' && activeEnrichedSession ? (
+                            <span>
+                                {activeEnrichedSession.shiftBadge}: <strong>{activeShiftOrders.length}</strong> Order · Rp {activeShiftRevenue.toLocaleString('id-ID')}
+                            </span>
+                        ) : (
+                            <span>
+                                Hari Ini{todaySessions.length > 1 ? ` (${todaySessions.length} Shift)` : ''}: <strong>{todayOrders.length}</strong> Order · Rp {todayRevenue.toLocaleString('id-ID')}
+                            </span>
+                        )}
+                    </button>
                 </div>
                 <div className="flex items-center gap-2">
                     {/* Always-visible Order Queue & History Drawer Button */}
@@ -1346,6 +1392,51 @@ export default function POSPage() {
                                     Selesai ({completedTodayOrders.length})
                                 </button>
                             </div>
+
+                            {/* Filter Sesi Shift Hari Ini pada Tab Selesai (mendukung 2+ shift dalam sehari) */}
+                            {orderDrawerTab === 'completed' && todaySessions.length > 0 && (
+                                <div className="px-3 py-2 bg-white border-b border-gray-200 flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase whitespace-nowrap mr-1">Filter Shift:</span>
+                                    {activeEnrichedSession && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setPosShiftScope('active_shift')}
+                                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition border ${
+                                                posShiftScope === 'active_shift'
+                                                    ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20]'
+                                                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            🟢 {activeEnrichedSession.shiftBadge} Aktif
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setPosShiftScope('all_today')}
+                                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition border ${
+                                            posShiftScope === 'all_today'
+                                                ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20]'
+                                                : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        Semua Hari Ini ({todaySessions.length} Sesi)
+                                    </button>
+                                    {todaySessions.filter(ts => ts.id !== currentSessionId).map(ts => (
+                                        <button
+                                            key={ts.id}
+                                            type="button"
+                                            onClick={() => setPosShiftScope(ts.id)}
+                                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition border ${
+                                                posShiftScope === ts.id
+                                                    ? 'bg-amber-500 text-white border-amber-600'
+                                                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {ts.shiftBadge} · {ts.cashierName}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
 
                             <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50/50">
                                 {orderDrawerTab === 'incoming' && incomingOrders.length === 0 && (

@@ -26,7 +26,8 @@ import { useRouter } from "next/navigation";
 import {
     useProductStore, useSalesStore, useAuthStore, usePromoStore,
     useCustomerStore, useInventoryStore, useSupplierStore, useExpenseStore, useForecastHistoryStore,
-    ExtendedProduct, Order, ExpenseCategory, EXPENSE_CATEGORIES, DEFAULT_BRANCHES, RecipeItem, Role
+    ExtendedProduct, Order, ExpenseCategory, EXPENSE_CATEGORIES, DEFAULT_BRANCHES, RecipeItem, Role,
+    getEnrichedSessions, isOrderInSession, isExpenseInSession, toLocalDateKey, getTodayDateKey, getYesterdayDateKey, EnrichedStoreSession
 } from "@/lib/store";
 import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -54,7 +55,7 @@ import {
     CheckCircle, XCircle, Clock, Loader,
     Menu, Search, Sparkles, RefreshCw, Ticket, Users as UsersIcon, Box,
     Building2, BarChart2, TrendingUp, FileSpreadsheet, Bell, Wallet, DollarSign, Upload, Database, ClipboardCheck,
-    ChefHat, Coffee, Presentation, PackagePlus, Lock, Unlock
+    ChefHat, Coffee, Presentation, PackagePlus, Lock, Unlock, Calendar, Filter
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -182,6 +183,11 @@ export default function AdminPage() {
     const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
     const [orderSortMode, setOrderSortMode] = useState<'newest' | 'pipeline' | 'oldest'>('newest');
     const [viewReceiptOrder, setViewReceiptOrder] = useState<Order | null>(null);
+
+    // ── Filter Per Hari & Per Sesi Shift (Mendukung 2+ Sesi Shift dalam Sehari) ──
+    const [filterDateMode, setFilterDateMode] = useState<'all' | 'today' | 'yesterday' | 'custom'>('all');
+    const [customFilterDate, setCustomFilterDate] = useState<string>(() => getTodayDateKey());
+    const [selectedShiftId, setSelectedShiftId] = useState<string>('all');
 
     // Shift summary
     const [shiftSummary, setShiftSummary] = useState<import("@/lib/store").StoreSession | null>(null);
@@ -327,28 +333,159 @@ export default function AdminPage() {
         window.location.reload();
     };
 
+    // ── LOGIKA UTAMA FILTER PER HARI & PER SESI SHIFT (MENDUKUNG 2+ SHIFT SEHARI) ──
+    const enrichedSessions = useMemo(() => getEnrichedSessions(sessions), [sessions]);
+    const sessionByIdMap = useMemo(
+        () => new Map<string, EnrichedStoreSession>(enrichedSessions.map(s => [s.id, s])),
+        [enrichedSessions]
+    );
+
+    // Mencari sesi shift tempat sebuah pesanan terjadi (via sessionId atau rentang jam buka-tutup shift)
+    const resolveOrderShift = useMemo(() => {
+        return (order: Order): EnrichedStoreSession | undefined => {
+            if (order.sessionId && sessionByIdMap.has(order.sessionId)) {
+                return sessionByIdMap.get(order.sessionId);
+            }
+            return enrichedSessions.find(s => isOrderInSession(order, s));
+        };
+    }, [enrichedSessions, sessionByIdMap]);
+
+    const activeDateKey = useMemo(() => {
+        if (filterDateMode === 'today') return getTodayDateKey();
+        if (filterDateMode === 'yesterday') return getYesterdayDateKey();
+        if (filterDateMode === 'custom') return customFilterDate || getTodayDateKey();
+        return null;
+    }, [filterDateMode, customFilterDate]);
+
+    const selectedShiftObj = useMemo(
+        () => (selectedShiftId !== 'all' ? sessionByIdMap.get(selectedShiftId) || null : null),
+        [selectedShiftId, sessionByIdMap]
+    );
+
+    const sessionsOnSelectedDate = useMemo(() => {
+        if (!activeDateKey) return [];
+        return enrichedSessions.filter(s => s.dateKey === activeDateKey);
+    }, [enrichedSessions, activeDateKey]);
+
+    const isPeriodFilterActive = filterDateMode !== 'all' || selectedShiftId !== 'all';
+
+    const handleDateModeChange = (mode: 'all' | 'today' | 'yesterday' | 'custom', customDateVal?: string) => {
+        setFilterDateMode(mode);
+        const nextDateKey =
+            mode === 'today' ? getTodayDateKey() :
+            mode === 'yesterday' ? getYesterdayDateKey() :
+            mode === 'custom' ? (customDateVal ?? customFilterDate) :
+            null;
+        if (customDateVal !== undefined) {
+            setCustomFilterDate(customDateVal);
+        }
+        // Reset pilihan shift jika tidak berada di tanggal yang baru dipilih
+        if (selectedShiftObj && nextDateKey && selectedShiftObj.dateKey !== nextDateKey) {
+            setSelectedShiftId('all');
+        }
+        if (mode === 'all') {
+            setSelectedShiftId('all');
+        }
+    };
+
+    const handleSelectShiftFilter = (shiftId: string, syncDate = false) => {
+        setSelectedShiftId(shiftId);
+        if (syncDate && shiftId !== 'all') {
+            const target = sessionByIdMap.get(shiftId);
+            if (target) {
+                const todayKey = getTodayDateKey();
+                const yesterdayKey = getYesterdayDateKey();
+                if (target.dateKey === todayKey) {
+                    setFilterDateMode('today');
+                } else if (target.dateKey === yesterdayKey) {
+                    setFilterDateMode('yesterday');
+                } else {
+                    setCustomFilterDate(target.dateKey);
+                    setFilterDateMode('custom');
+                }
+            }
+        }
+    };
+
+    const resetPeriodFilter = () => {
+        setFilterDateMode('all');
+        setSelectedShiftId('all');
+    };
+
+    const activePeriodLabel = useMemo(() => {
+        let datePart = 'Semua Hari';
+        if (activeDateKey) {
+            const formatted = new Date(`${activeDateKey}T00:00:00`).toLocaleDateString('id-ID', {
+                day: '2-digit', month: 'short', year: 'numeric'
+            });
+            if (filterDateMode === 'today') datePart = `Hari Ini (${formatted})`;
+            else if (filterDateMode === 'yesterday') datePart = `Kemarin (${formatted})`;
+            else datePart = `Tanggal ${formatted}`;
+        } else if (selectedShiftObj) {
+            datePart = new Date(selectedShiftObj.startTime).toLocaleDateString('id-ID', {
+                day: '2-digit', month: 'short', year: 'numeric'
+            });
+        }
+
+        if (selectedShiftObj) {
+            return `${datePart} — ${selectedShiftObj.shiftBadge} · ${selectedShiftObj.cashierName} (${selectedShiftObj.timeRangeLabel})`;
+        }
+        if (activeDateKey && sessionsOnSelectedDate.length > 0) {
+            return `${datePart} — Semua Shift (${sessionsOnSelectedDate.length} Sesi)`;
+        }
+        return `${datePart} — Semua Sesi Shift`;
+    }, [activeDateKey, filterDateMode, selectedShiftObj, sessionsOnSelectedDate]);
+
+    // Pesanan & Pengeluaran yang sudah difilter berdasarkan Hari & Sesi Shift terpilih
+    const periodOrders = useMemo(() => {
+        if (selectedShiftObj) {
+            return orders.filter(o => isOrderInSession(o, selectedShiftObj));
+        }
+        if (activeDateKey) {
+            return orders.filter(o => toLocalDateKey(o.date) === activeDateKey);
+        }
+        return orders;
+    }, [orders, selectedShiftObj, activeDateKey]);
+
+    const periodExpenses = useMemo(() => {
+        if (selectedShiftObj) {
+            return expenses.filter(e => isExpenseInSession(e, selectedShiftObj));
+        }
+        if (activeDateKey) {
+            return expenses.filter(e => toLocalDateKey(e.date) === activeDateKey);
+        }
+        return expenses;
+    }, [expenses, selectedShiftObj, activeDateKey]);
+
     const handleExportCSV = () => {
-        const headers = ["Order ID", "Date", "Customer", "Items", "Total", "Payment", "Status"];
-        const rows = orders.map(order => [
-            order.id,
-            new Date(order.date).toLocaleString('id-ID'),
-            order.customerName || "Guest",
-            order.items.map(i => `${i.name} (x${i.quantity})`).join("; "),
-            order.total,
-            order.paymentMethod || '-',
-            order.status,
-        ]);
+        const headers = ["Order ID", "Date", "Shift", "Customer", "Items", "Total", "Payment", "Status"];
+        const rows = periodOrders.map(order => {
+            const sh = resolveOrderShift(order);
+            return [
+                order.id,
+                new Date(order.date).toLocaleString('id-ID'),
+                sh ? `${sh.shiftBadge} (${sh.cashierName})` : '-',
+                order.customerName || "Guest",
+                order.items.map(i => `${i.name} (x${i.quantity})`).join("; "),
+                order.total,
+                order.paymentMethod || '-',
+                order.status,
+            ];
+        });
         const csvContent = "data:text/csv;charset=utf-8,"
             + [headers.join(","), ...rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `laporan_penjualan_${new Date().toISOString().split('T')[0]}.csv`);
+        const fileSuffix = selectedShiftObj
+            ? `${selectedShiftObj.dateKey}_shift${selectedShiftObj.shiftNumber}`
+            : (activeDateKey || getTodayDateKey());
+        link.setAttribute("download", `laporan_penjualan_${fileSuffix}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        addLog("EXPORT_CSV", "Exported sales data to CSV", user?.name || "Unknown");
-        toast.success("Data penjualan berhasil di-export ke CSV!");
+        addLog("EXPORT_CSV", `Exported sales data to CSV (${activePeriodLabel})`, user?.name || "Unknown");
+        toast.success(`Data penjualan (${activePeriodLabel}) berhasil di-export ke CSV!`);
     };
 
     const handleTabChange = (tab: typeof activeTab) => {
@@ -356,74 +493,90 @@ export default function AdminPage() {
         setIsMobileMenuOpen(false);
     };
 
-    // Export to Excel
+    // Export to Excel (mengikuti Filter Hari & Sesi Shift yang sedang dipilih)
     const handleExportExcel = async () => {
         const XLSX = await import('xlsx');
         const wsData = [
-            ["Order ID", "Tanggal", "Waktu", "Pelanggan", "No. HP", "Items", "Subtotal", "Diskon", "Total", "Metode Bayar", "Status", "Kasir", "Cabang"],
-            ...orders.map(o => [
-                o.id,
-                new Date(o.date).toLocaleDateString('id-ID'),
-                new Date(o.date).toLocaleTimeString('id-ID'),
-                o.customerName || 'Guest',
-                o.customerPhone || '-',
-                o.items.map(i => `${i.quantity}x ${i.name}`).join('; '),
-                o.subtotal ?? o.total,
-                o.discount ?? 0,
-                o.total,
-                o.paymentMethod || '-',
-                o.status,
-                o.cashierName || '-',
-                o.branchId || 'main',
-            ])
+            ["Order ID", "Tanggal", "Waktu", "Sesi Shift", "Pelanggan", "No. HP", "Items", "Subtotal", "Diskon", "Total", "Metode Bayar", "Status", "Kasir", "Cabang"],
+            ...periodOrders.map(o => {
+                const sh = resolveOrderShift(o);
+                return [
+                    o.id,
+                    new Date(o.date).toLocaleDateString('id-ID'),
+                    new Date(o.date).toLocaleTimeString('id-ID'),
+                    sh ? `${sh.shiftBadge} (${sh.cashierName})` : '-',
+                    o.customerName || 'Guest',
+                    o.customerPhone || '-',
+                    o.items.map(i => `${i.quantity}x ${i.name}`).join('; '),
+                    o.subtotal ?? o.total,
+                    o.discount ?? 0,
+                    o.total,
+                    o.paymentMethod || '-',
+                    o.status,
+                    o.cashierName || '-',
+                    o.branchId || 'main',
+                ];
+            })
         ];
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(wsData);
-        ws['!cols'] = [12, 12, 10, 18, 14, 40, 12, 10, 12, 12, 12, 14, 12].map(w => ({ wch: w }));
+        ws['!cols'] = [12, 12, 10, 18, 18, 14, 40, 12, 10, 12, 12, 12, 14, 12].map(w => ({ wch: w }));
         XLSX.utils.book_append_sheet(wb, ws, 'Laporan Penjualan');
 
         const popMap = new Map<string, number>();
-        orders.filter(o => o.status !== 'cancelled').forEach(o => o.items.forEach(i => popMap.set(i.name, (popMap.get(i.name) || 0) + i.quantity)));
-        const popData = [['Nama Produk', 'Qty Terjual'], ...Array.from(popMap.entries()).sort((a, b) => b[1] - a[1])];
+        periodOrders.filter(o => o.status !== 'cancelled').forEach(o => o.items.forEach(i => popMap.set(i.name, (popMap.get(i.name) || 0) + i.quantity)));
+        const popData = [
+            ['Periode Laporan', activePeriodLabel],
+            [],
+            ['Nama Produk', 'Qty Terjual'],
+            ...Array.from(popMap.entries()).sort((a, b) => b[1] - a[1])
+        ];
         const ws2 = XLSX.utils.aoa_to_sheet(popData);
         XLSX.utils.book_append_sheet(wb, ws2, 'Ringkasan Produk');
 
-        XLSX.writeFile(wb, `Laporan_TehRaja_${new Date().toISOString().split('T')[0]}.xlsx`);
-        addLog("EXPORT_XLSX", "Exported full report to Excel", user?.name || "Admin");
-        toast.success("Berhasil export ke Excel!");
+        const fileSuffix = selectedShiftObj
+            ? `${selectedShiftObj.dateKey}_Shift${selectedShiftObj.shiftNumber}`
+            : (activeDateKey || getTodayDateKey());
+        XLSX.writeFile(wb, `Laporan_TehRaja_${fileSuffix}.xlsx`);
+        addLog("EXPORT_XLSX", `Exported report to Excel (${activePeriodLabel})`, user?.name || "Admin");
+        toast.success(`Berhasil export Excel (${activePeriodLabel})!`);
     };
 
-    // ── Live Today Stats ──────────────────────────────────────────
+    // ── Live Today & Filtered KPI Stats ───────────────────────────
     const todayOrders = useMemo(() => {
-        const todayStr = new Date().toDateString();
-        return orders.filter(o => {
-            const d = new Date(o.date);
-            return !isNaN(d.getTime()) && d.toDateString() === todayStr;
-        });
+        const todayKey = getTodayDateKey();
+        return orders.filter(o => toLocalDateKey(o.date) === todayKey);
     }, [orders]);
 
+    const dashboardFocusOrders = isPeriodFilterActive ? periodOrders : todayOrders;
+
     const todayValidOrders = useMemo(() => {
-        return todayOrders.filter(o => o.status !== 'cancelled');
-    }, [todayOrders]);
+        return dashboardFocusOrders.filter(o => o.status !== 'cancelled');
+    }, [dashboardFocusOrders]);
 
     const todayGrossRevenue = useMemo(() => {
         return todayValidOrders.reduce((sum, o) => sum + o.total, 0);
     }, [todayValidOrders]);
 
     const todayCompletedOrders = useMemo(() => {
-        return todayOrders.filter(o => o.status === 'completed');
-    }, [todayOrders]);
+        return dashboardFocusOrders.filter(o => o.status === 'completed');
+    }, [dashboardFocusOrders]);
 
-    // ── Financials (P&L) Calculations ─────────────────────────────
-    const validOrders = useMemo(() => orders.filter(o => o.status !== 'cancelled'), [orders]);
+    const allTimeGrossRevenue = useMemo(
+        () => orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total, 0),
+        [orders]
+    );
+
+    // ── Financials (P&L) Calculations (mengikuti Filter Hari & Shift) ──
+    const validOrders = useMemo(() => periodOrders.filter(o => o.status !== 'cancelled'), [periodOrders]);
     const grossRevenue = useMemo(() => validOrders.reduce((sum, o) => sum + o.total, 0), [validOrders]);
     const estimatedCOGS = useMemo(() => Math.round(grossRevenue * 0.30), [grossRevenue]);
     const grossProfit = useMemo(() => grossRevenue - estimatedCOGS, [grossRevenue, estimatedCOGS]);
-    const totalExpenses = useMemo(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
+    const totalExpenses = useMemo(() => periodExpenses.reduce((sum, e) => sum + e.amount, 0), [periodExpenses]);
     const netProfit = useMemo(() => grossProfit - totalExpenses, [grossProfit, totalExpenses]);
     const netMargin = useMemo(() => grossRevenue > 0 ? ((netProfit / grossRevenue) * 100).toFixed(1) : '0.0', [grossRevenue, netProfit]);
-    const drawerExpenses = useMemo(() => expenses.filter(e => e.paidVia === 'kas_laci').reduce((sum, e) => sum + e.amount, 0), [expenses]);
-    const transferExpenses = useMemo(() => expenses.filter(e => e.paidVia === 'rekening_toko').reduce((sum, e) => sum + e.amount, 0), [expenses]);
+    const drawerExpenses = useMemo(() => periodExpenses.filter(e => e.paidVia === 'kas_laci').reduce((sum, e) => sum + e.amount, 0), [periodExpenses]);
+    const transferExpenses = useMemo(() => periodExpenses.filter(e => e.paidVia === 'rekening_toko').reduce((sum, e) => sum + e.amount, 0), [periodExpenses]);
 
     const handleSaveExpense = (e: React.FormEvent) => {
         e.preventDefault();
@@ -522,8 +675,9 @@ export default function AdminPage() {
 
         const pnlRows = [
             ["LAPORAN LABA RUGI (PROFIT & LOSS) - TEH RAJA"],
-            [`Periode Cetak: ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}`],
-            [`Dicatat Oleh : ${user?.name || 'Admin'}`],
+            [`Periode Filter : ${activePeriodLabel}`],
+            [`Tanggal Cetak  : ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}`],
+            [`Dicatat Oleh   : ${user?.name || 'Admin'}`],
             [],
             ["Komponen Keuangan", "Nominal (Rp)", "Persentase (%)"],
             ["1. Pendapatan Kotor (Gross Sales)", grossRevenue, "100.0%"],
@@ -539,22 +693,29 @@ export default function AdminPage() {
         XLSX.utils.book_append_sheet(wb, wsPNL, "Laba Rugi (P&L)");
 
         const expRows = [
-            ["No", "Tanggal", "Kategori", "Keperluan / Deskripsi", "Metode Bayar", "Jumlah (Rp)", "Dicatat Oleh"],
-            ...expenses.map((e, idx) => [
-                idx + 1,
-                new Date(e.date).toLocaleDateString('id-ID'),
-                EXPENSE_CATEGORIES.find(c => c.id === e.category)?.label || e.category,
-                e.description,
-                e.paidVia === 'kas_laci' ? 'Kas Laci Kasir' : 'Rekening Toko',
-                e.amount,
-                e.cashierName || 'Admin'
-            ])
+            ["No", "Tanggal", "Sesi Shift", "Kategori", "Keperluan / Deskripsi", "Metode Bayar", "Jumlah (Rp)", "Dicatat Oleh"],
+            ...periodExpenses.map((e, idx) => {
+                const sh = e.sessionId ? sessionByIdMap.get(e.sessionId) : enrichedSessions.find(s => isExpenseInSession(e, s));
+                return [
+                    idx + 1,
+                    new Date(e.date).toLocaleString('id-ID'),
+                    sh ? `${sh.shiftBadge} (${sh.cashierName})` : '-',
+                    EXPENSE_CATEGORIES.find(c => c.id === e.category)?.label || e.category,
+                    e.description,
+                    e.paidVia === 'kas_laci' ? 'Kas Laci Kasir' : 'Rekening Toko',
+                    e.amount,
+                    e.cashierName || 'Admin'
+                ];
+            })
         ];
         const wsExp = XLSX.utils.aoa_to_sheet(expRows);
         XLSX.utils.book_append_sheet(wb, wsExp, "Daftar Pengeluaran");
 
-        XLSX.writeFile(wb, `Laporan_Laba_Rugi_TehRaja_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        toast.success("Laporan Laba Rugi (.xlsx) berhasil diunduh!");
+        const fileSuffix = selectedShiftObj
+            ? `${selectedShiftObj.dateKey}_Shift${selectedShiftObj.shiftNumber}`
+            : (activeDateKey || getTodayDateKey());
+        XLSX.writeFile(wb, `Laporan_Laba_Rugi_TehRaja_${fileSuffix}.xlsx`);
+        toast.success(`Laporan Laba Rugi (${activePeriodLabel}) berhasil diunduh!`);
     };
 
     const handleExportBackup = () => {
@@ -812,17 +973,17 @@ export default function AdminPage() {
         setPromoModalOpen(false);
     };
 
-    // Lifecycle Stage Counts
+    // Lifecycle Stage Counts (mengikuti Filter Hari & Sesi Shift)
     const orderStageCounts = useMemo(() => {
         return {
-            all: orders.length,
-            pending: orders.filter(o => !o.status || o.status === 'pending').length,
-            awaiting_payment: orders.filter(o => o.status === 'awaiting_payment').length,
-            processing: orders.filter(o => o.status === 'processing').length,
-            completed: orders.filter(o => o.status === 'completed').length,
-            cancelled: orders.filter(o => o.status === 'cancelled').length,
+            all: periodOrders.length,
+            pending: periodOrders.filter(o => !o.status || o.status === 'pending').length,
+            awaiting_payment: periodOrders.filter(o => o.status === 'awaiting_payment').length,
+            processing: periodOrders.filter(o => o.status === 'processing').length,
+            completed: periodOrders.filter(o => o.status === 'completed').length,
+            cancelled: periodOrders.filter(o => o.status === 'cancelled').length,
         };
-    }, [orders]);
+    }, [periodOrders]);
 
     const filteredOrders = useMemo(() => {
         const statusWeight: Record<string, number> = {
@@ -833,7 +994,7 @@ export default function AdminPage() {
             cancelled: 5,
         };
 
-        const list = orders.filter(order => {
+        const list = periodOrders.filter(order => {
             const currentStatus = order.status || 'pending';
             const matchStatus = orderStatusFilter === 'all' || currentStatus === orderStatusFilter;
             const q = orderSearch.toLowerCase();
@@ -859,12 +1020,34 @@ export default function AdminPage() {
                 return timeB - timeA;
             }
         });
-    }, [orders, orderStatusFilter, orderSearch, orderSortMode]);
+    }, [periodOrders, orderStatusFilter, orderSearch, orderSortMode]);
 
-    // Charts Data
+    // Charts Data (Produk Terpopuler & Waktu Tersibuk ikut merespons Filter Hari & Shift)
     const dailySales = getDailySales();
-    const popularity = getProductPopularity();
-    const peakHours = getPeakHours();
+    const popularity = useMemo(() => {
+        if (!isPeriodFilterActive) return getProductPopularity();
+        const counts = new Map<string, number>();
+        validOrders.forEach(o => o.items.forEach(i => counts.set(i.name, (counts.get(i.name) || 0) + i.quantity)));
+        return Array.from(counts.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+    }, [isPeriodFilterActive, getProductPopularity, validOrders]);
+
+    const peakHours = useMemo(() => {
+        if (!isPeriodFilterActive) return getPeakHours();
+        const hourMap = new Map<number, number>();
+        validOrders.forEach(o => {
+            const d = new Date(o.date);
+            if (!isNaN(d.getTime())) {
+                const h = d.getHours();
+                hourMap.set(h, (hourMap.get(h) || 0) + 1);
+            }
+        });
+        return Array.from(hourMap.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([h, count]) => ({ hour: `${String(h).padStart(2, '0')}:00`, count }));
+    }, [isPeriodFilterActive, getPeakHours, validOrders]);
 
     // Variant analysis (only valid orders)
     const variantAnalysis = useMemo(() => {
@@ -1121,7 +1304,10 @@ export default function AdminPage() {
                 {activeTab === 'dashboard' && (
                     <div className="animate-fade-in space-y-6 md:space-y-8">
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                            <h2 className="text-xl md:text-2xl font-bold">Laporan Kinerja Operasional</h2>
+                            <div>
+                                <h2 className="text-xl md:text-2xl font-bold">Laporan Kinerja Operasional</h2>
+                                <p className="text-xs text-gray-500 mt-0.5">Periode aktif: <strong className="text-forest">{activePeriodLabel}</strong></p>
+                            </div>
                             <div className="flex gap-2 flex-wrap">
                                 <button onClick={handleExportCSV} className="flex items-center gap-2 text-forest bg-white border border-gray-200 px-3 py-2 rounded text-sm hover:bg-gray-50 shadow-sm transition font-bold">
                                     <Download size={16} /> CSV
@@ -1129,9 +1315,23 @@ export default function AdminPage() {
                                 <button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-700 text-white px-3 py-2 rounded text-sm hover:bg-green-800 shadow-sm transition font-bold">
                                     <FileSpreadsheet size={16} /> Excel (.xlsx)
                                 </button>
-                                <ReportGenerator orders={orders} />
+                                <ReportGenerator orders={periodOrders} periodLabel={activePeriodLabel} />
                             </div>
                         </div>
+
+                        {/* Filter Per Hari & Per Sesi Shift (Mendukung 2+ Shift Sehari) */}
+                        <DayShiftFilterBar
+                            filterDateMode={filterDateMode}
+                            customFilterDate={customFilterDate}
+                            selectedShiftId={selectedShiftId}
+                            sessionsOnSelectedDate={sessionsOnSelectedDate}
+                            allEnrichedSessions={enrichedSessions}
+                            activePeriodLabel={activePeriodLabel}
+                            isFilterActive={isPeriodFilterActive}
+                            onChangeDateMode={handleDateModeChange}
+                            onSelectShift={handleSelectShiftFilter}
+                            onReset={resetPeriodFilter}
+                        />
 
                         {/* Low Stock Alert Banner */}
                         {(lowStockProducts.length > 0 || lowStockIngredients.length > 0) && (
@@ -1160,11 +1360,13 @@ export default function AdminPage() {
                             <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
                                 <div>
                                     <div className="flex items-center justify-between">
-                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Order Hari Ini</p>
+                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                            {selectedShiftObj ? `Order (${selectedShiftObj.shiftBadge})` : isPeriodFilterActive ? 'Order Periode' : 'Order Hari Ini'}
+                                        </p>
                                         <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                                     </div>
                                     <p className="text-2xl md:text-3xl font-black text-blue-600 mt-1 font-mono">
-                                        {todayOrders.length}
+                                        {dashboardFocusOrders.length}
                                     </p>
                                 </div>
                                 <p className="text-[11px] text-gray-400 mt-2 pt-2 border-t border-gray-50 flex items-center justify-between">
@@ -1176,8 +1378,12 @@ export default function AdminPage() {
                             <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
                                 <div>
                                     <div className="flex items-center justify-between">
-                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Omset Hari Ini</p>
-                                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Live</span>
+                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                            {selectedShiftObj ? `Omzet (${selectedShiftObj.shiftBadge})` : isPeriodFilterActive ? 'Omzet Periode' : 'Omzet Hari Ini'}
+                                        </p>
+                                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                            {selectedShiftObj ? selectedShiftObj.shiftBadge : 'Live'}
+                                        </span>
                                     </div>
                                     <p className="text-2xl md:text-3xl font-black text-amber-600 mt-1 font-mono">
                                         Rp {todayGrossRevenue.toLocaleString('id-ID')}
@@ -1185,7 +1391,7 @@ export default function AdminPage() {
                                 </div>
                                 <p className="text-[11px] text-gray-400 mt-2 pt-2 border-t border-gray-50 flex items-center justify-between">
                                     <span>{todayValidOrders.length} pesanan valid</span>
-                                    <span className="font-semibold text-forest font-mono">Rp {grossRevenue.toLocaleString('id-ID')} all</span>
+                                    <span className="font-semibold text-forest font-mono">Rp {allTimeGrossRevenue.toLocaleString('id-ID')} all</span>
                                 </p>
                             </div>
 
@@ -1193,10 +1399,10 @@ export default function AdminPage() {
                                 <div>
                                     <div className="flex items-center justify-between">
                                         <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Perlu Tindakan</p>
-                                        {pendingCount > 0 && <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />}
+                                        {(orderStageCounts.pending + orderStageCounts.awaiting_payment) > 0 && <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />}
                                     </div>
                                     <p className="text-2xl md:text-3xl font-black text-orange-600 mt-1 font-mono">
-                                        {pendingCount}
+                                        {orderStageCounts.pending + orderStageCounts.awaiting_payment}
                                     </p>
                                 </div>
                                 <p className="text-[11px] text-gray-400 mt-2 pt-2 border-t border-gray-50 flex items-center justify-between">
@@ -1208,7 +1414,9 @@ export default function AdminPage() {
                             <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex flex-col justify-between">
                                 <div>
                                     <div className="flex items-center justify-between">
-                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Selesai Hari Ini</p>
+                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                            {selectedShiftObj ? `Selesai (${selectedShiftObj.shiftBadge})` : isPeriodFilterActive ? 'Selesai Periode' : 'Selesai Hari Ini'}
+                                        </p>
                                         <CheckCircle size={14} className="text-green-500" />
                                     </div>
                                     <p className="text-2xl md:text-3xl font-black text-green-600 mt-1 font-mono">
@@ -1244,62 +1452,115 @@ export default function AdminPage() {
                             </div>
                         </div>
 
-                        {/* Riwayat Sesi */}
+                        {/* Riwayat Sesi Shift Kasir (Mendukung Multi-Shift Harian: Shift 1, Shift 2, dst.) */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                            <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50">
-                                <h3 className="font-bold text-lg text-forest flex items-center gap-2">
-                                    <Clock size={20} className="text-amber-500" /> Riwayat Laporan Harian (Sesi Shift Kasir)
-                                </h3>
-                                <p className="text-sm text-gray-500 mt-1">Laporan pendapatan dan rekonsiliasi laci kas setiap kali shift dibuka dan ditutup.</p>
+                            <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <h3 className="font-bold text-lg text-forest flex items-center gap-2">
+                                        <Clock size={20} className="text-amber-500" /> Riwayat Laporan Harian (Sesi Shift Kasir)
+                                    </h3>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Laporan pendapatan dan rekonsiliasi laci kas per sesi shift (otomatis menomori <strong>Shift 1</strong>, <strong>Shift 2</strong> jika sehari ada beberapa sesi).
+                                    </p>
+                                </div>
+                                {activeDateKey && (
+                                    <span className="text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-xl whitespace-nowrap">
+                                        {sessionsOnSelectedDate.length} Sesi Shift pada Tanggal Ini
+                                    </span>
+                                )}
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
                                         <tr>
+                                            <th className="p-4">Sesi Shift</th>
                                             <th className="p-4">Staff Kasir</th>
                                             <th className="p-4">Waktu Buka</th>
                                             <th className="p-4">Waktu Tutup</th>
                                             <th className="p-4 text-center">Jml Transaksi</th>
                                             <th className="p-4 text-right">Total Pendapatan</th>
-                                            <th className="p-4 text-right">Detail</th>
+                                            <th className="p-4 text-right">Aksi &amp; Detail</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {sessions.slice().reverse().map(session => (
-                                            <tr key={session.id} className="hover:bg-blue-50/50 transition bg-white">
-                                                <td className="p-4 font-bold text-gray-800 flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs">
-                                                        {session.cashierName.charAt(0)}
-                                                    </div>
-                                                    {session.cashierName}
-                                                </td>
-                                                <td className="p-4 text-sm text-gray-600">
-                                                    {new Date(session.startTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-                                                </td>
-                                                <td className="p-4 text-sm text-gray-600">
-                                                    {session.endTime
-                                                        ? new Date(session.endTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
-                                                        : <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded">SEDANG BUKA</span>
-                                                    }
-                                                </td>
-                                                <td className="p-4 text-center font-mono">{session.totalOrders}</td>
-                                                <td className="p-4 text-right font-bold text-forest">
-                                                    Rp {session.totalSales.toLocaleString('id-ID')}
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    <button
-                                                        onClick={() => setShiftSummary(session)}
-                                                        className="text-xs text-blue-600 hover:text-blue-800 font-bold transition"
-                                                    >
-                                                        Lihat Ringkasan
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {sessions.length === 0 && (
+                                        {(activeDateKey ? sessionsOnSelectedDate : enrichedSessions.slice().reverse()).map(session => {
+                                            const liveOrders = session.status === 'open'
+                                                ? orders.filter(o => o.status !== 'cancelled' && isOrderInSession(o, session))
+                                                : null;
+                                            const rowOrdersCount = liveOrders ? liveOrders.length : session.totalOrders;
+                                            const rowTotalSales = liveOrders
+                                                ? liveOrders.reduce((sum, o) => sum + o.total, 0)
+                                                : session.totalSales;
+                                            const isSelectedShift = selectedShiftId === session.id;
+
+                                            return (
+                                                <tr key={session.id} className={`transition ${isSelectedShift ? 'bg-amber-50/70' : 'hover:bg-blue-50/50 bg-white'}`}>
+                                                    <td className="p-4 whitespace-nowrap">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-black ${
+                                                                session.shiftNumber === 1
+                                                                    ? 'bg-[#0D2B20] text-amber-300'
+                                                                    : 'bg-amber-500 text-white'
+                                                            }`}>
+                                                                {session.shiftBadge}
+                                                            </span>
+                                                            {session.totalShiftsOnDay > 1 && (
+                                                                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                                    dari {session.totalShiftsOnDay} shift
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 font-bold text-gray-800 flex items-center gap-2">
+                                                        <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs">
+                                                            {session.cashierName.charAt(0)}
+                                                        </div>
+                                                        {session.cashierName}
+                                                    </td>
+                                                    <td className="p-4 text-sm text-gray-600 whitespace-nowrap">
+                                                        {new Date(session.startTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                                                    </td>
+                                                    <td className="p-4 text-sm text-gray-600 whitespace-nowrap">
+                                                        {session.endTime
+                                                            ? new Date(session.endTime).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
+                                                            : <span className="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded border border-green-200">SEDANG BUKA</span>
+                                                        }
+                                                    </td>
+                                                    <td className="p-4 text-center font-mono font-bold">{rowOrdersCount}</td>
+                                                    <td className="p-4 text-right font-bold text-forest whitespace-nowrap">
+                                                        Rp {rowTotalSales.toLocaleString('id-ID')}
+                                                    </td>
+                                                    <td className="p-4 text-right whitespace-nowrap">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => isSelectedShift ? setSelectedShiftId('all') : handleSelectShiftFilter(session.id, true)}
+                                                                className={`text-xs px-2.5 py-1 rounded-lg font-bold transition border ${
+                                                                    isSelectedShift
+                                                                        ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20]'
+                                                                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-amber-50 hover:border-amber-300'
+                                                                }`}
+                                                            >
+                                                                {isSelectedShift ? '✓ Difilter' : 'Filter Shift'}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setShiftSummary(session)}
+                                                                className="text-xs text-blue-600 hover:text-blue-800 font-bold transition"
+                                                            >
+                                                                Lihat Ringkasan
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {(activeDateKey ? sessionsOnSelectedDate.length === 0 : enrichedSessions.length === 0) && (
                                             <tr>
-                                                <td colSpan={6} className="p-8 text-center text-gray-400 italic">
-                                                    Belum ada riwayat sesi toko tersimpan.
+                                                <td colSpan={7} className="p-8 text-center text-gray-400 italic">
+                                                    {activeDateKey
+                                                        ? 'Tidak ada sesi shift kasir yang tercatat pada tanggal terpilih.'
+                                                        : 'Belum ada riwayat sesi toko tersimpan.'}
                                                 </td>
                                             </tr>
                                         )}
@@ -1366,6 +1627,20 @@ export default function AdminPage() {
                                 />
                             </div>
                         </div>
+
+                        {/* Filter Per Hari & Per Sesi Shift untuk Laporan Laba Rugi & Petty Cash */}
+                        <DayShiftFilterBar
+                            filterDateMode={filterDateMode}
+                            customFilterDate={customFilterDate}
+                            selectedShiftId={selectedShiftId}
+                            sessionsOnSelectedDate={sessionsOnSelectedDate}
+                            allEnrichedSessions={enrichedSessions}
+                            activePeriodLabel={activePeriodLabel}
+                            isFilterActive={isPeriodFilterActive}
+                            onChangeDateMode={handleDateModeChange}
+                            onSelectShift={handleSelectShiftFilter}
+                            onReset={resetPeriodFilter}
+                        />
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
@@ -1441,10 +1716,17 @@ export default function AdminPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {expenses.map(e => (
+                                        {periodExpenses.map(e => {
+                                            const expShift = e.sessionId ? sessionByIdMap.get(e.sessionId) : enrichedSessions.find(s => isExpenseInSession(e, s));
+                                            return (
                                             <tr key={e.id} className="hover:bg-gray-50 transition">
                                                 <td className="p-3.5 text-gray-500 font-mono">
-                                                    {new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                    <div>{new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                                                    {expShift && (
+                                                        <span className="inline-block mt-0.5 text-[10px] font-bold bg-[#0D2B20]/10 text-[#0D2B20] px-1.5 py-0.5 rounded">
+                                                            {expShift.shiftBadge}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="p-3.5">
                                                     <span className="font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
@@ -1474,11 +1756,14 @@ export default function AdminPage() {
                                                     </button>
                                                 </td>
                                             </tr>
-                                        ))}
-                                        {expenses.length === 0 && (
+                                            );
+                                        })}
+                                        {periodExpenses.length === 0 && (
                                             <tr>
                                                 <td colSpan={7} className="p-8 text-center text-gray-400">
-                                                    Belum ada pengeluaran yang dicatat. Klik &quot;Catat Biaya Operasional&quot;.
+                                                    {isPeriodFilterActive
+                                                        ? `Tidak ada pengeluaran operasional tercatat pada periode "${activePeriodLabel}".`
+                                                        : 'Belum ada pengeluaran yang dicatat. Klik "Catat Biaya Operasional".'}
                                                 </td>
                                             </tr>
                                         )}
@@ -1623,6 +1908,20 @@ export default function AdminPage() {
                 {/* === ORDERS TAB (PIPELINE: 1. PESAN -> 2. BAYAR -> 3. RACIK -> 4. SELESAI) === */}
                 {activeTab === 'orders' && (
                     <div className="animate-fade-in space-y-4">
+                        {/* Filter Per Hari & Per Sesi Shift pada Daftar Pesanan POS */}
+                        <DayShiftFilterBar
+                            filterDateMode={filterDateMode}
+                            customFilterDate={customFilterDate}
+                            selectedShiftId={selectedShiftId}
+                            sessionsOnSelectedDate={sessionsOnSelectedDate}
+                            allEnrichedSessions={enrichedSessions}
+                            activePeriodLabel={activePeriodLabel}
+                            isFilterActive={isPeriodFilterActive}
+                            onChangeDateMode={handleDateModeChange}
+                            onSelectShift={handleSelectShiftFilter}
+                            onReset={resetPeriodFilter}
+                        />
+
                         {/* Header & Status Workflow Banner */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                             <div className="p-4 md:p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1801,12 +2100,13 @@ export default function AdminPage() {
                                             const orderTime = new Date(order.date);
                                             const diffMins = Math.floor((Date.now() - orderTime.getTime()) / 60000);
                                             const isVeryRecent = diffMins < 5;
+                                            const orderShift = resolveOrderShift(order);
 
                                             return (
                                                 <tr key={order.id} className="hover:bg-amber-50/30 transition bg-white">
                                                     <td className="p-4">
                                                         <div className="font-mono font-bold text-gray-800 text-xs">#{order.id.slice(0, 6).toUpperCase()}</div>
-                                                        <div className="flex items-center gap-1 mt-1">
+                                                        <div className="flex items-center gap-1 mt-1 flex-wrap">
                                                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${order.orderType === 'take-away' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                                                                 {order.orderType === 'take-away' ? 'Bawa Pulang' : 'Makan di Tempat'}
                                                             </span>
@@ -1827,6 +2127,11 @@ export default function AdminPage() {
                                                                 <span className="ml-1 text-red-600 font-bold animate-pulse">🔥 Baru!</span>
                                                             )}
                                                         </div>
+                                                        {orderShift && (
+                                                            <span className="inline-block mt-1 text-[10px] font-bold bg-[#0D2B20] text-amber-300 px-2 py-0.5 rounded-full">
+                                                                {orderShift.shiftBadge}
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td className="p-4">
                                                         <div className="font-bold text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</div>
@@ -1879,8 +2184,8 @@ export default function AdminPage() {
                                         {filteredOrders.length === 0 && (
                                             <tr>
                                                 <td colSpan={7} className="p-12 text-center text-gray-400 italic">
-                                                    {orderSearch || orderStatusFilter !== 'all'
-                                                        ? 'Tidak ada pesanan yang sesuai dengan filter pencarian.'
+                                                    {orderSearch || orderStatusFilter !== 'all' || isPeriodFilterActive
+                                                        ? `Tidak ada pesanan yang sesuai dengan filter (${activePeriodLabel}).`
                                                         : 'Belum ada pesanan masuk.'}
                                                 </td>
                                             </tr>
@@ -1893,20 +2198,28 @@ export default function AdminPage() {
                             <div className="md:hidden divide-y divide-gray-100">
                                 {filteredOrders.length === 0 && (
                                     <p className="p-8 text-center text-gray-400 italic text-xs">
-                                        {orderSearch || orderStatusFilter !== 'all' ? 'Tidak ada pesanan yang sesuai filter.' : 'Belum ada pesanan masuk.'}
+                                        {orderSearch || orderStatusFilter !== 'all' || isPeriodFilterActive
+                                            ? `Tidak ada pesanan yang sesuai filter (${activePeriodLabel}).`
+                                            : 'Belum ada pesanan masuk.'}
                                     </p>
                                 )}
                                 {filteredOrders.map(order => {
                                     const orderTime = new Date(order.date);
                                     const diffMins = Math.floor((Date.now() - orderTime.getTime()) / 60000);
                                     const isVeryRecent = diffMins < 5;
+                                    const orderShift = resolveOrderShift(order);
 
                                     return (
                                         <div key={order.id} className="p-4 space-y-3 bg-white">
                                             <div className="flex justify-between items-start gap-2">
                                                 <div>
-                                                    <div className="flex items-center gap-1.5">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
                                                         <span className="font-bold text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</span>
+                                                        {orderShift && (
+                                                            <span className="text-[9px] bg-[#0D2B20] text-amber-300 font-bold px-1.5 py-0.5 rounded-full">
+                                                                {orderShift.shiftBadge}
+                                                            </span>
+                                                        )}
                                                         {isVeryRecent && (
                                                             <span className="text-[9px] bg-red-100 text-red-600 font-black px-1.5 py-0.2 rounded-full animate-pulse">BARU</span>
                                                         )}
@@ -3538,6 +3851,166 @@ export default function AdminPage() {
 }
 
 // ====== Helper Sub-components ======
+
+/**
+ * Komponen Bar Filter Per Hari & Per Sesi Shift (mendukung operasional 2+ sesi shift dalam 1 hari).
+ * Dipakai seragam pada tab Dashboard, Pesanan POS, serta Laba Rugi & Kas.
+ */
+function DayShiftFilterBar({
+    filterDateMode,
+    customFilterDate,
+    selectedShiftId,
+    sessionsOnSelectedDate,
+    allEnrichedSessions,
+    activePeriodLabel,
+    isFilterActive,
+    onChangeDateMode,
+    onSelectShift,
+    onReset,
+}: {
+    filterDateMode: 'all' | 'today' | 'yesterday' | 'custom';
+    customFilterDate: string;
+    selectedShiftId: string;
+    sessionsOnSelectedDate: EnrichedStoreSession[];
+    allEnrichedSessions: EnrichedStoreSession[];
+    activePeriodLabel: string;
+    isFilterActive: boolean;
+    onChangeDateMode: (mode: 'all' | 'today' | 'yesterday' | 'custom', customDateVal?: string) => void;
+    onSelectShift: (shiftId: string, syncDate?: boolean) => void;
+    onReset: () => void;
+}) {
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-3.5 md:p-4 space-y-3">
+            {/* Baris 1: Filter Per Hari */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5 mr-1">
+                        <Calendar size={14} className="text-amber-600" /> Filter Hari:
+                    </span>
+                    {([
+                        { id: 'all', label: 'Semua Hari' },
+                        { id: 'today', label: 'Hari Ini' },
+                        { id: 'yesterday', label: 'Kemarin' },
+                    ] as const).map(opt => (
+                        <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => onChangeDateMode(opt.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
+                                filterDateMode === opt.id
+                                    ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20] shadow-xs'
+                                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs transition ${
+                        filterDateMode === 'custom'
+                            ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20] shadow-xs'
+                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                    }`}>
+                        <span className="font-bold whitespace-nowrap">Pilih Tanggal:</span>
+                        <input
+                            type="date"
+                            value={customFilterDate}
+                            onChange={e => {
+                                if (e.target.value) {
+                                    onChangeDateMode('custom', e.target.value);
+                                }
+                            }}
+                            className={`bg-transparent font-mono font-bold text-xs focus:outline-none cursor-pointer ${
+                                filterDateMode === 'custom' ? 'text-amber-300 [color-scheme:dark]' : 'text-gray-800'
+                            }`}
+                        />
+                    </div>
+                </div>
+
+                {isFilterActive && (
+                    <div className="flex items-center gap-2 self-start lg:self-auto">
+                        <span className="text-[11px] font-semibold text-forest bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                            📌 {activePeriodLabel}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={onReset}
+                            className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition flex items-center gap-1"
+                        >
+                            <X size={12} /> Reset
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Baris 2: Filter Per Sesi Shift (Shift 1, Shift 2, dst.) */}
+            <div className="pt-2.5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center gap-2">
+                <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5 whitespace-nowrap mr-1">
+                    <Filter size={13} className="text-forest" /> Sesi Shift:
+                </span>
+
+                {filterDateMode !== 'all' ? (
+                    sessionsOnSelectedDate.length > 0 ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                                type="button"
+                                onClick={() => onSelectShift('all')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
+                                    selectedShiftId === 'all'
+                                        ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20] shadow-xs'
+                                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                }`}
+                            >
+                                Semua Shift ({sessionsOnSelectedDate.length} Sesi)
+                            </button>
+                            {sessionsOnSelectedDate.map(sess => (
+                                <button
+                                    key={sess.id}
+                                    type="button"
+                                    onClick={() => onSelectShift(sess.id)}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border flex items-center gap-1.5 ${
+                                        selectedShiftId === sess.id
+                                            ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                                            : 'bg-amber-50/60 text-gray-800 border-amber-200 hover:bg-amber-100/70'
+                                    }`}
+                                >
+                                    <span className={`w-2 h-2 rounded-full ${sess.status === 'open' ? 'bg-green-500 animate-pulse' : 'bg-amber-600'}`} />
+                                    <span>{sess.shiftBadge} · {sess.cashierName}</span>
+                                    <span className={`text-[10px] font-mono ${selectedShiftId === sess.id ? 'text-white/90' : 'text-gray-500'}`}>
+                                        ({sess.timeRangeLabel})
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <span className="text-xs text-gray-400 italic">
+                            Belum ada sesi buka/tutup shift pada tanggal ini (menampilkan seluruh transaksi tanggal terpilih).
+                        </span>
+                    )
+                ) : (
+                    <div className="flex items-center gap-2 flex-1 max-w-md">
+                        <select
+                            value={selectedShiftId}
+                            onChange={e => onSelectShift(e.target.value, e.target.value !== 'all')}
+                            className="w-full border border-gray-200 rounded-xl text-xs font-bold text-gray-700 px-3 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] transition"
+                        >
+                            <option value="all">Semua Sesi Shift ({allEnrichedSessions.length} total sesi tercatat)</option>
+                            {allEnrichedSessions.slice().reverse().map(sess => {
+                                const dStr = new Date(sess.startTime).toLocaleDateString('id-ID', {
+                                    day: '2-digit', month: 'short', year: 'numeric'
+                                });
+                                return (
+                                    <option key={sess.id} value={sess.id}>
+                                        {dStr} — {sess.shiftBadge}{sess.totalShiftsOnDay > 1 ? ` (dari ${sess.totalShiftsOnDay} shift)` : ''} · {sess.cashierName} ({sess.timeRangeLabel})
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 function OrderStatusBadge({ status }: { status?: string }) {
     const map: Record<string, { cls: string; icon: React.ReactNode; label: string }> = {
