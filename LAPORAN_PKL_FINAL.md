@@ -420,9 +420,9 @@ Basis data disusun menggunakan struktur pohon JSON pada Firebase Realtime Databa
 | `ingredients` | `id` (`string`) | `name`, `stock`, `unit` (`ml`, `gram`, `pcs`), `minStockThreshold` | Menyimpan saldo persediaan bahan baku gudang (teh, gula, susu, bubuk rasa, *cup*) yang terpotong otomatis saat transaksi. |
 | `opnameLogs` | `id` (`string`) | `date`, `ingredientId`, `ingredientName`, `systemStock`, `actualStock`, `difference`, `notes` | Menyimpan riwayat penyesuaian stok fisik bahan baku (*stock opname*) di gudang. |
 | `suppliers` | `id` (`string`) | `name`, `contactPerson`, `phone`, `address`, `itemsSupplied[]` | Menyimpan informasi pemasok bahan baku untuk pengiriman pesan *Purchase Order* (PO) via WhatsApp. |
-| `orders` | `id` (`nanoid`) | `date`, `items[]`, `subtotal`, `discount`, `total`, `customerName`, `cashierName`, `status` (`pending`, `awaiting_payment`, `processing`, `completed`, `cancelled`), `paymentMethod`, `orderType`, `tableNumber` | Menyimpan seluruh rekaman transaksi penjualan dari kasir maupun pemesanan mandiri pelanggan beserta status racikannya. |
-| `sessions` | `id` (`string`) | `cashierName`, `startTime`, `endTime`, `startingCash`, `totalSales`, `expectedCash`, `actualCash`, `discrepancy` | Menyimpan rekaman pembukaan dan penutupan *shift* kasir untuk rekonsiliasi uang fisik di laci. |
-| `expenses` | `id` (`string`) | `date`, `amount`, `description`, `category`, `paidVia`, `cashierName` | Menyimpan catatan pengeluaran kas kecil (*petty cash*) dari laci kasir. |
+| `orders` | `id` (`nanoid`) | `date`, `sessionId`, `items[]`, `subtotal`, `discount`, `total`, `customerName`, `cashierName`, `status` (`pending`, `awaiting_payment`, `processing`, `completed`, `cancelled`), `paymentMethod`, `orderType`, `tableNumber` | Menyimpan seluruh rekaman transaksi penjualan beserta relasi sesi *shift* kasir (`sessionId`) dan status racikannya. |
+| `sessions` | `id` (`string`) | `cashierName`, `startTime`, `endTime`, `startingCash`, `totalSales`, `expectedCash`, `actualCash`, `cashExpenses`, `status` | Menyimpan rekaman pembukaan dan penutupan *shift* kasir (mendukung multi-sesi seperti **Shift 1** & **Shift 2** dalam satu hari) untuk rekonsiliasi uang fisik di laci. |
+| `expenses` | `id` (`string`) | `date`, `sessionId`, `amount`, `description`, `category`, `paidVia`, `cashierName` | Menyimpan catatan pengeluaran kas kecil (*petty cash*) dari laci kasir per sesi *shift* maupun rekening toko. |
 | `users` | `id` (`string`) | `username`, `password`, `role` (`admin` / `cashier`), `name` | Menyimpan kredensial staf kasir dan administrator untuk autentikasi *5x Tap Logo*. |
 
 ## 3.5 Implementasi Sistem Project
@@ -463,7 +463,7 @@ Setelah staf mengetuk logo 5 kali dan memasukkan *username* serta *password* yan
 
 ### 3.5.3 Implementasi Terminal Kasir POS Terpadu untuk Kasir Merangkap Barista (`/pos`)
 Halaman Kasir POS pada [`app/pos/page.tsx`](file:///d:/TEHRAJA/teh-raja/app/pos/page.tsx) dirancang khusus agar satu orang staf (kasir merangkap *barista*) dapat menangani seluruh operasional gerai dari satu layar:
-1. **Buka & Tutup Shift Kasir:** Saat mulai bertugas, kasir menginput modal uang kembalian di laci (*Starting Cash*). Saat jam tutup gerai, kasir menginput jumlah uang fisik aktual di laci (*Actual Cash*), lalu [`components/ShiftSummaryModal.tsx`](file:///d:/TEHRAJA/teh-raja/components/ShiftSummaryModal.tsx) menyajikan rekapitulasi penjualan tunai, non-tunai, kas keluar, serta selisih kas.
+1. **Buka & Tutup Multi-Shift Kasir Harian (`Shift 1` & `Shift 2`):** Saat mulai bertugas, kasir menginput modal uang kembalian di laci (*Starting Cash*). Apabila dalam satu hari gerai beroperasi dalam dua sesi pergantian staf (misalnya *Shift 1 Pagi* dan *Shift 2 Sore*), sistem secara otomatis menomori setiap sesi dan mengisolasi transaksi serta pengeluaran kas laci per sesi (`sessionId`). Saat tutup *shift*, [`components/ShiftSummaryModal.tsx`](file:///d:/TEHRAJA/teh-raja/components/ShiftSummaryModal.tsx) menyajikan rekapitulasi penjualan tunai, non-tunai, kas keluar, serta selisih kas secara terpisah untuk masing-masing *shift*.
 2. **Transaksi Cepat & Kustomisasi Varian:** Kasir memilih produk, menentukan varian ukuran/gula/es/topping pada [`components/VariantModal.tsx`](file:///d:/TEHRAJA/teh-raja/components/VariantModal.tsx), memilih pembayaran (Tunai dengan nominal cepat, QRIS dinamis, atau Transfer), dan menyelesaikan pesanan dalam hitungan detik.
 3. **Laci Antrean & Racikan dalam Satu Layar:** Pesanan mandiri dari ponsel pelanggan muncul pada tombol lonceng **Antrean & Struk** di bilah atas `/pos`. Kasir cukup membuka laci tersebut di layar yang sama, menekan **"Terima & Racik"** saat mulai membuat minuman, lalu menekan **"Tandai Selesai"** ketika minuman siap diserahkan.
 4. **Pencatatan Kas Keluar (*Petty Cash*) & Cetak Struk Bluetooth:** Pengambilan uang laci untuk membeli es batu atau galon dicatat langsung melalui modal **Kas Keluar**, sedangkan pencetakan struk dilakukan melalui dialog cetak peramban, pengiriman ke WhatsApp pelanggan, atau printer termal Bluetooth via [`lib/bluetoothPrint.ts`](file:///d:/TEHRAJA/teh-raja/lib/bluetoothPrint.ts).
@@ -474,29 +474,38 @@ Pengelolaan bahan baku dan resep minuman berpusat pada [`app/admin/page.tsx`](fi
 Setiap kali terjadi checkout pesanan di `/pos` maupun `/menu`, fungsi `decrementIngredientsForOrder` secara otomatis memotong stok bahan baku di gudang:
 
 ```typescript
-// Potongan kode: lib/store.ts (Pemotongan Bahan Baku Otomatis Sesuai Resep BOM)
-decrementIngredientsForOrder: (orderItems, products) => {
-    const deductions = new Map<string, number>();
-    orderItems.forEach((item) => {
-        const product = products.find((p) => p.id === item.id);
-        if (!product?.recipe) return;
-        product.recipe.forEach((r) => {
-            const prev = deductions.get(r.ingredientId) || 0;
-            deductions.set(r.ingredientId, prev + r.quantity * item.quantity);
-        });
-    });
-    if (deductions.size === 0) return;
+// Potongan kode asli: lib/store.ts (Pemotongan Bahan Baku Dinamis Sesuai Resep BOM & Varian)
+decrementIngredientsForOrder: (items, products) => {
     set((state) => {
-        const next = state.ingredients.map((ing) => {
-            const deduct = deductions.get(ing.id);
-            if (!deduct) return ing;
-            return { ...ing, stock: Math.max(0, ing.stock - deduct) };
+        const newIngredients = [...state.ingredients];
+        items.forEach(cartItem => {
+            const product = products.find(p => p.id === cartItem.id);
+            const recipe = product?.recipe || cartItem.recipe;
+            if (!recipe || recipe.length === 0) return;
+
+            recipe.forEach(recipeItem => {
+                const ingIndex = newIngredients.findIndex(i => i.id === recipeItem.ingredientId);
+                if (ingIndex !== -1) {
+                    const qtyToDeduct = calculateRecipeIngredientQty(recipeItem, cartItem);
+                    newIngredients[ingIndex] = {
+                        ...newIngredients[ingIndex],
+                        stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - qtyToDeduct) * 100) / 100)
+                    };
+                }
+            });
         });
-        syncIngredientsToFirebase(next);
-        return { ingredients: next };
+
+        const updates: Record<string, any> = {};
+        newIngredients.forEach(ing => { updates[`ingredients/${ing.id}`] = ing; });
+        if (Object.keys(updates).length > 0) {
+            firebaseUpdate(ref(rtdb), updates).catch(err => console.warn(err));
+        }
+        return { ingredients: newIngredients };
     });
 }
 ```
+
+Selain itu, halaman Admin dilengkapi komponen **Filter Per Hari & Per Sesi Shift (`DayShiftFilterBar`)** pada tab *Dashboard*, *Pesanan POS*, serta *Laba Rugi & Kas*, sehingga pemilik kedai dapat memfilter dan mengekspor laporan (PDF, CSV, Excel) berdasarkan tanggal tertentu maupun sesi *shift* spesifik (`Shift 1` atau `Shift 2`).
 
 Selanjutnya, pada tab **Bahan Baku & Suplier** di halaman Admin, pemilik dapat:
 1. Memantau bar persentase sisa stok setiap bahan baku beserta lencana peringatan **Stok Menipis** apabila saldo berada di bawah batas aman (`minStockThreshold`).
@@ -516,7 +525,7 @@ Pengujian dilakukan menggunakan metode *Black-Box Testing* terhadap seluruh sken
 | **TC-04** | **Transaksi Kasir Merangkap Barista (`/pos`)** | Membuka *shift* kasir, memproses transaksi tunai/QRIS, serta memperbarui status pesanan masuk (*Terima & Racik* $\rightarrow$ *Selesai*) dari laci antrean `/pos`. | Transaksi terekam, kembalian dihitung tepat, struk tercetak, dan status pesanan pelanggan berubah menjadi *Siap Diambil* dari 1 layar POS. | Seluruh fungsi transaksi dan manajemen antrean racikan berjalan lancar dalam 1 layar `/pos`. | **Valid (Lulus)** |
 | **TC-05** | **Pemotongan & Pengembalian Stok Resep BOM** | Membeli 2 *cup Royale Milk Tea* di POS, memeriksa saldo bahan baku di `/admin`, lalu membatalkan pesanan tersebut. | Saldo Konsentrat Teh berkurang $30\text{ ml}$, Gula Cair berkurang $50\text{ ml}$, Es & Cup berkurang $2\text{ unit}$; saldo kembali utuh saat dibatalkan. | Pemotongan dan pengembalian stok bahan baku bekerja 100% presisi sesuai rasio resep BOM. | **Valid (Lulus)** |
 | **TC-06** | **Deteksi Otomatis "Bahan Habis" pada Menu** | Mengubah stok salah satu bahan baku penyusun di bawah takaran 1 porsi, lalu membuka halaman `/menu` dan `/pos`. | Produk yang menggunakan bahan baku tersebut otomatis berstatus **BAHAN HABIS** dan tidak dapat dipesan. | Kartu produk langsung menampilkan lencana *HABIS* dan tombol tambah dinonaktifkan. | **Valid (Lulus)** |
-| **TC-07** | **Stock Opname, Restock PO & Rekonsiliasi Shift** | Mencatat *Restock* bahan baku, melakukan *Stock Opname*, mencatat *Kas Keluar*, lalu menekan **Tutup Shift** di POS. | Saldo bahan baku terbarui, log opname tercatat, dan modal rekap *shift* menghitung *Expected Cash* vs *Actual Cash* dengan tepat. | Seluruh perhitungan mutasi stok gudang dan rekonsiliasi uang kas laci akurat. | **Valid (Lulus)** |
+| **TC-07** | **Multi-Shift Harian (`Shift 1` & `Shift 2`), Opname & Filter Laporan** | Membuka & menutup 2 sesi *shift* dalam 1 hari, mencatat *Kas Keluar* dan *Stock Opname*, lalu memfilter laporan Admin per hari & per sesi *shift*. | Setiap transaksi & kas laci terisolasi akurat antara *Shift 1* dan *Shift 2*; filter per hari & per *shift* menampilkan serta mengekspor data yang sesuai. | Rekonsiliasi uang kas antar *shift* terpisah presisi dan filter laporan berjalan akurat. | **Valid (Lulus)** |
 | **TC-08** | **Ketahanan Mode Luring (*Offline-First*)** | Mematikan koneksi Wi-Fi pada perangkat kasir, memproses 3 transaksi di `/pos`, lalu menyalakan kembali Wi-Fi. | Transaksi tetap tersimpan di IndexedDB saat *offline* dan otomatis disinkronkan ke Firebase saat kembali *online*. | Tidak ada transaksi yang hilang; antrean luring berhasil tersinkronisasi penuh. | **Valid (Lulus)** |
 
 ## 3.7 Kendala Pelaksanaan dan Solusi Teknis
@@ -549,7 +558,7 @@ Evaluasi ketercapaian project dilakukan dengan membandingkan spesifikasi target 
 | 1 | **Modul Katalog Menu & Pelacakan Struk Pelanggan** | Katalog menu digital untuk pembeli dengan fitur keranjang pesanan. | Katalog interaktif (`/menu`) dengan validasi stok bahan baku BOM *real-time*, kustomisasi varian lengkap, pembayaran QRIS/Tunai, serta fitur **Lacak Pesanan & Struk Digital**. | **100% (Melampaui Target)** |
 | 2 | **Modul Terminal Kasir POS (Kasir Merangkap Barista)** | Aplikasi kasir untuk mencatat transaksi penjualan dan mencetak struk. | Terminal *Smart POS* (`/pos`) dengan laci **Antrean & Racikan** dalam 1 layar, Buka/Tutup *Shift*, *Hold Order*, Kas Keluar (*Petty Cash*), QRIS dinamis, dan cetak struk *Web Bluetooth* / WhatsApp. | **100% (Melampaui Target)** |
 | 3 | **Modul Manajemen Inventori Resep BOM** | Pencatatan stok bahan baku dan pemotongan otomatis saat produk terjual. | Editor resep *Bill of Materials* (BOM) per produk di `/admin`, pemotongan & pengembalian bahan baku otomatis (`decrementIngredientsForOrder`), *Low-Stock Alert*, *Stock Opname*, dan *Restock PO* Suplier. | **100% (Melampaui Target)** |
-| 4 | **Modul Laporan Penjualan & Laba Rugi** | Rekapitulasi omzet penjualan harian bagi pemilik kedai. | *Dashboard* grafik penjualan, laporan **Laba Rugi & Kas (P&L)** yang menghitung pendapatan kotor, HPP, dan pengeluaran kas kecil, serta ekspor laporan ke PDF dan CSV/Excel. | **100% (Tercapai Penuh)** |
+| 4 | **Modul Laporan Penjualan, Multi-Shift & Laba Rugi** | Rekapitulasi omzet penjualan harian bagi pemilik kedai. | *Dashboard* grafik penjualan, **Filter Per Hari & Per Sesi Shift** (mendukung 2+ *shift* dalam sehari), laporan **Laba Rugi & Kas (P&L)**, serta ekspor ke PDF dan CSV/Excel. | **100% (Melampaui Target)** |
 | 5 | **Keandalan Offline-First & Keamanan Akses** | Aplikasi tetap berjalan saat koneksi lambat dan halaman staf terlindungi login. | Arsitektur *Offline-First PWA* (IndexedDB + Firebase RTDB) serta penyembunyian akses POS & Admin di balik mekanisme rahasia **Tap Logo 5x (`SecretStaffModal`)**. | **100% (Melampaui Target)** |
 
 ## 4.3 Manfaat bagi Mitra dan Keterbatasan Sistem

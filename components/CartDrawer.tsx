@@ -17,6 +17,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
+    useAuthStore,
     useCartStore,
     useSalesStore,
     useProductStore,
@@ -26,6 +27,7 @@ import {
     Order,
     formatVariantLabel,
     POINTS_REDEEM_VALUE,
+    getInsufficientBomIngredients,
 } from "@/lib/store";
 import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag, Tag, Gift, Phone } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -41,6 +43,7 @@ interface CartDrawerProps {
 type OrderType = 'dine-in' | 'take-away';
 
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
+    const { isAdvancedUnlocked } = useAuthStore();
     const { items, removeFromCart, updateQuantity, updateNote, total, clearCart, setActiveOrder } = useCartStore();
     const { addOrder, addLog, branchId } = useSalesStore();
     const { products, decrementStock } = useProductStore();
@@ -79,16 +82,17 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     }, [member, name]);
 
     const subtotal = total();
-    const activePromoMatch = getApplicablePromo(subtotal);
+    // Promo Engine & Loyalty CRM hanya aktif jika Mode Pengembangan Lanjutan dibuka (isAdvancedUnlocked)
+    const activePromoMatch = isAdvancedUnlocked ? getApplicablePromo(subtotal) : null;
     const promoDiscount = activePromoMatch ? activePromoMatch.discountAmount : 0;
     const afterPromo = Math.max(0, subtotal - promoDiscount);
 
-    const maxMemberPointDiscount = member ? member.points * POINTS_REDEEM_VALUE : 0;
-    const pointsDiscount = usePoints && member ? Math.min(maxMemberPointDiscount, afterPromo) : 0;
+    const maxMemberPointDiscount = (isAdvancedUnlocked && member) ? member.points * POINTS_REDEEM_VALUE : 0;
+    const pointsDiscount = (isAdvancedUnlocked && usePoints && member) ? Math.min(maxMemberPointDiscount, afterPromo) : 0;
     const pointsRedeemed = Math.ceil(pointsDiscount / POINTS_REDEEM_VALUE);
     const totalDiscount = promoDiscount + pointsDiscount;
     const grandTotal = Math.max(0, subtotal - totalDiscount);
-    const earnedPoints = getPointsForOrder(grandTotal);
+    const earnedPoints = isAdvancedUnlocked ? getPointsForOrder(grandTotal) : 0;
 
     const checkStock = () => {
         // Check direct product stock (aggregated across variants)
@@ -98,14 +102,6 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             const product = products.find(p => p.id === cartItem.id);
             const needed = qtyByProd.get(cartItem.id) || cartItem.quantity;
             if (!product || !product.isAvailable || product.stock < needed) return true;
-            // Check BOM ingredients
-            if (product.recipe && product.recipe.length > 0) {
-                const depleted = product.recipe.some(r => {
-                    const ing = ingredients.find(ig => ig.id === r.ingredientId);
-                    return !ing || ing.stock < r.quantity * needed;
-                });
-                if (depleted) return true;
-            }
             return false;
         });
     };
@@ -117,12 +113,19 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         }
         const outOfStock = checkStock();
         if (outOfStock.length > 0) {
-            toast.error(`Stok/bahan tidak cukup: ${Array.from(new Set(outOfStock.map(i => i.name))).join(", ")}`);
+            toast.error(`Stok produk tidak cukup: ${Array.from(new Set(outOfStock.map(i => i.name))).join(", ")}`);
+            return;
+        }
+        const bomShortages = getInsufficientBomIngredients(items, products, ingredients);
+        if (bomShortages.length > 0) {
+            toast.error(
+                `Bahan baku habis/kurang: ${bomShortages.map(s => `${s.name} (sisa ${s.available} ${s.unit})`).join(", ")}`
+            );
             return;
         }
 
         const cleanPhone = phone.trim();
-        if (cleanPhone.length >= 8) {
+        if (isAdvancedUnlocked && cleanPhone.length >= 8) {
             if (!member) {
                 addCustomer({
                     id: nanoid(),
@@ -301,7 +304,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                             <span className="font-bold">-Rp {promoDiscount.toLocaleString('id-ID')}</span>
                                         </div>
                                     )}
-                                    {member && member.points > 0 && (
+                                    {isAdvancedUnlocked && member && member.points > 0 && (
                                         <div className="flex justify-between items-center bg-amber-400/10 border border-amber-400/25 px-2.5 py-1.5 rounded-lg text-amber-300">
                                             <div className="flex items-center gap-1.5">
                                                 <Gift size={12} />
@@ -320,7 +323,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                         <span>Total Bayar</span>
                                         <span>Rp {grandTotal.toLocaleString('id-ID')}</span>
                                     </div>
-                                    {phone.trim().length >= 8 && earnedPoints > 0 && (
+                                    {isAdvancedUnlocked && phone.trim().length >= 8 && earnedPoints > 0 && (
                                         <p className="text-[10px] text-amber-300/80 text-right">
                                             ✨ Dapat +{earnedPoints} Poin Member dari pesanan ini
                                         </p>
@@ -352,7 +355,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                     <Phone size={13} className="text-white/40 flex-shrink-0" />
                                     <input
                                         type="tel"
-                                        placeholder="No. WhatsApp / Member (Opsional - dapat poin)"
+                                        placeholder={isAdvancedUnlocked ? "No. WhatsApp / Member (Opsional - dapat poin)" : "No. WhatsApp (Opsional - untuk struk & lacak pesanan)"}
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value)}
                                         className="bg-transparent text-xs w-full focus:outline-none text-white placeholder:text-white/30"

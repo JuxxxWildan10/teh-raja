@@ -31,7 +31,7 @@ import {
     useAuthStore, useCartStore, useProductStore, useSalesStore,
     usePromoStore, useCustomerStore, useInventoryStore, useExpenseStore,
     Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES, POINTS_REDEEM_VALUE,
-    getEnrichedSessions, isOrderInSession, getTodayDateKey, toLocalDateKey
+    getEnrichedSessions, isOrderInSession, isExpenseInSession, getTodayDateKey, toLocalDateKey, getInsufficientBomIngredients
 } from "@/lib/store";
 import { nanoid } from "nanoid";
 import Image from "next/image";
@@ -303,7 +303,8 @@ export default function POSPage() {
 
     // ── Cart & Loyalty Calculations ───────────────────────────
     const subtotal = total();
-    const applicablePromo = getApplicablePromo(subtotal);
+    // Promo Engine otomatis hanya berlaku jika fitur lanjutan dibuka (isAdvancedUnlocked)
+    const applicablePromo = isAdvancedUnlocked ? getApplicablePromo(subtotal) : null;
 
     const discountAmount = useMemo(() => {
         if (discountMode === 'none' && applicablePromo) {
@@ -534,23 +535,34 @@ export default function POSPage() {
             return;
         }
 
-        // Process Loyalty Points
-        const cleanPhone = customerPhone.trim();
-        if (usePoints && customer && pointsToRedeem > 0) {
-            redeemPoints(cleanPhone, pointsToRedeem);
+        // Validasi akumulasi kecukupan bahan baku BOM untuk seluruh isi keranjang
+        const bomShortages = getInsufficientBomIngredients(items, products, ingredients);
+        if (bomShortages.length > 0) {
+            toast.error(
+                `Stok bahan baku tidak mencukupi: ${bomShortages.map(s => `${s.name} (butuh ${s.needed}, sisa ${s.available} ${s.unit})`).join(', ')}`
+            );
+            return;
         }
-        if (cleanPhone) {
-            if (!customer) {
-                addCustomer({
-                    id: nanoid(),
-                    name: customerName.trim(),
-                    phone: cleanPhone,
-                    points: 0,
-                    totalSpent: 0,
-                    createdAt: new Date().toISOString()
-                });
+
+        // Process Loyalty Points (hanya aktif pada Mode Pengembangan Lanjutan)
+        const cleanPhone = customerPhone.trim();
+        if (isAdvancedUnlocked) {
+            if (usePoints && customer && pointsToRedeem > 0) {
+                redeemPoints(cleanPhone, pointsToRedeem);
             }
-            addPoints(cleanPhone, orderTotal);
+            if (cleanPhone) {
+                if (!customer) {
+                    addCustomer({
+                        id: nanoid(),
+                        name: customerName.trim(),
+                        phone: cleanPhone,
+                        points: 0,
+                        totalSpent: 0,
+                        createdAt: new Date().toISOString()
+                    });
+                }
+                addPoints(cleanPhone, orderTotal);
+            }
         }
 
         const newOrder: Order = {
@@ -593,7 +605,7 @@ export default function POSPage() {
     }, [isStoreOpen, items, customerName, paymentMethod, cashIn, orderTotal, subtotal,
         discountAmount, pointsDiscount, pointsToRedeem, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user, branchId, currentSessionId,
         usePoints, customer, customerPhone, redeemPoints, addCustomer, addPoints,
-        addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, clearCart, toast, isAdvancedUnlocked]);
+        addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, ingredients, clearCart, toast, isAdvancedUnlocked]);
 
     // ── FUNGSI TUTUP SHIFT KASIR & REKONSILIASI UANG LACI ──
     // Membandingkan uang tunai fisik yang dihitung kasir (`actualCash`) dengan
@@ -1081,7 +1093,7 @@ export default function POSPage() {
                                         className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold transition border ${discountMode === mode
                                             ? mode === 'none' ? 'bg-gray-200 text-gray-700 border-gray-300' : 'bg-red-600 text-white border-red-600'
                                             : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'}`}>
-                                        {mode === 'none' ? 'Promo Otomatis' : mode === 'amount' ? <><Tag size={10} /> Nominal</> : <><Percent size={10} /> Persen</>}
+                                        {mode === 'none' ? (isAdvancedUnlocked ? 'Promo Otomatis' : 'Tanpa Diskon') : mode === 'amount' ? <><Tag size={10} /> Nominal</> : <><Percent size={10} /> Persen</>}
                                     </button>
                                 ))}
                             </div>
@@ -1705,12 +1717,67 @@ export default function POSPage() {
             </AnimatePresence>
 
             <AnimatePresence>
-                {confirmCloseStore && (
+                {confirmCloseStore && (() => {
+                    const activeCashSales = activeEnrichedSession
+                        ? activeShiftOrders
+                            .filter(o => o.paymentMethod === 'cash' || !o.paymentMethod)
+                            .reduce((s, o) => s + o.total, 0)
+                        : 0;
+                    const activeDrawerExpenses = activeEnrichedSession
+                        ? (useExpenseStore.getState().expenses || [])
+                            .filter(e => e.paidVia === 'kas_laci' && isExpenseInSession(e, activeEnrichedSession))
+                            .reduce((s, e) => s + e.amount, 0)
+                        : 0;
+                    const estExpectedCash = Math.max(
+                        0,
+                        (activeEnrichedSession?.startingCash || 0) + activeCashSales - activeDrawerExpenses
+                    );
+                    const unfinishedCount = incomingOrders.length + processingOrders.length;
+
+                    return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                             className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-                            <h3 className="text-xl font-black text-[#0D2B20] mb-2">Tutup Shift Kasir</h3>
+                            <div className="flex items-center justify-between mb-1">
+                                <h3 className="text-xl font-black text-[#0D2B20]">
+                                    Tutup {activeEnrichedSession ? activeEnrichedSession.shiftBadge : 'Shift'} Kasir
+                                </h3>
+                                {activeEnrichedSession && (
+                                    <span className="text-xs font-bold bg-[#0D2B20] text-amber-300 px-2.5 py-0.5 rounded-full">
+                                        {activeEnrichedSession.shiftBadge} · {activeEnrichedSession.cashierName}
+                                    </span>
+                                )}
+                            </div>
                             <p className="text-sm text-gray-500 mb-4">Silakan hitung uang fisik di laci kasir dan masukkan totalnya untuk pencocokan.</p>
+
+                            {unfinishedCount > 0 && (
+                                <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900">
+                                    <strong>⚠ Perhatian:</strong> Masih terdapat <strong>{unfinishedCount} pesanan aktif</strong> ({incomingOrders.length} masuk, {processingOrders.length} diracik) yang belum ditandai selesai.
+                                </div>
+                            )}
+
+                            {activeEnrichedSession && (
+                                <div className="mb-4 p-3 rounded-xl bg-gray-50 border border-gray-200 text-xs space-y-1 text-gray-700">
+                                    <div className="flex justify-between">
+                                        <span>Modal Awal Shift:</span>
+                                        <span className="font-mono font-bold">{formatRp(activeEnrichedSession.startingCash || 0)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span>Penjualan Tunai ({activeEnrichedSession.shiftBadge}):</span>
+                                        <span className="font-mono font-bold text-green-700">+{formatRp(activeCashSales)}</span>
+                                    </div>
+                                    {activeDrawerExpenses > 0 && (
+                                        <div className="flex justify-between">
+                                            <span>Kas Keluar Laci ({activeEnrichedSession.shiftBadge}):</span>
+                                            <span className="font-mono font-bold text-red-600">-{formatRp(activeDrawerExpenses)}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between pt-1 border-t border-gray-200 font-black text-[#0D2B20]">
+                                        <span>Estimasi Uang di Laci:</span>
+                                        <span className="font-mono">{formatRp(estExpectedCash)}</span>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="space-y-3 mb-6">
                                 <div>
@@ -1749,7 +1816,8 @@ export default function POSPage() {
                             </div>
                         </motion.div>
                     </div>
-                )}
+                    );
+                })()}
             </AnimatePresence>
 
             {/* ── SHIFT SUMMARY ─────────────────────────────── */}

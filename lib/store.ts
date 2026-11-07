@@ -845,7 +845,16 @@ export const useSalesStore = create<SalesState>()(
                     .sort((a, b) => a.hour.localeCompare(b.hour));
             },
             resetData: () => {
-                set({ orders: [], logs: [], sessions: [], isStoreOpen: false, currentSessionId: null });
+                set({
+                    orders: [],
+                    offlineOrders: [],
+                    heldOrders: [],
+                    logs: [],
+                    offlineLogs: [],
+                    sessions: [],
+                    isStoreOpen: false,
+                    currentSessionId: null,
+                });
                 firebaseSet(ref(rtdb, 'orders'), null).catch(err => console.warn(err));
                 firebaseSet(ref(rtdb, 'logs'), null).catch(err => console.warn(err));
                 firebaseSet(ref(rtdb, 'sessions'), null).catch(err => console.warn(err));
@@ -1086,13 +1095,14 @@ interface InventoryState {
  * FUNGSI INTI PERHITUNGAN RESEP BOM DINAMIS (`calculateRecipeIngredientQty`):
  * Menghitung berapa gram/ml/pcs bahan baku yang harus dipotong untuk setiap item pesanan,
  * dengan menyesuaikan varian:
- * - Ukuran Cup Large (L) = 1.5x takaran normal (M)
+ * - Ukuran Cup Large (L) = 1.5x takaran bahan cair/bubuk (cup kemasan `ing-cup` tetap 1 pcs per gelas!)
  * - Gula Cair (`ing-sugar`) = proporsional sesuai pilihan % gula (0%, 25%, 50%, 75%, 100%)
  * - Es Batu (`ing-ice`) = 0 jika minuman Panas atau No-Ice, 0.5x jika Less Ice, 1.5x jika Extra Ice
  */
-function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: CartItem): number {
-    let sizeMultiplier = 1;
-    if (cartItem.variants?.size === 'L') sizeMultiplier = 1.5;
+export function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: CartItem): number {
+    // Kemasan cup plastik tetap dihitung 1 pcs per gelas meskipun ukuran Large (L)
+    const isPackagingCup = recipeItem.ingredientId === 'ing-cup';
+    const sizeMultiplier = !isPackagingCup && cartItem.variants?.size === 'L' ? 1.5 : 1;
 
     let qty = recipeItem.quantity * sizeMultiplier * cartItem.quantity;
 
@@ -1112,6 +1122,50 @@ function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: CartItem
     }
 
     return Math.round(qty * 100) / 100;
+}
+
+/**
+ * Mengecek kecukupan akumulasi bahan baku BOM di gudang untuk seluruh isi keranjang sekaligus
+ * (termasuk bahan baku bersama seperti Daun Teh, Gula Cair, Es Batu, dan Cup Plastik).
+ */
+export function getInsufficientBomIngredients(
+    items: CartItem[],
+    products: ExtendedProduct[],
+    ingredients: Ingredient[]
+): { id: string; name: string; needed: number; available: number; unit: UnitType }[] {
+    const totalNeededMap = new Map<string, number>();
+
+    items.forEach(cartItem => {
+        const product = products.find(p => p.id === cartItem.id);
+        const recipe = product?.recipe || cartItem.recipe;
+        if (!recipe || recipe.length === 0) return;
+
+        recipe.forEach(recipeItem => {
+            const qty = calculateRecipeIngredientQty(recipeItem, cartItem);
+            if (qty > 0) {
+                totalNeededMap.set(
+                    recipeItem.ingredientId,
+                    Math.round(((totalNeededMap.get(recipeItem.ingredientId) || 0) + qty) * 100) / 100
+                );
+            }
+        });
+    });
+
+    const shortages: { id: string; name: string; needed: number; available: number; unit: UnitType }[] = [];
+    totalNeededMap.forEach((needed, ingId) => {
+        const ing = ingredients.find(i => i.id === ingId);
+        if (ing && ing.stock < needed) {
+            shortages.push({
+                id: ing.id,
+                name: ing.name,
+                needed,
+                available: ing.stock,
+                unit: ing.unit,
+            });
+        }
+    });
+
+    return shortages;
 }
 
 export const useInventoryStore = create<InventoryState>()(

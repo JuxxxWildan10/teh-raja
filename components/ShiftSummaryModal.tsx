@@ -17,7 +17,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X, TrendingUp, CreditCard, Banknote, QrCode, Building2, Clock, CheckCircle2, ShoppingBag } from "lucide-react";
-import { StoreSession, Order, isOrderInSession, getEnrichedSessions, useSalesStore } from "@/lib/store";
+import { StoreSession, Order, isOrderInSession, isExpenseInSession, getEnrichedSessions, useSalesStore, useExpenseStore } from "@/lib/store";
 
 interface ShiftSummaryModalProps {
     isOpen: boolean;
@@ -62,7 +62,18 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
         ? Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000)
         : Math.max(0, Math.round((Date.now() - new Date(session.startTime).getTime()) / 60000));
 
-    const diffCash = (session.actualCash || 0) - (session.expectedCash || 0);
+    const allExpenses = useExpenseStore(s => s.expenses);
+    const isSessionOpen = session.status === 'open';
+    const displayCashExpenses = isSessionOpen
+        ? allExpenses
+            .filter(e => e.paidVia === 'kas_laci' && isExpenseInSession(e, session))
+            .reduce((sum, e) => sum + e.amount, 0)
+        : (session.cashExpenses || 0);
+    const displayExpectedCash = isSessionOpen
+        ? Math.max(0, (session.startingCash || 0) + paymentSummary.cash - displayCashExpenses)
+        : (session.expectedCash || 0);
+
+    const diffCash = (session.actualCash || 0) - displayExpectedCash;
     const diffColor = diffCash === 0 ? 'text-green-600' : diffCash > 0 ? 'text-blue-600' : 'text-red-600';
 
     return (
@@ -162,25 +173,33 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
                                         <span>Pemasukan Tunai</span>
                                         <span className="font-bold text-green-600">+{formatRp(paymentSummary.cash)}</span>
                                     </div>
-                                    {Boolean(session.cashExpenses) && (
+                                    {displayCashExpenses > 0 && (
                                         <div className="flex justify-between items-center text-gray-600">
                                             <span>Kas Keluar (Petty Cash)</span>
-                                            <span className="font-bold text-red-600">-{formatRp(session.cashExpenses || 0)}</span>
+                                            <span className="font-bold text-red-600">-{formatRp(displayCashExpenses)}</span>
                                         </div>
                                     )}
                                     <div className="border-t border-amber-200/50 my-1 pt-1 flex justify-between items-center">
                                         <span className="font-bold text-gray-800">Kas Seharusnya (Expected)</span>
-                                        <span className="font-black text-gray-800">{formatRp(session.expectedCash || 0)}</span>
+                                        <span className="font-black text-gray-800">{formatRp(displayExpectedCash)}</span>
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-bold text-gray-800">Uang Fisik Aktual</span>
-                                        <span className="font-black text-gray-800">{formatRp(session.actualCash || 0)}</span>
-                                    </div>
+                                    {!isSessionOpen && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-gray-800">Uang Fisik Aktual</span>
+                                            <span className="font-black text-gray-800">{formatRp(session.actualCash || 0)}</span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className={`mt-2 p-2 rounded-lg text-center font-bold text-sm border ${diffCash === 0 ? 'bg-green-100 border-green-200 text-green-700' : diffCash > 0 ? 'bg-blue-100 border-blue-200 text-blue-700' : 'bg-red-100 border-red-200 text-red-700'}`}>
-                                    {diffCash === 0 ? '✓ Uang Kas Sesuai (Balance)' : `Selisih: ${diffCash > 0 ? '+' : ''}${formatRp(diffCash)}`}
-                                </div>
+                                {isSessionOpen ? (
+                                    <div className="mt-2 p-2 rounded-lg text-center font-bold text-xs border bg-amber-100/80 border-amber-300 text-amber-900">
+                                        ⏳ Shift Masih Berjalan — Hitung fisik aktual dilakukan saat Tutup Shift
+                                    </div>
+                                ) : (
+                                    <div className={`mt-2 p-2 rounded-lg text-center font-bold text-sm border ${diffCash === 0 ? 'bg-green-100 border-green-200 text-green-700' : diffCash > 0 ? 'bg-blue-100 border-blue-200 text-blue-700' : 'bg-red-100 border-red-200 text-red-700'}`}>
+                                        {diffCash === 0 ? '✓ Uang Kas Sesuai (Balance)' : `Selisih: ${diffCash > 0 ? '+' : ''}${formatRp(diffCash)}`}
+                                    </div>
+                                )}
                                 {session.notes && (
                                     <p className="text-[10px] text-gray-500 italic text-center mt-1">Catatan: {session.notes}</p>
                                 )}
