@@ -24,12 +24,13 @@ import {
     usePromoStore,
     useCustomerStore,
     useInventoryStore,
+    useStoreConfigStore,
     Order,
     formatVariantLabel,
     POINTS_REDEEM_VALUE,
     getInsufficientBomIngredients,
 } from "@/lib/store";
-import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag, Tag, Gift, Phone } from "lucide-react";
+import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag, Tag, Gift, Phone, Lock } from "lucide-react";
 import { useState, useEffect } from "react";
 import { nanoid } from "nanoid";
 import NextImage from "next/image";
@@ -44,6 +45,7 @@ type OrderType = 'dine-in' | 'take-away';
 
 export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     const { isAdvancedUnlocked } = useAuthStore();
+    const { isOnlineOrderOpen, closedBadge, closedMessage } = useStoreConfigStore();
     const { items, removeFromCart, updateQuantity, updateNote, total, clearCart, setActiveOrder } = useCartStore();
     const { addOrder, addLog, branchId } = useSalesStore();
     const { products, decrementStock } = useProductStore();
@@ -107,6 +109,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     };
 
     const handleCheckout = () => {
+        if (!isOnlineOrderOpen) {
+            toast.error(`Mohon maaf, Kedai sedang tutup (${closedBadge || 'Libur Operasional'}). Pemesanan online belum dapat diproses.`);
+            return;
+        }
         if (!name.trim()) {
             toast.error("Mohon isi nama Anda dulu!");
             return;
@@ -381,14 +387,34 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                     ))}
                                 </div>
 
+                                {/* Peringatan jika kedai dikunci saat pelanggan sedang membuka keranjang */}
+                                {!isOnlineOrderOpen && (
+                                    <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-start gap-2">
+                                        <Lock size={15} className="text-red-300 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="font-bold text-red-300">{closedBadge || 'Kedai Sedang Tutup'}</p>
+                                            <p className="opacity-90 mt-0.5">{closedMessage}</p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Checkout button */}
                                 <button
                                     onClick={handleCheckout}
-                                    disabled={items.length === 0}
+                                    disabled={items.length === 0 || !isOnlineOrderOpen}
                                     className="w-full py-3.5 bg-gold text-forest font-bold rounded-xl hover:bg-gold-light transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-lg"
                                 >
-                                    <MessageCircle size={18} />
-                                    Kirim Pesanan Sekarang
+                                    {isOnlineOrderOpen ? (
+                                        <>
+                                            <MessageCircle size={18} />
+                                            Kirim Pesanan Sekarang
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Lock size={16} />
+                                            Kedai Sedang Tutup ({closedBadge || 'Libur'})
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         )}

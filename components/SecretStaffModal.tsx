@@ -14,6 +14,8 @@
  * 3. Pintasan navigasi cepat ke `/pos`, `/admin`, Slide Sempro, dan Slide Laporan Akhir PKL.
  * 4. Tombol **`Unlock / Kunci Fitur Pengembangan Lanjutan`**: Membuka seluruh fitur Skripsi (AI Forecasting,
  *    Layar KDS Terpisah `/kds`, Voice POS, CRM, Multi-Cabang) dalam 1 klik saat ditanya Dosen Penguji.
+ * 5. **Kontrol Buka / Tutup Kedai Online (`useStoreConfigStore`)**: Admin dapat kapan saja mengunci atau membuka
+ *    akses menu online pelanggan (misal saat Hari Libur / Tanggal Merah) langsung dari portal 5x Tap ini.
  * ============================================================================
  */
 
@@ -24,6 +26,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     useAuthStore,
     useSalesStore,
+    useStoreConfigStore,
+    SHOP_CLOSE_PRESETS,
 } from "@/lib/store";
 import {
     ShieldCheck,
@@ -41,6 +45,8 @@ import {
     KeyRound,
     ChevronRight,
     CheckCircle2,
+    CalendarX2,
+    Store,
 } from "lucide-react";
 import { useToast } from "./Toast";
 
@@ -81,6 +87,14 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
     const router = useRouter();
     const { user, loginWithPassword, logout, isAdvancedUnlocked, toggleAdvancedUnlocked } = useAuthStore();
     const { addLog } = useSalesStore();
+    const {
+        isOnlineOrderOpen,
+        closedBadge,
+        closedMessage,
+        reopenInfo,
+        openOnlineStore,
+        closeOnlineStore,
+    } = useStoreConfigStore();
     const toast = useToast();
 
     const [username, setUsername] = useState("");
@@ -88,6 +102,12 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+
+    // State pengaturan alasan tutup / libur kedai
+    const [showCloseConfig, setShowCloseConfig] = useState(false);
+    const [draftBadge, setDraftBadge] = useState(closedBadge || SHOP_CLOSE_PRESETS[0].badge);
+    const [draftMessage, setDraftMessage] = useState(closedMessage || SHOP_CLOSE_PRESETS[0].message);
+    const [draftReopen, setDraftReopen] = useState(reopenInfo || SHOP_CLOSE_PRESETS[0].reopenHint);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -133,6 +153,29 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
         }
     };
 
+    const handleOpenShopOnline = () => {
+        openOnlineStore(user?.name || "Admin");
+        setShowCloseConfig(false);
+        addLog("STORE_ONLINE_OPEN", "Kedai & menu online pelanggan dibuka kembali via Portal 5x Tap", user?.name || "Admin");
+        toast.success("🔓 Kedai dibuka! Pelanggan kini dapat mengakses katalog menu & order online.");
+    };
+
+    const handleConfirmCloseShopOnline = () => {
+        closeOnlineStore({
+            closedBadge: draftBadge.trim() || "Kedai Sedang Tutup",
+            closedMessage: draftMessage.trim() || SHOP_CLOSE_PRESETS[0].message,
+            reopenInfo: draftReopen.trim(),
+            updatedBy: user?.name || "Admin",
+        });
+        setShowCloseConfig(false);
+        addLog(
+            "STORE_ONLINE_LOCK",
+            `Kedai & menu online dikunci (${draftBadge.trim() || "Kedai Sedang Tutup"}) via Portal 5x Tap`,
+            user?.name || "Admin"
+        );
+        toast.info(`🔒 Kedai berhasil ditutup (${draftBadge || "Libur"}). Pelanggan tidak dapat mengakses menu.`);
+    };
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -141,7 +184,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="w-full max-w-lg bg-[#07221B] border border-amber-400/30 rounded-3xl shadow-2xl overflow-hidden text-white"
+                        className="w-full max-w-lg max-h-[90vh] flex flex-col bg-[#07221B] border border-amber-400/30 rounded-3xl shadow-2xl overflow-hidden text-white"
                     >
                         {/* Header */}
                         <div className="p-5 bg-gradient-to-r from-amber-400/15 via-emerald-900/30 to-transparent border-b border-white/10 flex items-center justify-between">
@@ -175,7 +218,7 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                         </div>
 
                         {/* Body */}
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto">
                             {!user ? (
                                 <form onSubmit={handleLogin} className="space-y-4">
                                     <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-xs text-white/70 leading-relaxed flex items-start gap-3">
@@ -333,6 +376,147 @@ export default function SecretStaffModal({ isOpen, onClose }: SecretStaffModalPr
                                             </button>
                                         )}
                                     </div>
+
+                                    {/* Kontrol Buka / Tutup (Lock / Unlock) Kedai & Menu Online Pelanggan */}
+                                    {user.role === "admin" && (
+                                        <div
+                                            className={`p-3.5 rounded-2xl border space-y-3 ${
+                                                isOnlineOrderOpen
+                                                    ? "bg-emerald-500/10 border-emerald-500/30"
+                                                    : "bg-red-500/15 border-red-500/40"
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div
+                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                                            isOnlineOrderOpen
+                                                                ? "bg-emerald-400/20 text-emerald-300"
+                                                                : "bg-red-500/25 text-red-300"
+                                                        }`}
+                                                    >
+                                                        {isOnlineOrderOpen ? <Store size={15} /> : <CalendarX2 size={15} />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold text-white truncate">
+                                                            Order Online Pelanggan:{" "}
+                                                            <span className={isOnlineOrderOpen ? "text-emerald-300" : "text-red-300"}>
+                                                                {isOnlineOrderOpen ? "BUKA (Menu Aktif)" : `DIKUNCI (${closedBadge})`}
+                                                            </span>
+                                                        </p>
+                                                        <p className="text-[10px] text-white/60 truncate">
+                                                            {isOnlineOrderOpen
+                                                                ? "Pelanggan dapat mengakses /menu & memesan online"
+                                                                : "Pelanggan tidak bisa akses menu (Sedang Tutup / Libur)"}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {isOnlineOrderOpen ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setDraftBadge(closedBadge || SHOP_CLOSE_PRESETS[0].badge);
+                                                            setDraftMessage(closedMessage || SHOP_CLOSE_PRESETS[0].message);
+                                                            setDraftReopen(reopenInfo || SHOP_CLOSE_PRESETS[0].reopenHint);
+                                                            setShowCloseConfig((v) => !v);
+                                                        }}
+                                                        className="px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex-shrink-0 bg-red-500/25 hover:bg-red-500/35 text-red-200 border border-red-400/40"
+                                                    >
+                                                        🔒 Tutup Kedai
+                                                    </button>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setDraftBadge(closedBadge);
+                                                                setDraftMessage(closedMessage);
+                                                                setDraftReopen(reopenInfo || "");
+                                                                setShowCloseConfig((v) => !v);
+                                                            }}
+                                                            className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition bg-white/10 hover:bg-white/20 text-white/80 border border-white/15"
+                                                            title="Ubah pesan libur / tutup"
+                                                        >
+                                                            ✏️ Pesan
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleOpenShopOnline}
+                                                            className="px-3 py-1.5 rounded-xl text-[11px] font-black transition bg-emerald-400 hover:bg-emerald-300 text-[#07221B] shadow"
+                                                        >
+                                                            🔓 Buka Kedai
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {showCloseConfig && (
+                                                <div className="pt-2.5 border-t border-white/10 space-y-2.5">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                                                        Pilih Alasan Tutup / Libur (Atau Ketik Sendiri):
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {SHOP_CLOSE_PRESETS.map((preset) => (
+                                                            <button
+                                                                key={preset.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setDraftBadge(preset.badge);
+                                                                    setDraftMessage(preset.message);
+                                                                    setDraftReopen(preset.reopenHint);
+                                                                }}
+                                                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition ${
+                                                                    draftBadge === preset.badge
+                                                                        ? "bg-amber-400 text-[#07221B] border-amber-400"
+                                                                        : "bg-black/30 text-white/75 border-white/15 hover:bg-white/10"
+                                                                }`}
+                                                            >
+                                                                {preset.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        value={draftBadge}
+                                                        onChange={(e) => setDraftBadge(e.target.value)}
+                                                        placeholder="Judul Status (misal: Libur Hari Raya / Kedai Tutup)"
+                                                        className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400"
+                                                    />
+                                                    <textarea
+                                                        rows={2}
+                                                        value={draftMessage}
+                                                        onChange={(e) => setDraftMessage(e.target.value)}
+                                                        placeholder="Pesan untuk pelanggan yang membuka menu..."
+                                                        className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400 resize-none"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={draftReopen}
+                                                        onChange={(e) => setDraftReopen(e.target.value)}
+                                                        placeholder="Info buka kembali (opsional, misal: Buka Senin 09.00 WIB)"
+                                                        className="w-full px-3 py-2 bg-black/30 border border-white/15 rounded-xl text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400"
+                                                    />
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowCloseConfig(false)}
+                                                            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs text-white/70 font-bold"
+                                                        >
+                                                            Batal
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleConfirmCloseShopOnline}
+                                                            className="px-3.5 py-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-black shadow"
+                                                        >
+                                                            🔒 Kunci &amp; Tutup Menu Pelanggan
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Toggle Unlock / Lock Fitur Pengembangan Selanjutnya (Skripsi) */}
                                     <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between gap-3">

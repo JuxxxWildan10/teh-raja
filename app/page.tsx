@@ -15,6 +15,9 @@
  *    Jika staf/admin mengetuk logo mahkota Teh Raja 5 kali cepat di kiri atas, modal login staf akan muncul.
  * 3. **Portal Modul Sistem (`PORTAL_MODULES`)**:
  *    Hanya muncul di bagian bawah halaman setelah staf/admin berhasil login.
+ * 4. **Status Buka/Tutup Kedai Real-Time (`useStoreConfigStore`)**:
+ *    Menampilkan status operasional kedai secara langsung (Buka / Libur Operasional) dan mengunci
+ *    tombol akses menu pelanggan apabila kedai sedang ditutup oleh Admin.
  * ============================================================================
  */
 
@@ -38,10 +41,20 @@ import {
     ShieldCheck,
     Receipt,
     QrCode,
+    Lock,
+    Unlock,
+    CalendarX2,
 } from "lucide-react";
-import { useAuthStore, useCartStore, useSalesStore } from "@/lib/store";
+import {
+    useAuthStore,
+    useCartStore,
+    useSalesStore,
+    useStoreConfigStore,
+    SHOP_CLOSE_PRESETS,
+} from "@/lib/store";
 import SecretStaffModal, { useSecretLogoTap } from "@/components/SecretStaffModal";
 import CustomerOrderTrackerModal from "@/components/CustomerOrderTrackerModal";
+import { useToast } from "@/components/Toast";
 
 const FEATURED_TEAS = [
     {
@@ -138,9 +151,18 @@ const PORTAL_MODULES = [
 
 export default function LandingPage() {
     const router = useRouter();
+    const toast = useToast();
     const { user, logout, isAdvancedUnlocked } = useAuthStore();
     const activeOrderId = useCartStore((state) => state.activeOrderId);
-    const orders = useSalesStore((state) => state.orders);
+    const { orders, addLog } = useSalesStore();
+    const {
+        isOnlineOrderOpen,
+        closedBadge,
+        closedMessage,
+        reopenInfo,
+        openOnlineStore,
+        closeOnlineStore,
+    } = useStoreConfigStore();
     const activeOrder = activeOrderId ? orders.find((o) => o.id === activeOrderId) : null;
 
     const [currentTea, setCurrentTea] = useState(0);
@@ -162,24 +184,73 @@ export default function LandingPage() {
 
     if (!mounted) return null;
 
+    const handleCustomerOpenMenu = () => {
+        if (!isOnlineOrderOpen && !user) {
+            toast.warning(`Mohon maaf, Kedai sedang tutup (${closedBadge || "Libur Operasional"}). Menu belum dapat diakses.`);
+            router.push("/menu");
+            return;
+        }
+        router.push("/menu");
+    };
+
+    const handleQuickToggleOnlineStore = () => {
+        if (!user || user.role !== "admin") return;
+        if (isOnlineOrderOpen) {
+            const preset = SHOP_CLOSE_PRESETS[0];
+            closeOnlineStore({
+                closedBadge: preset.badge,
+                closedMessage: preset.message,
+                reopenInfo: preset.reopenHint,
+                updatedBy: user.name,
+            });
+            addLog("STORE_ONLINE_LOCK", `Kedai & menu online dikunci dari Beranda (${preset.badge})`, user.name);
+            toast.info(`🔒 Kedai ditutup (${preset.badge}). Pelanggan tidak dapat mengakses menu.`);
+        } else {
+            openOnlineStore(user.name);
+            addLog("STORE_ONLINE_OPEN", "Kedai & menu online dibuka kembali dari Beranda", user.name);
+            toast.success("🔓 Kedai telah dibuka! Pelanggan kini dapat mengakses menu.");
+        }
+    };
+
     return (
         <div className="min-h-screen bg-[#07221B] text-white overflow-x-hidden">
             {/* ── NAVBAR ─────────────────────────────────── */}
             <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 glass">
                 {/* Logo: Tap 5x to open Secret Admin Login / Portal */}
-                <button
-                    type="button"
-                    onClick={handleLogoTap}
-                    className="flex items-center gap-2.5 cursor-pointer select-none focus:outline-none group"
-                    title="Teh Raja"
-                >
-                    <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center transition-transform group-active:scale-90">
-                        <Leaf size={16} className="text-[#07221B]" />
-                    </div>
-                    <span className="font-bold text-amber-400 tracking-widest text-sm uppercase font-sans select-none">
-                        Teh Raja
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={handleLogoTap}
+                        className="flex items-center gap-2.5 cursor-pointer select-none focus:outline-none group"
+                        title="Teh Raja"
+                    >
+                        <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center transition-transform group-active:scale-90">
+                            <Leaf size={16} className="text-[#07221B]" />
+                        </div>
+                        <span className="font-bold text-amber-400 tracking-widest text-sm uppercase font-sans select-none">
+                            Teh Raja
+                        </span>
+                    </button>
+                    <span
+                        className={`hidden md:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                            isOnlineOrderOpen
+                                ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                : "bg-red-500/20 text-red-300 border-red-500/40"
+                        }`}
+                    >
+                        {isOnlineOrderOpen ? (
+                            <>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Kedai Buka
+                            </>
+                        ) : (
+                            <>
+                                <Lock size={10} />
+                                {closedBadge || "Kedai Tutup"}
+                            </>
+                        )}
                     </span>
-                </button>
+                </div>
 
                 <div className="flex items-center gap-2 sm:gap-3">
                     {user && (
@@ -211,12 +282,22 @@ export default function LandingPage() {
                         </span>
                     </button>
 
-                    <button
-                        onClick={() => router.push("/menu")}
-                        className="flex items-center gap-1.5 text-xs font-bold bg-amber-400 text-[#07221B] px-4 py-2 rounded-full hover:bg-amber-300 transition hover:scale-105 active:scale-95 shadow-lg shadow-amber-400/20"
-                    >
-                        <Coffee size={13} /> Pesan Menu
-                    </button>
+                    {isOnlineOrderOpen ? (
+                        <button
+                            onClick={handleCustomerOpenMenu}
+                            className="flex items-center gap-1.5 text-xs font-bold bg-amber-400 text-[#07221B] px-4 py-2 rounded-full hover:bg-amber-300 transition hover:scale-105 active:scale-95 shadow-lg shadow-amber-400/20"
+                        >
+                            <Coffee size={13} /> Pesan Menu
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleCustomerOpenMenu}
+                            className="flex items-center gap-1.5 text-xs font-bold bg-red-500/20 text-red-200 border border-red-500/40 px-3.5 py-2 rounded-full hover:bg-red-500/30 transition"
+                            title={closedMessage}
+                        >
+                            <Lock size={12} /> Kedai Tutup
+                        </button>
+                    )}
                 </div>
             </nav>
 
@@ -232,10 +313,23 @@ export default function LandingPage() {
                     transition={{ duration: 0.7 }}
                     className="text-center max-w-3xl mx-auto mb-12"
                 >
-                    {/* Badge */}
-                    <div className="inline-flex items-center gap-2 bg-amber-400/10 border border-amber-400/30 text-amber-400 text-xs font-bold px-4 py-2 rounded-full mb-6">
-                        <Award size={13} />
-                        Authentic Tea &amp; Signature Blends
+                    {/* Live Status + Brand Badges */}
+                    <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+                        <div className="inline-flex items-center gap-2 bg-amber-400/10 border border-amber-400/30 text-amber-400 text-xs font-bold px-4 py-2 rounded-full">
+                            <Award size={13} />
+                            Authentic Tea &amp; Signature Blends
+                        </div>
+                        {isOnlineOrderOpen ? (
+                            <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-bold px-4 py-2 rounded-full">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                Kedai Sedang Buka · Order Online Aktif
+                            </div>
+                        ) : (
+                            <div className="inline-flex items-center gap-2 bg-red-500/20 border border-red-500/40 text-red-200 text-xs font-bold px-4 py-2 rounded-full">
+                                <Lock size={12} />
+                                {closedBadge || "Kedai Sedang Tutup"} · Menu Dikunci
+                            </div>
+                        )}
                     </div>
 
                     <h1 className="text-5xl sm:text-6xl md:text-7xl font-serif font-bold leading-tight mb-6">
@@ -246,21 +340,54 @@ export default function LandingPage() {
                         </span>
                     </h1>
 
-                    <p className="text-white/60 text-base sm:text-lg leading-relaxed mb-10 max-w-xl mx-auto">
+                    <p className="text-white/60 text-base sm:text-lg leading-relaxed mb-8 max-w-xl mx-auto">
                         Nikmati racikan teh melati autentik, matcha pilihan, dan teh buah segar. Pesan langsung dari meja Anda, pantau proses peracikan secara live, dan unduh struk digital dengan mudah.
                     </p>
 
+                    {/* Pengumuman Resmi Saat Kedai Libur / Tutup */}
+                    {!isOnlineOrderOpen && (
+                        <div className="max-w-xl mx-auto mb-8 p-5 rounded-2xl bg-red-500/15 border border-red-400/35 text-left flex items-start gap-3.5 shadow-xl">
+                            <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-400/30 flex items-center justify-center text-red-300 flex-shrink-0 mt-0.5">
+                                <CalendarX2 size={20} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-black uppercase tracking-wider text-red-300 mb-1">
+                                    🔒 {closedBadge || "Kedai Sedang Tutup / Libur"}
+                                </p>
+                                <p className="text-sm text-white/85 leading-relaxed">
+                                    {closedMessage}
+                                </p>
+                                {reopenInfo && (
+                                    <p className="text-xs text-amber-300 font-semibold mt-2 flex items-center gap-1.5">
+                                        <Clock size={12} /> {reopenInfo}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex flex-wrap gap-3 justify-center">
-                        <motion.button
-                            whileHover={{ scale: 1.04 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => router.push("/menu")}
-                            className="flex items-center justify-center gap-2 bg-amber-400 text-[#07221B] font-black text-base px-8 py-4 rounded-2xl shadow-2xl shadow-amber-400/30 hover:bg-amber-300 transition"
-                        >
-                            <Coffee size={20} />
-                            Lihat Menu &amp; Pesan Sekarang
-                            <ChevronRight size={18} />
-                        </motion.button>
+                        {isOnlineOrderOpen ? (
+                            <motion.button
+                                whileHover={{ scale: 1.04 }}
+                                whileTap={{ scale: 0.97 }}
+                                onClick={handleCustomerOpenMenu}
+                                className="flex items-center justify-center gap-2 bg-amber-400 text-[#07221B] font-black text-base px-8 py-4 rounded-2xl shadow-2xl shadow-amber-400/30 hover:bg-amber-300 transition"
+                            >
+                                <Coffee size={20} />
+                                Lihat Menu &amp; Pesan Sekarang
+                                <ChevronRight size={18} />
+                            </motion.button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleCustomerOpenMenu}
+                                className="flex items-center justify-center gap-2 bg-red-500/20 text-red-200 border border-red-400/40 font-bold text-base px-7 py-4 rounded-2xl hover:bg-red-500/25 transition"
+                            >
+                                <Lock size={18} />
+                                Menu Ditutup ({closedBadge || "Sedang Libur / Tutup"})
+                            </button>
+                        )}
                         <motion.button
                             whileHover={{ scale: 1.04 }}
                             whileTap={{ scale: 0.97 }}
@@ -356,6 +483,63 @@ export default function LandingPage() {
                                 Kunci &amp; Sembunyikan Portal
                             </button>
                         </div>
+
+                        {/* Kontrol Cepat Buka / Tutup Kedai Online (Khusus Admin) */}
+                        {user.role === "admin" && (
+                            <div
+                                className={`mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                                    isOnlineOrderOpen
+                                        ? "bg-emerald-500/10 border-emerald-500/30"
+                                        : "bg-red-500/15 border-red-500/40"
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div
+                                        className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                            isOnlineOrderOpen
+                                                ? "bg-emerald-400/20 text-emerald-300"
+                                                : "bg-red-500/25 text-red-300"
+                                        }`}
+                                    >
+                                        {isOnlineOrderOpen ? <Unlock size={20} /> : <Lock size={20} />}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-white">
+                                            Status Kedai &amp; Order Online Pelanggan:{" "}
+                                            <span className={isOnlineOrderOpen ? "text-emerald-300" : "text-red-300"}>
+                                                {isOnlineOrderOpen ? "BUKA (AKTIF)" : `TUTUP (${closedBadge})`}
+                                            </span>
+                                        </p>
+                                        <p className="text-xs text-white/60 mt-0.5">
+                                            {isOnlineOrderOpen
+                                                ? "Pelanggan dapat mengakses /menu dan mengirim pesanan online."
+                                                : `Menu pelanggan sedang dikunci: "${closedMessage}"`}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleQuickToggleOnlineStore}
+                                        className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-lg ${
+                                            isOnlineOrderOpen
+                                                ? "bg-red-500 hover:bg-red-600 text-white"
+                                                : "bg-emerald-400 hover:bg-emerald-300 text-[#07221B]"
+                                        }`}
+                                    >
+                                        {isOnlineOrderOpen ? (
+                                            <>
+                                                <Lock size={14} /> Tutup / Liburkan Kedai
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Unlock size={14} /> Buka Kedai Sekarang
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {PORTAL_MODULES.filter((mod) => !mod.advancedOnly || isAdvancedUnlocked).map((mod) => {
@@ -488,12 +672,21 @@ export default function LandingPage() {
                         Pesan minuman teh otentik dengan resep signature kami atau lacak status pesanan dan struk pembelian Anda.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3">
-                        <button
-                            onClick={() => router.push("/menu")}
-                            className="flex-1 py-4 bg-amber-400 text-[#07221B] font-black rounded-xl hover:bg-amber-300 transition hover:scale-[1.02] active:scale-[0.98] shadow-lg"
-                        >
-                            Buka Menu Pelanggan
-                        </button>
+                        {isOnlineOrderOpen ? (
+                            <button
+                                onClick={handleCustomerOpenMenu}
+                                className="flex-1 py-4 bg-amber-400 text-[#07221B] font-black rounded-xl hover:bg-amber-300 transition hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+                            >
+                                Buka Menu Pelanggan
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleCustomerOpenMenu}
+                                className="flex-1 py-4 bg-red-500/20 text-red-200 border border-red-400/40 font-bold rounded-xl hover:bg-red-500/30 transition flex items-center justify-center gap-2"
+                            >
+                                <Lock size={16} /> Kedai Tutup ({closedBadge || "Libur"})
+                            </button>
+                        )}
                         <button
                             onClick={() => setIsTrackerModalOpen(true)}
                             className="flex-1 py-4 bg-white/10 text-white border border-white/20 font-bold rounded-xl hover:bg-white/20 transition flex items-center justify-center gap-2"

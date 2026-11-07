@@ -344,7 +344,7 @@ Sesuai kondisi operasional Kedai Teh Raja, sistem membagi hak akses pengguna ke 
    - Memilih kustomisasi varian minuman (Ukuran *Regular/Large/Jumbo*, Tingkat Gula, Level Es Batu, dan ekstra *Topping*) serta memasukkannya ke keranjang pesanan (*Tray*).
    - Memilih metode pembayaran (QRIS atau Tunai di Kasir) dan memantau status peracikan minuman secara langsung melalui *Live Order Tracker* (`OrderStatusOverlay`).
    - Mencari pesanan berdasarkan ID Pesanan, Nama, atau Nomor WhatsApp serta melihat/mengunduh **Struk Digital** melalui fitur **Lacak Pesanan & Struk** (`CustomerOrderTrackerModal`).
-   - *Isolasi Keamanan:* Pelanggan sama sekali tidak melihat tombol menuju halaman Kasir POS, Admin, maupun berkas presentasi.
+   - *Isolasi Keamanan & Proteksi Jam Tutup/Libur:* Pelanggan sama sekali tidak melihat tombol menuju halaman Kasir POS, Admin, maupun berkas presentasi. Selain itu, ketika kedai sedang libur atau ditutup oleh Administrator, akses katalog menu (`/menu`) otomatis terkunci dan menampilkan informasi resmi jadwal libur/operasional kedai.
 2. **Aktor Kasir Merangkap Barista (Akses via 5x Tap Logo $\rightarrow$ `/pos`):**
    - Membuka akses login staf dengan mengetuk logo **TEH RAJA** sebanyak 5 kali berturut-turut, lalu masuk menggunakan akun kasir.
    - Membuka *shift* kasir dengan menginput modal uang kembalian awal (*starting cash*) dan menutup *shift* dengan menginput uang tunai fisik di laci (*actual cash*).
@@ -354,7 +354,8 @@ Sesuai kondisi operasional Kedai Teh Raja, sistem membagi hak akses pengguna ke 
 3. **Aktor Administrator / Pemilik Kedai (Akses via 5x Tap Logo $\rightarrow$ `/admin`):**
    - Mengelola data master produk beserta pengaturan komposisi resep **Bill of Materials (BOM)** per gelas (jenis bahan baku dan kuantitas ml/gram/pcs yang dibutuhkan).
    - Memantau stok bahan baku gudang secara *real-time*, menerima peringatan bahan baku menipis (*low-stock alert*), mencatat pembelian bahan baku baru (*Restock PO* & kirim pesan PO ke WhatsApp suplier), serta melakukan penyesuaian stok fisik (*Stock Opname*).
-   - Memantau ringkasan omzet penjualan di *Dashboard*, mengelola daftar transaksi di tab *Pesanan POS*, mengelola akun staf di tab *Karyawan*, serta melihat laporan keuangan di tab *Laba Rugi & Kas* (Pendapatan Kotor, estimasi HPP Bahan Baku, Kas Keluar, dan Laba Bersih) beserta ekspor laporan ke PDF/Excel CSV.
+   - Mengatur **Kunci Buka/Tutup Kedai & Pemesanan Online Pelanggan (*Lock/Unlock Online Store*)** secara *real-time* kapan saja (misalnya saat hari libur operasional, tanggal merah, atau di luar jam buka) beserta pesan pengumuman kustom sehingga pelanggan tidak dapat mengakses katalog menu saat kedai sedang tutup.
+   - Memantau ringkasan omzet penjualan di *Dashboard* (dilengkapi filter per hari dan multi-*shift*), mengelola daftar transaksi di tab *Pesanan POS*, mengelola akun staf di tab *Karyawan*, serta melihat laporan keuangan di tab *Laba Rugi & Kas* (Pendapatan Kotor, estimasi HPP Bahan Baku, Kas Keluar, dan Laba Bersih) beserta ekspor laporan ke PDF/Excel CSV.
 
 ### 3.2.2 Kebutuhan Non-Fungsional
 1. **Keandalan Luring (*Offline-First Reliability*):** Seluruh proses transaksi di `/pos` dan pemotongan stok BOM tetap berjalan lancar tanpa koneksi internet berkat penyimpanan lokal IndexedDB dan disinkronkan otomatis saat kembali daring.

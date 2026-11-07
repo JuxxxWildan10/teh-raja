@@ -12,6 +12,9 @@
  * 2. Mengecek ketersediaan stok bahan baku BOM secara real-time (`isOutOfIngredient`): jika salah satu bahan resep habis, kartu menu otomatis berstatus "Habis".
  * 3. Membuka modal pemilihan varian (`VariantModal`) saat pelanggan menekan tombol "+ Keranjang".
  * 4. Menampilkan progres pesanan aktif (`OrderStatusOverlay`) dan mendukung ketukan rahasia 5x pada judul/logo untuk akses staf (`useSecretLogoTap`).
+ * 5. **Proteksi Kunci Buka/Tutup Kedai (`isOnlineOrderOpen`)**: Jika Admin menutup kedai (misal Hari Libur / di luar jam operasional),
+ *    katalog menu & keranjang otomatis dikunci sehingga pelanggan tidak dapat mengakses menu, namun tetap menampilkan informasi
+ *    libur/tutup dan tetap menjaga akses rahasia 5x Tap Logo untuk Admin.
  * ============================================================================
  */
 
@@ -20,17 +23,37 @@ import RecommendationQuiz from "@/components/RecommendationQuiz";
 import OrderStatusOverlay from "@/components/OrderStatusOverlay";
 import VariantModal from "@/components/VariantModal";
 import { useSecretLogoTap } from "@/components/SecretStaffModal";
+import { useToast } from "@/components/Toast";
 import {
   useAuthStore,
   useCartStore,
   useProductStore,
   usePromoStore,
   useInventoryStore,
+  useStoreConfigStore,
+  useSalesStore,
+  SHOP_CLOSE_PRESETS,
   ExtendedProduct,
   ProductVariants,
 } from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, ArrowDown, AlertTriangle, Download, Search, ShoppingBag, Tag, Receipt } from "lucide-react";
+import {
+  Star,
+  ArrowDown,
+  AlertTriangle,
+  Download,
+  Search,
+  ShoppingBag,
+  Tag,
+  Receipt,
+  Lock,
+  Unlock,
+  Clock,
+  Home as HomeIcon,
+  LayoutDashboard,
+  CalendarX2,
+} from "lucide-react";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -49,6 +72,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function Home() {
+  const user = useAuthStore((state) => state.user);
   const isAdvancedUnlocked = useAuthStore((state) => state.isAdvancedUnlocked);
   const addToCart = useCartStore((state) => state.addToCart);
   const cartItems = useCartStore((state) => state.items);
@@ -58,6 +82,16 @@ export default function Home() {
   const products = useProductStore((state) => state.products);
   const promos = usePromoStore((state) => state.promos);
   const ingredients = useInventoryStore((state) => state.ingredients);
+  const {
+    isOnlineOrderOpen,
+    closedBadge,
+    closedMessage,
+    reopenInfo,
+    openOnlineStore,
+    closeOnlineStore,
+  } = useStoreConfigStore();
+  const addLog = useSalesStore((state) => state.addLog);
+  const toast = useToast();
 
   const [isClient, setIsClient] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -65,19 +99,31 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const activePromos = promos.filter(p => p.isActive);
+  const activePromos = isAdvancedUnlocked ? promos.filter(p => p.isActive) : [];
 
   const handleHeroLogoTap = useSecretLogoTap(() => {
     window.dispatchEvent(new CustomEvent('tehraja:open-secret-modal'));
   });
 
   const handleVariantConfirm = (variants: ProductVariants, finalPrice: number, qty: number) => {
+    if (!isOnlineOrderOpen) {
+      setVariantProduct(null);
+      toast.error(`Mohon maaf, Kedai sedang tutup (${closedBadge || 'Libur Operasional'}).`);
+      return;
+    }
     if (!variantProduct) return;
     for (let i = 0; i < qty; i++) {
       addToCart(variantProduct, variants, finalPrice);
     }
     setVariantProduct(null);
   };
+
+  // Tutup modal varian otomatis apabila Admin mengunci kedai secara real-time
+  useEffect(() => {
+    if (!isOnlineOrderOpen && variantProduct) {
+      setVariantProduct(null);
+    }
+  }, [isOnlineOrderOpen, variantProduct]);
 
   useEffect(() => {
     setIsClient(true);
@@ -98,9 +144,155 @@ export default function Home() {
 
   if (!isClient) return null;
 
+  const handleAdminQuickUnlock = () => {
+    openOnlineStore(user?.name || 'Admin');
+    addLog('STORE_ONLINE_OPEN', 'Kedai & menu online pelanggan dibuka kembali dari halaman /menu', user?.name || 'Admin');
+    toast.success('🔓 Kedai telah dibuka! Pelanggan kini dapat mengakses katalog menu & memesan online.');
+  };
+
+  const handleAdminQuickLockHoliday = () => {
+    const preset = SHOP_CLOSE_PRESETS[0];
+    closeOnlineStore({
+      closedBadge: preset.badge,
+      closedMessage: preset.message,
+      reopenInfo: preset.reopenHint,
+      updatedBy: user?.name || 'Admin',
+    });
+    addLog('STORE_ONLINE_LOCK', `Kedai & menu online pelanggan dikunci (${preset.badge})`, user?.name || 'Admin');
+    toast.info(`🔒 Kedai berhasil dikunci (${preset.badge}). Pelanggan tidak dapat mengakses menu.`);
+  };
+
+  // ── TAMPILAN SAAT KEDAI TUTUP / LIBUR (PELANGGAN TIDAK BISA MENGAKSES MENU) ──
+  if (!isOnlineOrderOpen) {
+    return (
+      <main className="min-h-screen bg-forest text-cream selection:bg-gold selection:text-forest flex flex-col">
+        <Navbar />
+
+        {/* Banner Kendali Cepat khusus Admin yang sedang login */}
+        {user?.role === 'admin' && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-xl bg-[#07221B]/95 backdrop-blur-xl border border-amber-400/40 rounded-2xl p-3.5 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-xs">
+              <div className="w-8 h-8 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-300 flex-shrink-0">
+                <Lock size={15} />
+              </div>
+              <div>
+                <p className="font-bold text-amber-300">Mode Admin: Menu Pelanggan Sedang Dikunci</p>
+                <p className="text-[11px] text-white/60">Pelanggan melihat layar tutup ini &amp; tidak bisa memesan.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <Link
+                href="/admin"
+                className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1.5"
+              >
+                <LayoutDashboard size={13} /> Admin
+              </Link>
+              <button
+                type="button"
+                onClick={handleAdminQuickUnlock}
+                className="px-3.5 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-[#07221B] text-xs font-black transition flex items-center gap-1.5 shadow-lg"
+              >
+                <Unlock size={13} /> Buka Kedai Sekarang
+              </button>
+            </div>
+          </div>
+        )}
+
+        <section className="flex-1 flex items-center justify-center px-6 pt-28 pb-24 relative overflow-hidden">
+          <div className="absolute inset-0 z-0 pointer-events-none">
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--color-gold-light)_0%,_transparent_25%)] opacity-15" />
+            <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_bottom_left,_var(--color-forest-light)_0%,_transparent_45%)] opacity-40" />
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="relative z-10 max-w-xl w-full bg-black/30 backdrop-blur-xl border border-gold/25 rounded-3xl p-8 md:p-11 text-center shadow-2xl"
+          >
+            {/* Icon & Badge Tutup */}
+            <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-red-500/15 border border-red-400/30 flex items-center justify-center text-red-300 shadow-lg">
+              <CalendarX2 size={32} />
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-200 text-xs font-bold uppercase tracking-wider mb-5">
+              <Lock size={12} />
+              <span>{closedBadge || 'Kedai Sedang Tutup'}</span>
+            </div>
+
+            {/* Judul tetap mendukung 5x Tap Rahasia Staf/Admin agar Admin tidak pernah terkunci */}
+            <h1
+              onClick={handleHeroLogoTap}
+              className="text-3xl md:text-5xl font-serif font-bold mb-3 text-transparent bg-clip-text bg-gradient-to-b from-gold-light to-gold cursor-pointer select-none inline-block active:scale-95 transition-transform"
+              title="TEH RAJA"
+            >
+              TEH RAJA
+            </h1>
+
+            <h2 className="text-lg md:text-xl font-bold text-white mb-3">
+              Mohon Maaf, Menu &amp; Pemesanan Online Sedang Ditutup
+            </h2>
+
+            <p className="text-sm md:text-base text-white/75 leading-relaxed mb-6">
+              {closedMessage || 'Saat ini Kedai Teh Raja sedang libur / tutup operasional sehingga katalog menu belum dapat diakses.'}
+            </p>
+
+            {reopenInfo && (
+              <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold/10 border border-gold/30 text-gold text-xs md:text-sm font-semibold mb-7">
+                <Clock size={15} className="flex-shrink-0" />
+                <span>{reopenInfo}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2 border-t border-white/10">
+              <Link
+                href="/"
+                className="px-6 py-3 rounded-xl bg-gold text-forest font-bold text-sm hover:bg-gold-light transition flex items-center justify-center gap-2 shadow-lg"
+              >
+                <HomeIcon size={16} /> Kembali ke Beranda
+              </Link>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('tehraja:open-tracker-modal'))}
+                className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold text-sm transition flex items-center justify-center gap-2"
+              >
+                <Receipt size={16} className="text-gold" /> Lacak Pesanan &amp; Struk
+              </button>
+            </div>
+          </motion.div>
+        </section>
+
+        <footer className="bg-black/40 py-6 border-t border-white/5 text-center text-xs opacity-40">
+          <p>TEH RAJA &copy; 2026 · Authentic Tea &amp; Blends</p>
+        </footer>
+
+        {/* Overlay pelacakan pesanan sebelumnya tetap aktif jika pelanggan baru saja memesan sebelum tutup */}
+        <OrderStatusOverlay />
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-forest text-cream selection:bg-gold selection:text-forest">
       <Navbar />
+
+      {/* Pintasan Admin saat login di halaman /menu untuk mengunci kedai kapanpun */}
+      {user?.role === 'admin' && (
+        <div className="fixed bottom-4 right-4 z-40 hidden md:flex items-center gap-2 bg-[#07221B]/95 backdrop-blur-md border border-emerald-500/40 rounded-full pl-3.5 pr-2 py-1.5 shadow-xl text-xs">
+          <span className="flex items-center gap-1.5 text-emerald-300 font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            Kedai Online: Buka
+          </span>
+          <button
+            type="button"
+            onClick={handleAdminQuickLockHoliday}
+            className="px-2.5 py-1 rounded-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 font-bold transition flex items-center gap-1"
+            title="Kunci & tutup akses menu pelanggan sekarang"
+          >
+            <Lock size={11} /> Tutup Kedai
+          </button>
+        </div>
+      )}
 
       {/* HERO SECTION */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
@@ -110,6 +302,12 @@ export default function Home() {
         </div>
 
         <div className="container relative z-10 px-6 text-center">
+          <div className="mb-4">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              Kedai Sedang Buka · Siap Menerima Pesanan
+            </span>
+          </div>
           <motion.h1
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}

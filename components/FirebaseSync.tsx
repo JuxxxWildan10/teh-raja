@@ -9,7 +9,7 @@
  *
  * FUNGSI UTAMA (Jantung Arsitektur Offline-First & Real-Time):
  * 1. **Auto-Flush Antrean Offline**: Saat koneksi internet kembali *online*, otomatis mengunggah `offlineOrders` dan `offlineLogs` dari IndexedDB ke Firebase RTDB.
- * 2. **Real-Time Listener (`onValue`)**: Mendengarkan perubahan node `orders`, `products`, `ingredients` (BOM), `sessions`, `expenses`, `suppliers`, `opnameLogs`, dan `users` agar layar Pelanggan, Kasir POS, dan Admin selalu sinkron (<500ms).
+ * 2. **Real-Time Listener (`onValue`)**: Mendengarkan perubahan node `orders`, `products`, `ingredients` (BOM), `sessions`, `expenses`, `suppliers`, `opnameLogs`, `users`, dan `storeConfig` (Lock/Unlock Buka-Tutup Kedai Online) agar layar Pelanggan, Kasir POS, dan Admin selalu sinkron (<500ms).
  * 3. **Notifikasi Audio Otomatis**: Memutar bunyi bel saat ada pesanan baru masuk di kasir atau saat pesanan pelanggan selesai diracik.
  * ============================================================================
  */
@@ -28,11 +28,14 @@ import {
     useCustomerStore,
     useSupplierStore,
     useAuthStore,
+    useStoreConfigStore,
+    DEFAULT_STORE_CONFIG,
     DEFAULT_INGREDIENTS,
     Order,
     ActivityLog,
     ExtendedProduct,
     StoreSession,
+    StoreOperationConfig,
     Promo,
     Customer,
     Supplier,
@@ -356,6 +359,35 @@ export default function FirebaseSync() {
             console.debug("[FirebaseSync] expenses sync paused:", err.message);
         });
 
+        // Sinkronisasi Real-Time Status Buka / Tutup (Lock / Unlock) Kedai & Menu Online Pelanggan
+        const storeConfigRef = ref(rtdb, 'storeConfig');
+        const unsubStoreConfig = onValue(storeConfigRef, (snapshot) => {
+            const data = snapshot.val() as StoreOperationConfig | null;
+            if (data && typeof data.isOnlineOrderOpen === 'boolean') {
+                useStoreConfigStore.setState({
+                    isOnlineOrderOpen: data.isOnlineOrderOpen,
+                    closedBadge: data.closedBadge || DEFAULT_STORE_CONFIG.closedBadge,
+                    closedMessage: data.closedMessage || DEFAULT_STORE_CONFIG.closedMessage,
+                    reopenInfo: data.reopenInfo || '',
+                    updatedAt: data.updatedAt,
+                    updatedBy: data.updatedBy,
+                });
+            } else {
+                const localCfg = useStoreConfigStore.getState();
+                const seedCfg: StoreOperationConfig = {
+                    isOnlineOrderOpen: localCfg.isOnlineOrderOpen ?? true,
+                    closedBadge: localCfg.closedBadge || DEFAULT_STORE_CONFIG.closedBadge,
+                    closedMessage: localCfg.closedMessage || DEFAULT_STORE_CONFIG.closedMessage,
+                    reopenInfo: localCfg.reopenInfo || DEFAULT_STORE_CONFIG.reopenInfo,
+                    updatedAt: localCfg.updatedAt,
+                    updatedBy: localCfg.updatedBy,
+                };
+                firebaseSet(storeConfigRef, JSON.parse(JSON.stringify(seedCfg))).catch(() => {});
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] storeConfig sync paused:", err.message);
+        });
+
         const connectedRef = ref(rtdb, ".info/connected");
         const unsubscribeStatus = onValue(connectedRef, (snap) => {
             const connected = snap.val() === true;
@@ -396,6 +428,7 @@ export default function FirebaseSync() {
             unsubSessions();
             unsubHistory();
             unsubExpenses();
+            unsubStoreConfig();
             unsubscribeStatus();
         };
     }, []);

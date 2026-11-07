@@ -25,8 +25,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
     useProductStore, useSalesStore, useAuthStore, usePromoStore,
-    useCustomerStore, useInventoryStore, useSupplierStore, useExpenseStore, useForecastHistoryStore,
-    ExtendedProduct, Order, ExpenseCategory, EXPENSE_CATEGORIES, DEFAULT_BRANCHES, RecipeItem, Role,
+    useCustomerStore, useInventoryStore, useSupplierStore, useExpenseStore, useForecastHistoryStore, useStoreConfigStore,
+    SHOP_CLOSE_PRESETS, ExtendedProduct, Order, ExpenseCategory, EXPENSE_CATEGORIES, DEFAULT_BRANCHES, RecipeItem, Role,
     getEnrichedSessions, isOrderInSession, isExpenseInSession, toLocalDateKey, getTodayDateKey, getYesterdayDateKey, EnrichedStoreSession
 } from "@/lib/store";
 import { useToast } from "@/components/Toast";
@@ -55,7 +55,7 @@ import {
     CheckCircle, XCircle, Clock, Loader,
     Menu, Search, Sparkles, RefreshCw, Ticket, Users as UsersIcon, Box,
     Building2, BarChart2, TrendingUp, FileSpreadsheet, Bell, Wallet, DollarSign, Upload, Database, ClipboardCheck,
-    ChefHat, Coffee, Presentation, PackagePlus, Lock, Unlock, Calendar, Filter
+    ChefHat, Coffee, Presentation, PackagePlus, Lock, Unlock, Calendar, Filter, Store, CalendarX2
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -93,6 +93,55 @@ export default function AdminPage() {
     const { ingredients, addIngredient, updateIngredient, deleteIngredient, opnameLogs, recordOpname } = useInventoryStore();
     const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useSupplierStore();
     const { expenses, addExpense, deleteExpense } = useExpenseStore();
+    const {
+        isOnlineOrderOpen,
+        closedBadge,
+        closedMessage,
+        reopenInfo,
+        updatedAt: storeStatusUpdatedAt,
+        updatedBy: storeStatusUpdatedBy,
+        openOnlineStore,
+        closeOnlineStore,
+    } = useStoreConfigStore();
+
+    // ── Pengaturan Lock / Unlock Buka-Tutup Kedai Online Pelanggan ──
+    const [storeLockModalOpen, setStoreLockModalOpen] = useState(false);
+    const [lockForm, setLockForm] = useState({
+        badge: closedBadge || SHOP_CLOSE_PRESETS[0].badge,
+        message: closedMessage || SHOP_CLOSE_PRESETS[0].message,
+        reopenInfo: reopenInfo || SHOP_CLOSE_PRESETS[0].reopenHint,
+    });
+
+    const openStoreLockModal = () => {
+        setLockForm({
+            badge: closedBadge || SHOP_CLOSE_PRESETS[0].badge,
+            message: closedMessage || SHOP_CLOSE_PRESETS[0].message,
+            reopenInfo: reopenInfo ?? SHOP_CLOSE_PRESETS[0].reopenHint,
+        });
+        setStoreLockModalOpen(true);
+    };
+
+    const handleUnlockOnlineStore = () => {
+        openOnlineStore(user?.name || 'Admin');
+        addLog('STORE_ONLINE_OPEN', 'Kedai & menu order online pelanggan dibuka kembali (Unlock)', user?.name || 'Admin');
+        setStoreLockModalOpen(false);
+        toast.success('🔓 Kedai telah dibuka! Pelanggan kini dapat mengakses katalog /menu & memesan online.');
+    };
+
+    const handleSaveLockOnlineStore = (e: React.FormEvent) => {
+        e.preventDefault();
+        const badgeClean = lockForm.badge.trim() || 'Kedai Sedang Tutup';
+        const msgClean = lockForm.message.trim() || SHOP_CLOSE_PRESETS[0].message;
+        closeOnlineStore({
+            closedBadge: badgeClean,
+            closedMessage: msgClean,
+            reopenInfo: lockForm.reopenInfo.trim(),
+            updatedBy: user?.name || 'Admin',
+        });
+        addLog('STORE_ONLINE_LOCK', `Kedai & menu order online pelanggan dikunci: ${badgeClean}`, user?.name || 'Admin');
+        setStoreLockModalOpen(false);
+        toast.info(`🔒 Kedai berhasil ditutup (${badgeClean}). Pelanggan tidak dapat mengakses menu.`);
+    };
 
     // ── Inventory CRUD State ──────────────────────────────────────
     const [ingModalOpen, setIngModalOpen] = useState(false);
@@ -733,6 +782,12 @@ export default function AdminPage() {
             customers: useCustomerStore.getState().customers,
             sessions: useSalesStore.getState().sessions,
             forecastHistory: useForecastHistoryStore.getState().records,
+            storeConfig: {
+                isOnlineOrderOpen: useStoreConfigStore.getState().isOnlineOrderOpen,
+                closedBadge: useStoreConfigStore.getState().closedBadge,
+                closedMessage: useStoreConfigStore.getState().closedMessage,
+                reopenInfo: useStoreConfigStore.getState().reopenInfo,
+            },
         };
         const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
@@ -765,6 +820,7 @@ export default function AdminPage() {
                     if (data.customers) useCustomerStore.setState({ customers: data.customers });
                     if (data.sessions) useSalesStore.setState({ sessions: data.sessions });
                     if (data.forecastHistory) useForecastHistoryStore.setState({ records: data.forecastHistory });
+                    if (data.storeConfig) useStoreConfigStore.getState().updateStoreConfig(data.storeConfig);
                     toast.success("Database toko berhasil dipulihkan secara penuh!");
                 }
             } catch (err: any) {
@@ -1163,6 +1219,37 @@ export default function AdminPage() {
                         </span>
                     </div>
                     <div className="flex gap-2 sm:gap-2.5 items-center">
+                        {/* Tombol Lock / Unlock Buka-Tutup Kedai Online Pelanggan */}
+                        {user.role === 'admin' ? (
+                            <button
+                                type="button"
+                                onClick={openStoreLockModal}
+                                className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition ${
+                                    isOnlineOrderOpen
+                                        ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/30'
+                                        : 'bg-red-500/30 text-red-200 border-red-400/60 hover:bg-red-500/40 animate-pulse'
+                                }`}
+                                title={isOnlineOrderOpen ? 'Kedai Online sedang Buka. Klik untuk menutup/meliburkan kedai.' : `Kedai Online sedang Tutup (${closedBadge}). Klik untuk membuka kembali.`}
+                            >
+                                {isOnlineOrderOpen ? <Store size={13} className="text-emerald-300" /> : <Lock size={13} className="text-red-300" />}
+                                <span className="hidden lg:inline">
+                                    {isOnlineOrderOpen ? 'Kedai Online: BUKA' : `Kedai Tutup (${closedBadge})`}
+                                </span>
+                                <span className="lg:hidden">
+                                    {isOnlineOrderOpen ? 'Buka' : 'Tutup'}
+                                </span>
+                            </button>
+                        ) : (
+                            <span
+                                className={`hidden sm:inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border ${
+                                    isOnlineOrderOpen
+                                        ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
+                                        : 'bg-red-500/25 text-red-200 border-red-400/50'
+                                }`}
+                            >
+                                {isOnlineOrderOpen ? '🟢 Menu Online Buka' : `🔴 Menu Tutup (${closedBadge})`}
+                            </span>
+                        )}
                         <button
                             type="button"
                             onClick={handleToggleAdvancedMode}
@@ -1317,6 +1404,88 @@ export default function AdminPage() {
                                 </button>
                                 <ReportGenerator orders={periodOrders} periodLabel={activePeriodLabel} />
                             </div>
+                        </div>
+
+                        {/* Kartu Kendali Buka / Tutup Kedai & Penguncian Menu Online Pelanggan (Hari Libur / Tutup) */}
+                        <div
+                            className={`rounded-2xl p-4 md:p-5 border shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition ${
+                                isOnlineOrderOpen
+                                    ? 'bg-emerald-50/70 border-emerald-200'
+                                    : 'bg-red-50 border-red-300'
+                            }`}
+                        >
+                            <div className="flex items-start gap-3.5">
+                                <div
+                                    className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-xs ${
+                                        isOnlineOrderOpen
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-red-600 text-white'
+                                    }`}
+                                >
+                                    {isOnlineOrderOpen ? <Store size={22} /> : <CalendarX2 size={22} />}
+                                </div>
+                                <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span
+                                            className={`text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                                                isOnlineOrderOpen
+                                                    ? 'bg-emerald-600 text-white'
+                                                    : 'bg-red-600 text-white'
+                                            }`}
+                                        >
+                                            {isOnlineOrderOpen ? '🟢 KEDAI BUKA (UNLOCKED)' : `🔒 KEDAI TUTUP (${closedBadge})`}
+                                        </span>
+                                        {storeStatusUpdatedAt && (
+                                            <span className="text-[11px] text-gray-500">
+                                                Diperbarui {new Date(storeStatusUpdatedAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                {storeStatusUpdatedBy ? ` oleh ${storeStatusUpdatedBy}` : ''}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className={`text-sm font-bold mt-1.5 ${isOnlineOrderOpen ? 'text-emerald-950' : 'text-red-950'}`}>
+                                        {isOnlineOrderOpen
+                                            ? 'Menu & Order Online Pelanggan (/menu) sedang aktif dan siap menerima pesanan.'
+                                            : 'Akses Menu & Order Online Pelanggan (/menu) sedang DIKUNCI — pelanggan tidak dapat melihat/memesan menu.'}
+                                    </p>
+                                    {!isOnlineOrderOpen && (
+                                        <p className="text-xs text-red-800 mt-1">
+                                            Pesan di layar pelanggan: <em>&ldquo;{closedMessage}&rdquo;</em>
+                                            {reopenInfo ? ` · (${reopenInfo})` : ''}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {user.role === 'admin' && (
+                                <div className="flex flex-wrap items-center gap-2 self-start lg:self-center flex-shrink-0">
+                                    {isOnlineOrderOpen ? (
+                                        <button
+                                            type="button"
+                                            onClick={openStoreLockModal}
+                                            className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black transition flex items-center gap-1.5 shadow-sm"
+                                        >
+                                            <Lock size={14} /> Tutup / Liburkan Kedai
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={openStoreLockModal}
+                                                className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-gray-50 text-red-700 border border-red-200 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
+                                            >
+                                                <Edit size={13} /> Ubah Pesan Libur
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleUnlockOnlineStore}
+                                                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-1.5 shadow-md"
+                                            >
+                                                <Unlock size={14} /> Buka Kedai Sekarang
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Filter Per Hari & Per Sesi Shift (Mendukung 2+ Shift Sehari) */}
@@ -3832,6 +4001,144 @@ export default function AdminPage() {
                                     className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700 disabled:opacity-50 transition flex items-center justify-center gap-2 shadow-md"
                                 >
                                     <Save size={15} /> Simpan Opname
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Pengaturan Buka / Tutup (Lock / Unlock) Kedai & Menu Online Pelanggan */}
+            {storeLockModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 animate-fade-in">
+                        <div className="bg-[#0D2B20] text-white p-5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isOnlineOrderOpen ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/25 text-red-300'}`}>
+                                    {isOnlineOrderOpen ? <Store size={20} /> : <Lock size={20} />}
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-base text-amber-400">
+                                        Kontrol Buka / Tutup Kedai Online
+                                    </h3>
+                                    <p className="text-xs text-white/70">
+                                        Kunci atau buka akses katalog menu pelanggan (/menu) kapan saja
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setStoreLockModalOpen(false)}
+                                className="p-1.5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveLockOnlineStore} className="p-5 space-y-4">
+                            {/* Status Saat Ini + Tombol Buka Cepat jika sedang tutup */}
+                            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${isOnlineOrderOpen ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Status Kedai Saat Ini</p>
+                                    <p className={`text-sm font-black mt-0.5 ${isOnlineOrderOpen ? 'text-emerald-700' : 'text-red-700'}`}>
+                                        {isOnlineOrderOpen ? '🟢 BUKA — Menu Pelanggan Aktif' : `🔴 TUTUP — ${closedBadge}`}
+                                    </p>
+                                </div>
+                                {!isOnlineOrderOpen && (
+                                    <button
+                                        type="button"
+                                        onClick={handleUnlockOnlineStore}
+                                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-1.5 shadow"
+                                    >
+                                        <Unlock size={14} /> Buka Kedai Sekarang
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Preset Alasan Tutup / Libur */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                                    Pilih Preset Alasan Tutup / Hari Libur:
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {SHOP_CLOSE_PRESETS.map((preset) => (
+                                        <button
+                                            key={preset.id}
+                                            type="button"
+                                            onClick={() =>
+                                                setLockForm({
+                                                    badge: preset.badge,
+                                                    message: preset.message,
+                                                    reopenInfo: preset.reopenHint,
+                                                })
+                                            }
+                                            className={`p-2.5 rounded-xl border text-left text-xs font-bold transition ${
+                                                lockForm.badge === preset.badge
+                                                    ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20] shadow-xs'
+                                                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Label Status Tutup (Tampil di Badge)
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={lockForm.badge}
+                                    onChange={(e) => setLockForm({ ...lockForm, badge: e.target.value })}
+                                    placeholder="Contoh: Libur Operasional / Libur Hari Raya / Kedai Sedang Tutup"
+                                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-forest"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Pesan Pengumuman untuk Pelanggan
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    required
+                                    value={lockForm.message}
+                                    onChange={(e) => setLockForm({ ...lockForm, message: e.target.value })}
+                                    placeholder="Tulis alasan kedai tutup / libur agar pelanggan mengetahui informasinya..."
+                                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-forest resize-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Info Jadwal Buka Kembali (Opsional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={lockForm.reopenInfo}
+                                    onChange={(e) => setLockForm({ ...lockForm, reopenInfo: e.target.value })}
+                                    placeholder="Contoh: Buka kembali Besok pukul 09.00 WIB"
+                                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-forest"
+                                />
+                            </div>
+
+                            <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setStoreLockModalOpen(false)}
+                                    className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-bold transition"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-black transition flex items-center justify-center gap-2 shadow-md"
+                                >
+                                    <Lock size={15} />
+                                    {isOnlineOrderOpen ? 'Kunci & Tutup Kedai Sekarang' : 'Simpan Perubahan Pesan Tutup'}
                                 </button>
                             </div>
                         </form>

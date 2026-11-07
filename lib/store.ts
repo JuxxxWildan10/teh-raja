@@ -21,6 +21,8 @@
  * 8. `useSupplierStore`        : Mengelola daftar pemasok bahan baku (`suppliers`) untuk fitur Restok Bahan (PO).
  * 9. `useForecastHistoryStore` : Menyimpan data histori penjualan (impor/simulasi) untuk modul AI Demand Forecasting.
  * 10. `useExpenseStore`        : Mengelola pengeluaran operasional & kas kecil laci kasir (*Petty Cash*).
+ * 11. `useStoreConfigStore`    : Mengelola status **Buka / Tutup (Lock / Unlock) Kedai & Menu Online Pelanggan** secara *real-time*
+ *                                (termasuk pesan pengumuman saat Hari Libur Operasional / Tutup Sementara).
  * ============================================================================
  */
 import { create } from 'zustand';
@@ -1483,5 +1485,129 @@ export const useExpenseStore = create<ExpenseState>()(
             }
         }),
         { name: 'teh-raja-expenses-v1', storage: createJSONStorage(() => idbStorage) }
+    )
+);
+
+// ══════════════════════════════════════════════════════
+// STORE OPERATIONAL CONFIG (LOCK / UNLOCK MENU & ORDER ONLINE PELANGGAN)
+// ══════════════════════════════════════════════════════
+export interface ShopClosePreset {
+    id: string;
+    label: string;
+    badge: string;
+    message: string;
+    reopenHint: string;
+}
+
+export const SHOP_CLOSE_PRESETS: ShopClosePreset[] = [
+    {
+        id: 'holiday',
+        label: '📅 Hari Libur / Tanggal Merah',
+        badge: 'Libur Operasional',
+        message: 'Mohon maaf, Kedai Teh Raja sedang libur operasional hari ini. Terima kasih atas pengertian Anda dan sampai jumpa kembali!',
+        reopenHint: 'Buka kembali di hari operasional berikutnya pukul 09.00 WIB',
+    },
+    {
+        id: 'closed_hours',
+        label: '🌙 Kedai Sudah Tutup',
+        badge: 'Kedai Sedang Tutup',
+        message: 'Mohon maaf, saat ini Kedai Teh Raja sedang tutup di luar jam operasional. Silakan kunjungi kembali saat kedai buka.',
+        reopenHint: 'Jam Operasional: 09.00 – 21.00 WIB',
+    },
+    {
+        id: 'break',
+        label: '⏸️ Tutup Sementara / Istirahat',
+        badge: 'Tutup Sementara',
+        message: 'Mohon maaf, pemesanan online sedang dikunci sementara untuk istirahat operasional dan persiapan bahan baku segar.',
+        reopenHint: 'Akan segera dibuka kembali hari ini',
+    },
+    {
+        id: 'sold_out',
+        label: '🍵 Stok Hari Ini Habis',
+        badge: 'Habis Terjual Hari Ini',
+        message: 'Terima kasih! Seluruh kuota racikan Teh Raja hari ini telah habis terjual. Sampai jumpa kembali besok!',
+        reopenHint: 'Buka kembali besok pagi dengan bahan segar baru',
+    },
+];
+
+export interface StoreOperationConfig {
+    /** true = Kedai Buka (Pelanggan bebas akses /menu & checkout), false = Kedai Dikunci / Tutup */
+    isOnlineOrderOpen: boolean;
+    /** Label singkat alasan tutup (misal: "Libur Operasional", "Kedai Sedang Tutup") */
+    closedBadge: string;
+    /** Pesan pengumuman lengkap yang tampil di layar pelanggan saat kedai tutup */
+    closedMessage: string;
+    /** Informasi opsional jadwal buka kembali */
+    reopenInfo?: string;
+    /** Waktu perubahan status terakhir (ISO) */
+    updatedAt?: string;
+    /** Nama Admin yang membuka / menutup kedai */
+    updatedBy?: string;
+}
+
+interface StoreConfigState extends StoreOperationConfig {
+    /** Membuka kunci kedai agar pelanggan bisa mengakses menu & memesan online kembali */
+    openOnlineStore: (updatedBy?: string) => void;
+    /** Mengunci / menutup akses menu & order online pelanggan kapan saja (libur / tutup) */
+    closeOnlineStore: (options?: {
+        closedBadge?: string;
+        closedMessage?: string;
+        reopenInfo?: string;
+        updatedBy?: string;
+    }) => void;
+    /** Memperbarui pesan libur / info jadwal buka tanpa mengubah status jika diperlukan */
+    updateStoreConfig: (partial: Partial<StoreOperationConfig>) => void;
+}
+
+export const DEFAULT_STORE_CONFIG: StoreOperationConfig = {
+    isOnlineOrderOpen: true,
+    closedBadge: 'Libur Operasional',
+    closedMessage: 'Mohon maaf, Kedai Teh Raja sedang tutup / libur operasional hari ini. Silakan kunjungi kembali pada jam operasional berikutnya.',
+    reopenInfo: 'Jam Operasional: Setiap Hari 09.00 – 21.00 WIB',
+};
+
+export const useStoreConfigStore = create<StoreConfigState>()(
+    persist(
+        (set, get) => ({
+            ...DEFAULT_STORE_CONFIG,
+            openOnlineStore: (updatedBy = 'Admin') => {
+                const payload: StoreOperationConfig = {
+                    isOnlineOrderOpen: true,
+                    closedBadge: get().closedBadge || DEFAULT_STORE_CONFIG.closedBadge,
+                    closedMessage: get().closedMessage || DEFAULT_STORE_CONFIG.closedMessage,
+                    reopenInfo: get().reopenInfo || '',
+                    updatedAt: new Date().toISOString(),
+                    updatedBy,
+                };
+                set(payload);
+                firebaseSet(ref(rtdb, 'storeConfig'), JSON.parse(JSON.stringify(payload))).catch(logRtdbWarn);
+            },
+            closeOnlineStore: (options) => {
+                const payload: StoreOperationConfig = {
+                    isOnlineOrderOpen: false,
+                    closedBadge: options?.closedBadge?.trim() || get().closedBadge || DEFAULT_STORE_CONFIG.closedBadge,
+                    closedMessage: options?.closedMessage?.trim() || get().closedMessage || DEFAULT_STORE_CONFIG.closedMessage,
+                    reopenInfo: options?.reopenInfo !== undefined ? options.reopenInfo.trim() : (get().reopenInfo || ''),
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: options?.updatedBy || 'Admin',
+                };
+                set(payload);
+                firebaseSet(ref(rtdb, 'storeConfig'), JSON.parse(JSON.stringify(payload))).catch(logRtdbWarn);
+            },
+            updateStoreConfig: (partial) => {
+                const current = get();
+                const payload: StoreOperationConfig = {
+                    isOnlineOrderOpen: partial.isOnlineOrderOpen !== undefined ? partial.isOnlineOrderOpen : current.isOnlineOrderOpen,
+                    closedBadge: partial.closedBadge !== undefined ? partial.closedBadge : current.closedBadge,
+                    closedMessage: partial.closedMessage !== undefined ? partial.closedMessage : current.closedMessage,
+                    reopenInfo: partial.reopenInfo !== undefined ? partial.reopenInfo : (current.reopenInfo || ''),
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: partial.updatedBy || current.updatedBy || 'Admin',
+                };
+                set(payload);
+                firebaseSet(ref(rtdb, 'storeConfig'), JSON.parse(JSON.stringify(payload))).catch(logRtdbWarn);
+            },
+        }),
+        { name: 'teh-raja-store-config-v1', storage: createJSONStorage(() => idbStorage) }
     )
 );

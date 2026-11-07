@@ -12,13 +12,14 @@
  *    Hanya menampilkan tautan **Beranda**, **Menu**, tombol **Lacak Pesanan & Struk**, dan **Keranjang Belanja**.
  * 2. **Pemicu Rahasia Tap Logo 5x (`useSecretLogoTap`)**:
  *    Mengetuk logo "TEH RAJA" 5 kali berturut-turut membuka `SecretStaffModal` untuk login staf/admin.
- * 3. **Indikator Pesanan Aktif**:
- *    Menampilkan status pesanan pelanggan yang sedang berlangsung secara *real-time*.
+ * 3. **Indikator Pesanan Aktif & Status Buka/Tutup Kedai**:
+ *    Menampilkan status pesanan pelanggan yang sedang berlangsung secara *real-time*, serta otomatis
+ *    menyembunyikan keranjang & navigasi menu saat kedai dikunci/ditutup oleh Admin (`!isOnlineOrderOpen`).
  * ============================================================================
  */
 
 import { useState, useEffect } from "react";
-import { useCartStore, useSalesStore, useAuthStore } from "@/lib/store";
+import { useCartStore, useSalesStore, useAuthStore, useStoreConfigStore } from "@/lib/store";
 import {
     ShoppingBag,
     Menu as MenuIcon,
@@ -27,6 +28,7 @@ import {
     Receipt,
     ShieldCheck,
     Home,
+    Lock,
 } from "lucide-react";
 import CartDrawer from "./CartDrawer";
 import SecretStaffModal, { useSecretLogoTap } from "./SecretStaffModal";
@@ -42,6 +44,8 @@ export default function Navbar() {
 
     const user = useAuthStore((state) => state.user);
     const isAdvancedUnlocked = useAuthStore((state) => state.isAdvancedUnlocked);
+    const isOnlineOrderOpen = useStoreConfigStore((state) => state.isOnlineOrderOpen);
+    const closedBadge = useStoreConfigStore((state) => state.closedBadge);
     const cartCount = useCartStore((state) => state.items.reduce((s, i) => s + i.quantity, 0));
     const isCartOpen = useCartStore((state) => state.isCartDrawerOpen);
     const setCartOpen = useCartStore((state) => state.setCartDrawerOpen);
@@ -49,6 +53,13 @@ export default function Navbar() {
     const orders = useSalesStore((state) => state.orders);
 
     const activeOrder = activeOrderId ? orders.find((o) => o.id === activeOrderId) : null;
+
+    // Otomatis tutup laci keranjang jika Admin mengunci/menutup kedai secara live
+    useEffect(() => {
+        if (!isOnlineOrderOpen && isCartOpen) {
+            setCartOpen(false);
+        }
+    }, [isOnlineOrderOpen, isCartOpen, setCartOpen]);
 
     const handleLogoTap = useSecretLogoTap(() => {
         setIsSecretModalOpen(true);
@@ -82,14 +93,35 @@ export default function Navbar() {
             >
                 <div className="container mx-auto px-6 flex justify-between items-center">
                     {/* Logo: Tap 5x for Secret Admin Login & Portal */}
-                    <button
-                        type="button"
-                        onClick={handleLogoTap}
-                        className="font-serif text-2xl font-bold tracking-widest text-gradient-gold select-none cursor-pointer active:scale-95 transition-transform focus:outline-none"
-                        title="TEH RAJA"
-                    >
-                        TEH RAJA
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={handleLogoTap}
+                            className="font-serif text-2xl font-bold tracking-widest text-gradient-gold select-none cursor-pointer active:scale-95 transition-transform focus:outline-none"
+                            title="TEH RAJA"
+                        >
+                            TEH RAJA
+                        </button>
+                        <span
+                            className={`hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                                isOnlineOrderOpen
+                                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                    : "bg-red-500/20 text-red-300 border-red-500/40"
+                            }`}
+                        >
+                            {isOnlineOrderOpen ? (
+                                <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    Kedai Buka
+                                </>
+                            ) : (
+                                <>
+                                    <Lock size={10} />
+                                    {closedBadge || "Kedai Tutup"}
+                                </>
+                            )}
+                        </span>
+                    </div>
 
                     <div className="flex items-center gap-3 md:gap-5">
                         {/* Desktop Menu (Customer-only links) */}
@@ -97,10 +129,12 @@ export default function Navbar() {
                             <Link href="/" className="hover:text-gold transition flex items-center gap-1.5">
                                 <Home size={14} /> Beranda
                             </Link>
-                            <a href="#menu" className="hover:text-gold transition">
-                                Menu Kami
-                            </a>
-                            {isAdvancedUnlocked && (
+                            {isOnlineOrderOpen && (
+                                <a href="#menu" className="hover:text-gold transition">
+                                    Menu Kami
+                                </a>
+                            )}
+                            {isOnlineOrderOpen && isAdvancedUnlocked && (
                                 <a href="#recommendation" className="hover:text-gold transition">
                                     AI Sommelier
                                 </a>
@@ -148,23 +182,25 @@ export default function Navbar() {
                             <span className="hidden xs:inline">Struk</span>
                         </button>
 
-                        {/* Cart Button */}
-                        <button
-                            onClick={() => setCartOpen(true)}
-                            className="relative p-2 hover:bg-white/10 rounded-full transition"
-                            aria-label="Buka Keranjang"
-                        >
-                            <ShoppingBag className="text-gold" />
-                            {cartCount > 0 && (
-                                <motion.span
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs flex items-center justify-center rounded-full font-bold border-2 border-forest"
-                                >
-                                    {cartCount}
-                                </motion.span>
-                            )}
-                        </button>
+                        {/* Cart Button (Hanya tampil jika kedai sedang buka) */}
+                        {isOnlineOrderOpen && (
+                            <button
+                                onClick={() => setCartOpen(true)}
+                                className="relative p-2 hover:bg-white/10 rounded-full transition"
+                                aria-label="Buka Keranjang"
+                            >
+                                <ShoppingBag className="text-gold" />
+                                {cartCount > 0 && (
+                                    <motion.span
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs flex items-center justify-center rounded-full font-bold border-2 border-forest"
+                                    >
+                                        {cartCount}
+                                    </motion.span>
+                                )}
+                            </button>
+                        )}
 
                         {/* Mobile Hamburger */}
                         <button
@@ -193,14 +229,16 @@ export default function Navbar() {
                                 >
                                     Beranda
                                 </Link>
-                                <a
-                                    href="#menu"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className="text-base py-2 border-b border-white/5 hover:text-gold"
-                                >
-                                    Menu Kami
-                                </a>
-                                {isAdvancedUnlocked && (
+                                {isOnlineOrderOpen && (
+                                    <a
+                                        href="#menu"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="text-base py-2 border-b border-white/5 hover:text-gold"
+                                    >
+                                        Menu Kami
+                                    </a>
+                                )}
+                                {isOnlineOrderOpen && isAdvancedUnlocked && (
                                     <a
                                         href="#recommendation"
                                         onClick={() => setIsMobileMenuOpen(false)}

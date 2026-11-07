@@ -29,8 +29,8 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     useAuthStore, useCartStore, useProductStore, useSalesStore,
-    usePromoStore, useCustomerStore, useInventoryStore, useExpenseStore,
-    Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES, POINTS_REDEEM_VALUE,
+    usePromoStore, useCustomerStore, useInventoryStore, useExpenseStore, useStoreConfigStore,
+    SHOP_CLOSE_PRESETS, Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES, POINTS_REDEEM_VALUE,
     getEnrichedSessions, isOrderInSession, isExpenseInSession, getTodayDateKey, toLocalDateKey, getInsufficientBomIngredients
 } from "@/lib/store";
 import { nanoid } from "nanoid";
@@ -46,7 +46,7 @@ import {
     Banknote, QrCode, Building2, ChevronRight,
     RotateCcw, Users, Package, UtensilsCrossed, ShoppingBag, X, Cookie,
     Wand2, Sparkles, ChevronDown, Pause, Play, Trash, Tag, Percent, Mic, Loader2,
-    CheckCircle, RefreshCw, Bell, Printer, ChefHat
+    CheckCircle, RefreshCw, Bell, Printer, ChefHat, Lock, Unlock
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -80,6 +80,7 @@ export default function POSPage() {
     const { getApplicablePromo } = usePromoStore();
     const { findByPhone, addCustomer, addPoints, redeemPoints } = useCustomerStore();
     const { decrementIngredientsForOrder, ingredients } = useInventoryStore();
+    const { isOnlineOrderOpen, closedBadge, openOnlineStore, closeOnlineStore } = useStoreConfigStore();
     const toast = useToast();
 
     const [isClient, setIsClient] = useState(false);
@@ -668,6 +669,50 @@ export default function POSPage() {
                     </button>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Indikator & Sakelar Cepat Order Online Pelanggan (/menu) */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (user.role !== 'admin') {
+                                toast.info(
+                                    isOnlineOrderOpen
+                                        ? 'Menu Online Pelanggan (/menu) saat ini sedang BUKA. Hanya Admin yang dapat mengunci/menutup kedai.'
+                                        : `Menu Online Pelanggan sedang DIKUNCI oleh Admin (${closedBadge}).`
+                                );
+                                return;
+                            }
+                            if (isOnlineOrderOpen) {
+                                const preset = SHOP_CLOSE_PRESETS[1]; // Kedai Sedang Tutup
+                                closeOnlineStore({
+                                    closedBadge: preset.badge,
+                                    closedMessage: preset.message,
+                                    reopenInfo: preset.reopenHint,
+                                    updatedBy: user.name,
+                                });
+                                addLog('STORE_ONLINE_LOCK', `Menu online pelanggan ditutup dari POS (${preset.badge})`, user.name);
+                                toast.info(`🔒 Menu online pelanggan ditutup (${preset.badge}). Untuk pesan libur khusus, atur di halaman Admin.`);
+                            } else {
+                                openOnlineStore(user.name);
+                                addLog('STORE_ONLINE_OPEN', 'Menu online pelanggan dibuka kembali dari POS', user.name);
+                                toast.success('🔓 Menu online pelanggan kembali BUKA!');
+                            }
+                        }}
+                        className={`hidden sm:flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition ${
+                            isOnlineOrderOpen
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/30'
+                                : 'bg-red-500/25 text-red-200 border-red-400/50 hover:bg-red-500/35'
+                        }`}
+                        title={
+                            user.role === 'admin'
+                                ? (isOnlineOrderOpen ? 'Menu Online Buka — Klik untuk mengunci menu pelanggan' : `Menu Online Tutup (${closedBadge}) — Klik untuk membuka menu pelanggan`)
+                                : (isOnlineOrderOpen ? 'Status Menu Online Pelanggan: Buka' : `Status Menu Online Pelanggan: Tutup (${closedBadge})`)
+                        }
+                    >
+                        {isOnlineOrderOpen ? <Unlock size={11} /> : <Lock size={11} />}
+                        <span className="hidden xl:inline">{isOnlineOrderOpen ? 'Web Order: Buka' : `Web Tutup (${closedBadge})`}</span>
+                        <span className="xl:hidden">{isOnlineOrderOpen ? 'Web Buka' : 'Web Tutup'}</span>
+                    </button>
+
                     {/* Always-visible Order Queue & History Drawer Button */}
                     <button
                         onClick={() => {
