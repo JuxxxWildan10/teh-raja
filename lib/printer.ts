@@ -128,7 +128,7 @@ export function buildReceiptPayload(order: Order): Uint8Array {
     p.printRow('Order  :', '#' + order.id.slice(0, 8).toUpperCase());
     p.printRow('Waktu  :', new Date(order.date).toLocaleString('id-ID'));
     p.printRow('Kasir  :', order.cashierName || 'Staff');
-    p.printRow('Nama   :', order.customerName || 'Guest');
+    p.printRow('Nama   :', order.customerName || 'Pelanggan');
     if (order.tableNumber) p.printRow('Meja   :', order.tableNumber.toString());
     p.printDivider();
 
@@ -158,8 +158,10 @@ export function buildReceiptPayload(order: Order): Uint8Array {
     const subtotal = order.subtotal || (order.total + (order.discount || 0));
     if (order.discount && order.discount > 0) {
         p.printRow('Subtotal', formatRp(subtotal));
-        const discLabel = order.discountType === 'percent' ? `(${order.discountValue}%)` : '';
-        p.printRow(`Diskon ${discLabel}`, `-${formatRp(order.discount)}`);
+        const discLabel = order.promoName
+            ? `Promo: ${order.promoName}`
+            : `Diskon ${order.discountType === 'percent' ? `(${order.discountValue}%)` : ''}`.trim();
+        p.printRow(discLabel, `-${formatRp(order.discount)}`);
     }
 
     p.setBold(true);

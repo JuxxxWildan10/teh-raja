@@ -66,7 +66,7 @@ export default function ReportGenerator({ orders, periodLabel }: ReportGenerator
             const orderData = [
                 `#${order.id.substring(0, 6).toUpperCase()}`,
                 new Date(order.date).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }),
-                order.customerName || "Guest",
+                order.customerName || "Pelanggan",
                 (order.paymentMethod || 'cash').toUpperCase(),
                 itemsString,
                 `Rp ${order.total.toLocaleString('id-ID')}`

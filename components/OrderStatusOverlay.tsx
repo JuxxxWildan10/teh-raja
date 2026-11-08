@@ -487,9 +487,9 @@ export default function OrderStatusOverlay() {
                                     );
                                 })}
                                 {activeOrder.discount && activeOrder.discount > 0 ? (
-                                    <div className="flex justify-between text-xs text-emerald-600 font-bold pt-1">
-                                        <span>Diskon Promo / Poin</span>
-                                        <span>-Rp {activeOrder.discount.toLocaleString('id-ID')}</span>
+                                    <div className="flex justify-between gap-2 text-xs text-emerald-600 font-bold pt-1">
+                                        <span className="min-w-0 break-words">{activeOrder.promoName ? `Promo: ${activeOrder.promoName}` : 'Diskon Promo / Poin'}</span>
+                                        <span className="flex-shrink-0">-Rp {activeOrder.discount.toLocaleString('id-ID')}</span>
                                     </div>
                                 ) : null}
                                 <div className="flex justify-between font-black text-[#0D2B20] border-t border-gray-200 pt-2 mt-2">

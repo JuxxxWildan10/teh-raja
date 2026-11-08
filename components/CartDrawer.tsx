@@ -29,9 +29,11 @@ import {
     formatVariantLabel,
     POINTS_REDEEM_VALUE,
     getInsufficientBomIngredients,
+    getNextCustomerLabel,
+    getBundlePromoStatus,
 } from "@/lib/store";
-import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag, Tag, Gift, Phone, Lock } from "lucide-react";
-import { useState, useEffect } from "react";
+import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag, Tag, Gift, Phone, Lock, Sparkles } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 import { nanoid } from "nanoid";
 import NextImage from "next/image";
 import { useToast } from "./Toast";
@@ -47,10 +49,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     const { isAdvancedUnlocked } = useAuthStore();
     const { isOnlineOrderOpen, closedBadge, closedMessage } = useStoreConfigStore();
     const { items, removeFromCart, updateQuantity, updateNote, total, clearCart, setActiveOrder } = useCartStore();
-    const { addOrder, addLog, branchId } = useSalesStore();
+    const { orders, heldOrders, addOrder, addLog, branchId } = useSalesStore();
     const { products, decrementStock } = useProductStore();
     const { ingredients, decrementIngredientsForOrder } = useInventoryStore();
-    const { getApplicablePromo } = usePromoStore();
+    const { promos, getApplicablePromo } = usePromoStore();
     const { findByPhone, addCustomer, addPoints, redeemPoints, getPointsForOrder } = useCustomerStore();
     const toast = useToast();
 
@@ -83,11 +85,25 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         }
     }, [member, name]);
 
+    const nextCustomerLabel = useMemo(
+        () => getNextCustomerLabel([...orders, ...heldOrders]),
+        [orders, heldOrders]
+    );
+
     const subtotal = total();
-    // Promo Engine & Loyalty CRM hanya aktif jika Mode Pengembangan Lanjutan dibuka (isAdvancedUnlocked)
-    const activePromoMatch = isAdvancedUnlocked ? getApplicablePromo(subtotal) : null;
+    // Promo bundle produk (misal Imperial Jasmine 3 cup M = 10rb) aktif di Mode PKL maupun Full
+    const activePromoMatch = getApplicablePromo(subtotal, items, isAdvancedUnlocked);
     const promoDiscount = activePromoMatch ? activePromoMatch.discountAmount : 0;
     const afterPromo = Math.max(0, subtotal - promoDiscount);
+
+    // Nudge jika pembeli baru memilih sebagian paket bundle (misal 1 atau 2 cup Imperial Jasmine M)
+    const bundleNudge = useMemo(() => {
+        const candidate = promos
+            .filter(p => p.isActive && p.type === 'bundle' && (isAdvancedUnlocked || p.alwaysApplyInPkl || p.type === 'bundle'))
+            .map(p => ({ promo: p, ...getBundlePromoStatus(p, items) }))
+            .find(st => st.eligibleQty > 0 && st.remainingForNextBundle > 0);
+        return candidate || null;
+    }, [promos, items, isAdvancedUnlocked]);
 
     const maxMemberPointDiscount = (isAdvancedUnlocked && member) ? member.points * POINTS_REDEEM_VALUE : 0;
     const pointsDiscount = (isAdvancedUnlocked && usePoints && member) ? Math.min(maxMemberPointDiscount, afterPromo) : 0;
@@ -113,10 +129,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             toast.error(`Mohon maaf, Kedai sedang tutup (${closedBadge || 'Libur Operasional'}). Pemesanan online belum dapat diproses.`);
             return;
         }
-        if (!name.trim()) {
-            toast.error("Mohon isi nama Anda dulu!");
-            return;
-        }
+        const resolvedCustomerName = name.trim() || getNextCustomerLabel([...orders, ...heldOrders]);
         const outOfStock = checkStock();
         if (outOfStock.length > 0) {
             toast.error(`Stok produk tidak cukup: ${Array.from(new Set(outOfStock.map(i => i.name))).join(", ")}`);
@@ -135,7 +148,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             if (!member) {
                 addCustomer({
                     id: nanoid(),
-                    name: name.trim(),
+                    name: resolvedCustomerName,
                     phone: cleanPhone,
                     points: earnedPoints,
                     totalSpent: grandTotal,
@@ -150,16 +163,29 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             }
         }
 
+        const appliedDiscountType: Order['discountType'] = totalDiscount > 0
+            ? (pointsDiscount === 0 && activePromoMatch && (activePromoMatch.promo.type === 'percent' || activePromoMatch.promo.type === 'happy_hour')
+                ? 'percent'
+                : 'amount')
+            : undefined;
+        const appliedDiscountValue = totalDiscount > 0
+            ? (appliedDiscountType === 'percent' && activePromoMatch ? activePromoMatch.promo.value : totalDiscount)
+            : undefined;
+        const appliedPromoName = activePromoMatch
+            ? `${activePromoMatch.promo.name}${pointsDiscount > 0 ? ' + Poin' : ''}`
+            : (pointsDiscount > 0 ? `Tukar ${pointsRedeemed} Poin` : undefined);
+
         const newOrder: Order = {
             id: nanoid(),
             date: new Date().toISOString(),
             items: items.map(item => ({ ...item })),
             subtotal,
             discount: totalDiscount > 0 ? totalDiscount : undefined,
-            discountType: 'amount',
-            discountValue: totalDiscount > 0 ? totalDiscount : undefined,
+            discountType: appliedDiscountType,
+            discountValue: appliedDiscountValue,
+            promoName: appliedPromoName,
             total: grandTotal,
-            customerName: name.trim(),
+            customerName: resolvedCustomerName,
             customerPhone: cleanPhone || undefined,
             cashierName: "Web Store",
             status: 'pending',
@@ -170,14 +196,16 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         };
 
         addOrder(newOrder);
-        addLog("SALE", `Web Order #${newOrder.id.slice(0, 6).toUpperCase()} oleh ${name.trim()} (Rp ${grandTotal.toLocaleString('id-ID')})`, "Customer (Web)");
+        addLog("SALE", `Web Order #${newOrder.id.slice(0, 6).toUpperCase()} oleh ${resolvedCustomerName} (Rp ${grandTotal.toLocaleString('id-ID')})`, "Customer (Web)");
         decrementStock(items);
         decrementIngredientsForOrder(items, products);
         setActiveOrder(newOrder.id);
         clearCart();
+        setName("");
+        setPhone("");
         setUsePoints(false);
         onClose();
-        toast.success(`Pesanan dikirim! Silakan pilih metode pembayaran.`);
+        toast.success(`Pesanan ${resolvedCustomerName} dikirim! Silakan pilih metode pembayaran.`);
     };
 
     return (
@@ -300,14 +328,30 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
                                     {/* Data Pemesan & Tipe Pesanan (ikut scroll agar aman di layar HP pendek / saat keyboard muncul) */}
                                     <div className="p-3.5 rounded-xl bg-forest-light/60 border border-gold/15 space-y-3">
-                                        <p className="text-[11px] font-bold uppercase tracking-wider text-gold/80">Detail Pemesan</p>
+                                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-gold/80">Detail Pemesan</p>
+                                            {!name.trim() && (
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold/15 text-gold border border-gold/30">
+                                                    Auto: {nextCustomerLabel}
+                                                </span>
+                                            )}
+                                        </div>
 
                                         {activePromoMatch && (
-                                            <div className="flex justify-between items-center text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg text-xs">
-                                                <span className="flex items-center gap-1.5 font-bold">
-                                                    <Tag size={12} /> {activePromoMatch.promo.name}
+                                            <div className="flex justify-between items-center text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg text-xs gap-2">
+                                                <span className="flex items-center gap-1.5 font-bold min-w-0">
+                                                    <Tag size={12} className="flex-shrink-0" />
+                                                    <span className="truncate">{activePromoMatch.promo.name}</span>
                                                 </span>
-                                                <span className="font-bold">-Rp {promoDiscount.toLocaleString('id-ID')}</span>
+                                                <span className="font-bold whitespace-nowrap">-Rp {promoDiscount.toLocaleString('id-ID')}</span>
+                                            </div>
+                                        )}
+                                        {bundleNudge && (
+                                            <div className="flex items-start gap-2 text-amber-200 bg-amber-500/15 border border-amber-400/30 px-2.5 py-2 rounded-lg text-[11px]">
+                                                <Sparkles size={13} className="text-amber-300 flex-shrink-0 mt-0.5" />
+                                                <span>
+                                                    Tambah <strong>{bundleNudge.remainingForNextBundle} cup ({bundleNudge.promo.targetSize || 'M'})</strong> lagi untuk paket {bundleNudge.bundleQty} cup = <strong>Rp {bundleNudge.promo.value.toLocaleString('id-ID')}</strong>!
+                                                </span>
                                             </div>
                                         )}
                                         {isAdvancedUnlocked && member && member.points > 0 && (
@@ -330,10 +374,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                         <div className="flex gap-2">
                                             <input
                                                 type="text"
-                                                placeholder="Nama Pemesan (Wajib)"
+                                                placeholder={`Label Otomatis: ${nextCustomerLabel} (Opsional)`}
                                                 value={name}
                                                 onChange={(e) => setName(e.target.value)}
-                                                className="flex-1 min-w-0 p-2.5 bg-black/20 border border-white/10 rounded-lg focus:outline-none focus:border-gold text-white text-sm placeholder:text-white/30"
+                                                className="flex-1 min-w-0 p-2.5 bg-black/20 border border-white/10 rounded-lg focus:outline-none focus:border-gold text-white text-sm placeholder:text-white/35"
                                             />
                                             {orderType === 'dine-in' && (
                                                 <input
@@ -345,6 +389,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                                 />
                                             )}
                                         </div>
+                                        <p className="text-[10px] text-white/45 -mt-1.5">
+                                            Jika dikosongkan, pesanan otomatis dicatat sebagai <strong className="text-gold/80">{nextCustomerLabel}</strong>.
+                                        </p>
 
                                         {/* Optional WhatsApp / Member Phone */}
                                         <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-lg border border-white/10 focus-within:border-gold">
@@ -389,7 +436,19 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
                         {/* Sticky Bottom Footer / Checkout */}
                         {items.length > 0 && (
-                            <div className="p-3.5 sm:p-4 bg-forest-light border-t border-gold/20 space-y-2.5 flex-shrink-0">
+                            <div className="p-3.5 sm:p-4 bg-forest-light border-t border-gold/20 space-y-2 flex-shrink-0">
+                                {totalDiscount > 0 && (
+                                    <div className="space-y-1 text-xs pb-1.5 border-b border-white/10">
+                                        <div className="flex justify-between text-white/60">
+                                            <span>Subtotal</span>
+                                            <span>Rp {subtotal.toLocaleString('id-ID')}</span>
+                                        </div>
+                                        <div className="flex justify-between text-emerald-400 font-bold">
+                                            <span>{activePromoMatch ? activePromoMatch.promo.name : 'Potongan Promo / Poin'}</span>
+                                            <span>-Rp {totalDiscount.toLocaleString('id-ID')}</span>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center text-base sm:text-lg font-serif text-gold">
                                     <span>Total Bayar</span>
                                     <span className="font-bold">Rp {grandTotal.toLocaleString('id-ID')}</span>

@@ -333,6 +333,12 @@ export default function CustomerOrderTrackerModal({
                                                         </div>
                                                     );
                                                 })}
+                                                {order.discount && order.discount > 0 ? (
+                                                    <div className="flex justify-between gap-2 text-[11px] text-emerald-400 font-bold pt-1">
+                                                        <span className="min-w-0 break-words">{order.promoName ? `Promo: ${order.promoName}` : 'Promo / Diskon'}</span>
+                                                        <span className="flex-shrink-0">-Rp {order.discount.toLocaleString("id-ID")}</span>
+                                                    </div>
+                                                ) : null}
                                                 <div className="flex justify-between pt-1.5 mt-1 border-t border-white/10 font-bold text-amber-300">
                                                     <span>Total Bayar</span>
                                                     <span>Rp {order.total.toLocaleString("id-ID")}</span>

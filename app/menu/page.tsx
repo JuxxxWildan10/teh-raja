@@ -81,6 +81,7 @@ export default function Home() {
   const isCartOpen = useCartStore((state) => state.isCartDrawerOpen);
   const products = useProductStore((state) => state.products);
   const promos = usePromoStore((state) => state.promos);
+  const getApplicablePromo = usePromoStore((state) => state.getApplicablePromo);
   const ingredients = useInventoryStore((state) => state.ingredients);
   const {
     isOnlineOrderOpen,
@@ -99,7 +100,12 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const activePromos = isAdvancedUnlocked ? promos.filter(p => p.isActive) : [];
+  const activePromos = promos.filter(
+    p => p.isActive && (isAdvancedUnlocked || p.type === 'bundle' || p.alwaysApplyInPkl)
+  );
+  const traySubtotal = cartTotal();
+  const trayPromoMatch = getApplicablePromo(traySubtotal, cartItems, isAdvancedUnlocked);
+  const trayGrandTotal = Math.max(0, traySubtotal - (trayPromoMatch?.discountAmount || 0));
 
   const handleHeroLogoTap = useSecretLogoTap(() => {
     window.dispatchEvent(new CustomEvent('tehraja:open-secret-modal'));
@@ -395,12 +401,18 @@ export default function Home() {
               {activePromos.map(promo => (
                 <div
                   key={promo.id}
-                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gold/15 border border-gold/40 text-gold text-xs font-bold"
+                  className="inline-flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 rounded-2xl sm:rounded-full bg-gold/15 border border-gold/40 text-gold text-xs font-bold text-center max-w-full"
                 >
-                  <Tag size={13} />
+                  <Tag size={13} className="flex-shrink-0" />
                   <span>{promo.name}:</span>
                   <span className="text-white/90 font-normal">
-                    {promo.description || (promo.type === 'amount' ? `Potongan Rp ${promo.value.toLocaleString('id-ID')}` : `Diskon ${promo.value}%`)}
+                    {promo.description || (
+                      promo.type === 'bundle'
+                        ? `Beli ${promo.bundleQty || 3} cup (${promo.targetSize || 'M'}) = Rp ${promo.value.toLocaleString('id-ID')}`
+                        : promo.type === 'amount'
+                          ? `Potongan Rp ${promo.value.toLocaleString('id-ID')}`
+                          : `Diskon ${promo.value}%`
+                    )}
                   </span>
                 </div>
               ))}
@@ -453,6 +465,10 @@ export default function Home() {
                     return !ing || ing.stock < r.quantity;
                   });
                   const isOut = !product.isAvailable || product.stock <= 0 || isBomDepleted;
+                  const productBundlePromo = activePromos.find(p =>
+                    p.type === 'bundle' &&
+                    (p.productId === product.id || (p.productId === '2' && product.name.toLowerCase().includes('imperial jasmine')))
+                  );
 
                   return (
                     <motion.div
@@ -472,6 +488,16 @@ export default function Home() {
                             <span>{product.name[0]}</span>
                           )}
                         </div>
+
+                        {/* PROMO BADGE TOP-LEFT */}
+                        {productBundlePromo && !isOut && (
+                          <div className="absolute top-4 left-4">
+                            <span className="inline-flex items-center gap-1 bg-emerald-500 text-white text-[11px] font-black px-2.5 py-1 rounded-full shadow-lg">
+                              <Tag size={11} />
+                              {productBundlePromo.bundleQty || 3} {productBundlePromo.targetSize || 'M'} = Rp {(productBundlePromo.value / 1000).toLocaleString('id-ID')}rb
+                            </span>
+                          </div>
+                        )}
 
                         {/* STATUS BADGES */}
                         <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
@@ -506,9 +532,14 @@ export default function Home() {
                           <h3 className="text-xl font-serif font-bold">{product.name}</h3>
                         </div>
                         <p className="text-sm opacity-60 mb-4 h-10 overflow-hidden line-clamp-2">{product.description}</p>
-                        <div className="flex justify-between items-center">
-                          <span className="text-lg font-bold text-gold-light">Rp {product.price.toLocaleString('id-ID')}</span>
-                          <div className="flex gap-1">
+                        <div className="flex justify-between items-center gap-2">
+                          <div className="min-w-0">
+                            <span className="text-lg font-bold text-gold-light">Rp {product.price.toLocaleString('id-ID')}</span>
+                            {typeof product.largePrice === 'number' && (
+                              <span className="text-[11px] text-white/50 ml-1.5">(L: Rp {product.largePrice.toLocaleString('id-ID')})</span>
+                            )}
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
                             {[...Array(5)].map((_, i) => (
                               <Star key={i} size={12} className="text-gold fill-gold" />
                             ))}
@@ -556,8 +587,13 @@ export default function Home() {
                   </span>
                 </div>
                 <span>{cartItems.reduce((s, i) => s + i.quantity, 0)} item di Tray</span>
+                {trayPromoMatch && (
+                  <span className="hidden sm:inline text-[11px] bg-forest/15 px-2 py-0.5 rounded-full font-bold">
+                    Hemat Rp {trayPromoMatch.discountAmount.toLocaleString('id-ID')}
+                  </span>
+                )}
               </div>
-              <span className="font-black whitespace-nowrap">Rp {cartTotal().toLocaleString('id-ID')} →</span>
+              <span className="font-black whitespace-nowrap">Rp {trayGrandTotal.toLocaleString('id-ID')} →</span>
             </button>
           </motion.div>
         )}

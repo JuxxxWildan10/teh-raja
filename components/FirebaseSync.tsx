@@ -31,6 +31,7 @@ import {
     useStoreConfigStore,
     DEFAULT_STORE_CONFIG,
     DEFAULT_INGREDIENTS,
+    DEFAULT_JASMINE_BUNDLE_PROMO,
     Order,
     ActivityLog,
     ExtendedProduct,
@@ -154,19 +155,42 @@ export default function FirebaseSync() {
             if (data) {
                 const rawProducts: ExtendedProduct[] = Object.values(data);
                 // Auto-hydrate missing BOM recipes hanya jika produk belum pernah diedit resepnya (hasCustomRecipe !== true)
+                // Sekaligus migrasi 1x harga Imperial Jasmine (M: Rp 3.500, L: Rp 5.000) bila masih data lama (Rp 3.000)
                 const hydratedProducts = rawProducts.map(p => {
+                    let nextProduct: ExtendedProduct = { ...p, recipe: p.recipe || [] };
+                    const rtdbPatch: Record<string, unknown> = {};
+
+                    if (p.id === '2' && !p.hasCustomPrice && (p.price !== 3500 || p.largePrice !== 5000)) {
+                        nextProduct = {
+                            ...nextProduct,
+                            price: 3500,
+                            largePrice: 5000,
+                            hasCustomPrice: true,
+                            description: p.description?.trim().startsWith('Teh melati wangi yang harum')
+                                ? 'Teh melati wangi yang harum dan menenangkan. Promo Size M: beli 3 cup Rp 10.000, 6 cup Rp 20.000!'
+                                : p.description,
+                        };
+                        rtdbPatch.price = 3500;
+                        rtdbPatch.largePrice = 5000;
+                        rtdbPatch.hasCustomPrice = true;
+                        rtdbPatch.description = nextProduct.description;
+                    }
+
                     if ((!p.recipe || p.recipe.length === 0) && !p.hasCustomRecipe) {
                         const defaultProd = initialProducts.find(ip => ip.id === p.id);
                         const filteredDefaultRecipe = (defaultProd?.recipe || []).filter(
                             r => !remoteDeletedIds.has(r.ingredientId)
                         );
                         if (filteredDefaultRecipe.length > 0) {
-                            firebaseUpdate(ref(rtdb, `products/${p.id}`), { recipe: filteredDefaultRecipe }).catch(() => {});
-                            return { ...p, recipe: filteredDefaultRecipe };
+                            nextProduct = { ...nextProduct, recipe: filteredDefaultRecipe };
+                            rtdbPatch.recipe = filteredDefaultRecipe;
                         }
-                        return { ...p, recipe: [] };
                     }
-                    return { ...p, recipe: p.recipe || [] };
+
+                    if (Object.keys(rtdbPatch).length > 0) {
+                        firebaseUpdate(ref(rtdb, `products/${p.id}`), rtdbPatch).catch(() => {});
+                    }
+                    return nextProduct;
                 });
                 useProductStore.setState({ products: hydratedProducts });
             } else {
@@ -245,14 +269,41 @@ export default function FirebaseSync() {
             console.debug("[FirebaseSync] suppliers sync paused:", err.message);
         });
 
+        const deletedPromosRef = ref(rtdb, 'deletedPromos');
+        let remoteDeletedPromoIds = new Set<string>(usePromoStore.getState().deletedPromoIds || []);
+        const unsubDeletedPromos = onValue(deletedPromosRef, (snapshot) => {
+            const val = snapshot.val();
+            const fromRemote = val && typeof val === 'object' ? Object.keys(val).filter(k => val[k]) : [];
+            const localDel = usePromoStore.getState().deletedPromoIds || [];
+            remoteDeletedPromoIds = new Set([...fromRemote, ...localDel]);
+            usePromoStore.setState((s) => ({
+                promos: s.promos.filter(p => !remoteDeletedPromoIds.has(p.id)),
+                deletedPromoIds: Array.from(remoteDeletedPromoIds),
+            }));
+        }, () => {});
+
         const promosRef = ref(rtdb, 'promos');
         const unsubPromos = onValue(promosRef, (snapshot) => {
             const data = snapshot.val();
+            const currentDeletedPromos = new Set([
+                ...remoteDeletedPromoIds,
+                ...(usePromoStore.getState().deletedPromoIds || []),
+            ]);
             if (data) {
-                const loadedPromos = Object.values(data) as Promo[];
+                const loadedPromos = (Object.values(data) as Promo[]).filter(
+                    p => p && p.id && !currentDeletedPromos.has(p.id)
+                );
+                const hasJasminePromo = loadedPromos.some(p => p.id === DEFAULT_JASMINE_BUNDLE_PROMO.id);
+                if (!hasJasminePromo && !currentDeletedPromos.has(DEFAULT_JASMINE_BUNDLE_PROMO.id)) {
+                    loadedPromos.unshift(DEFAULT_JASMINE_BUNDLE_PROMO);
+                    firebaseSet(
+                        ref(rtdb, `promos/${DEFAULT_JASMINE_BUNDLE_PROMO.id}`),
+                        JSON.parse(JSON.stringify(DEFAULT_JASMINE_BUNDLE_PROMO))
+                    ).catch(() => {});
+                }
                 usePromoStore.setState({ promos: loadedPromos });
             } else {
-                const localPromos = usePromoStore.getState().promos;
+                const localPromos = usePromoStore.getState().promos.filter(p => !currentDeletedPromos.has(p.id));
                 localPromos.forEach(p => {
                     firebaseSet(ref(rtdb, `promos/${p.id}`), JSON.parse(JSON.stringify(p))).catch(() => {});
                 });
@@ -421,6 +472,7 @@ export default function FirebaseSync() {
             unsubIngredients();
             unsubOpname();
             unsubSuppliers();
+            unsubDeletedPromos();
             unsubPromos();
             unsubCustomers();
             unsubUsers();
@@ -453,7 +505,7 @@ export default function FirebaseSync() {
                     const itemList = order.items.slice(0, 2).map(i => `${i.quantity}x ${i.name}`).join(', ');
                     const suffix = order.items.length > 2 ? ` +${order.items.length - 2} lagi` : '';
                     showNotification(
-                        `🍵 Pesanan Baru — ${order.customerName || 'Guest'}`,
+                        `🍵 Pesanan Baru — ${order.customerName || 'Pelanggan'}`,
                         `${itemList}${suffix} · Rp ${order.total.toLocaleString('id-ID')}`,
                         order.id
                     );

@@ -26,7 +26,7 @@ import { useRouter } from "next/navigation";
 import {
     useProductStore, useSalesStore, useAuthStore, usePromoStore,
     useCustomerStore, useInventoryStore, useSupplierStore, useExpenseStore, useForecastHistoryStore, useStoreConfigStore,
-    SHOP_CLOSE_PRESETS, ExtendedProduct, Order, ExpenseCategory, EXPENSE_CATEGORIES, DEFAULT_BRANCHES, RecipeItem, Role,
+    SHOP_CLOSE_PRESETS, ExtendedProduct, Order, ExpenseCategory, EXPENSE_CATEGORIES, DEFAULT_BRANCHES, RecipeItem, Role, PromoType,
     getEnrichedSessions, isOrderInSession, isExpenseInSession, toLocalDateKey, getTodayDateKey, getYesterdayDateKey, EnrichedStoreSession
 } from "@/lib/store";
 import { useToast } from "@/components/Toast";
@@ -192,7 +192,20 @@ export default function AdminPage() {
     // ── Promo CRUD State ──────────────────────────────────────────
     const [promoModalOpen, setPromoModalOpen] = useState(false);
     const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
-    const [promoForm, setPromoForm] = useState({ name: '', type: 'percent' as 'percent' | 'amount' | 'happy_hour', value: 10, minSubtotal: '', startHour: 9, endHour: 17, description: '', isActive: true });
+    const [promoForm, setPromoForm] = useState({
+        name: '',
+        type: 'percent' as PromoType,
+        value: 10,
+        minSubtotal: '',
+        startHour: 9,
+        endHour: 17,
+        productId: '2',
+        targetSize: 'M' as 'M' | 'L',
+        bundleQty: 3,
+        alwaysApplyInPkl: true,
+        description: '',
+        isActive: true,
+    });
 
     // UI State
     const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics' | 'keuangan'>('dashboard');
@@ -242,7 +255,7 @@ export default function AdminPage() {
     const [shiftSummary, setShiftSummary] = useState<import("@/lib/store").StoreSession | null>(null);
 
     const [formData, setFormData] = useState<ExtendedProduct>({
-        id: '', name: '', price: 0, description: '',
+        id: '', name: '', price: 0, largePrice: undefined, description: '',
         image: '/images/royal-milk-tea.png', category: 'signature',
         attributes: { sweet: 5, creamy: 5, fruity: 5 },
         isAvailable: true, stock: 50, minStockThreshold: 10,
@@ -294,7 +307,7 @@ export default function AdminPage() {
     const openAddModal = () => {
         setEditingId(null);
         setFormData({
-            id: nanoid(), name: '', price: 10000, description: '',
+            id: nanoid(), name: '', price: 10000, largePrice: undefined, description: '',
             image: '/images/royal-milk-tea.png', category: 'signature',
             attributes: { sweet: 5, creamy: 5, fruity: 5 },
             isAvailable: true, stock: 50, minStockThreshold: 10,
@@ -312,7 +325,7 @@ export default function AdminPage() {
 
     const openEditModal = (product: ExtendedProduct) => {
         setEditingId(product.id);
-        setFormData({ ...product, recipe: product.recipe ? [...product.recipe] : [] });
+        setFormData({ ...product, largePrice: product.largePrice, recipe: product.recipe ? [...product.recipe] : [] });
         setNewRecipeIngId(ingredients[0]?.id || '');
         setNewRecipeQty('15');
         setIsModalOpen(true);
@@ -514,7 +527,7 @@ export default function AdminPage() {
                 order.id,
                 new Date(order.date).toLocaleString('id-ID'),
                 sh ? `${sh.shiftBadge} (${sh.cashierName})` : '-',
-                order.customerName || "Guest",
+                order.customerName || "Pelanggan",
                 order.items.map(i => `${i.name} (x${i.quantity})`).join("; "),
                 order.total,
                 order.paymentMethod || '-',
@@ -554,7 +567,7 @@ export default function AdminPage() {
                     new Date(o.date).toLocaleDateString('id-ID'),
                     new Date(o.date).toLocaleTimeString('id-ID'),
                     sh ? `${sh.shiftBadge} (${sh.cashierName})` : '-',
-                    o.customerName || 'Guest',
+                    o.customerName || 'Pelanggan',
                     o.customerPhone || '-',
                     o.items.map(i => `${i.quantity}x ${i.name}`).join('; '),
                     o.subtotal ?? o.total,
@@ -997,27 +1010,55 @@ export default function AdminPage() {
     // ── Promo CRUD Handlers ─────────────────────────────────────
     const openAddPromo = () => {
         setEditingPromoId(null);
-        setPromoForm({ name: '', type: 'percent', value: 10, minSubtotal: '', startHour: 9, endHour: 17, description: '', isActive: true });
+        setPromoForm({
+            name: '',
+            type: 'percent',
+            value: 10,
+            minSubtotal: '',
+            startHour: 9,
+            endHour: 17,
+            productId: products[0]?.id || '2',
+            targetSize: 'M',
+            bundleQty: 3,
+            alwaysApplyInPkl: true,
+            description: '',
+            isActive: true,
+        });
         setPromoModalOpen(true);
     };
     const openEditPromo = (promo: typeof promos[0]) => {
         setEditingPromoId(promo.id);
         setPromoForm({
-            name: promo.name, type: promo.type, value: promo.value,
+            name: promo.name,
+            type: promo.type,
+            value: promo.value,
             minSubtotal: promo.minSubtotal ? String(promo.minSubtotal) : '',
-            startHour: promo.startHour ?? 9, endHour: promo.endHour ?? 17,
-            description: promo.description ?? '', isActive: promo.isActive
+            startHour: promo.startHour ?? 9,
+            endHour: promo.endHour ?? 17,
+            productId: promo.productId || '2',
+            targetSize: promo.targetSize || 'M',
+            bundleQty: promo.bundleQty || 3,
+            alwaysApplyInPkl: promo.alwaysApplyInPkl ?? (promo.type === 'bundle'),
+            description: promo.description ?? '',
+            isActive: promo.isActive,
         });
         setPromoModalOpen(true);
     };
     const savePromo = () => {
         if (!promoForm.name.trim()) { toast.error('Nama promo wajib diisi!'); return; }
         const payload = {
-            name: promoForm.name, type: promoForm.type, value: Number(promoForm.value),
+            name: promoForm.name.trim(),
+            type: promoForm.type,
+            value: Number(promoForm.value),
             minSubtotal: promoForm.minSubtotal ? Number(promoForm.minSubtotal) : undefined,
             startHour: promoForm.type === 'happy_hour' ? promoForm.startHour : undefined,
             endHour: promoForm.type === 'happy_hour' ? promoForm.endHour : undefined,
-            description: promoForm.description, isActive: promoForm.isActive,
+            productId: promoForm.type === 'bundle' ? promoForm.productId : undefined,
+            targetSize: promoForm.type === 'bundle' ? promoForm.targetSize : undefined,
+            bundleQty: promoForm.type === 'bundle' ? Math.max(2, Number(promoForm.bundleQty) || 3) : undefined,
+            alwaysApplyInPkl: promoForm.alwaysApplyInPkl,
+            description: promoForm.description,
+            isActive: promoForm.isActive,
         };
         if (editingPromoId) {
             updatePromo(editingPromoId, payload);
@@ -2306,7 +2347,7 @@ export default function AdminPage() {
                                                         )}
                                                     </td>
                                                     <td className="p-4">
-                                                        <div className="font-bold text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</div>
+                                                        <div className="font-bold text-gray-800 text-sm">{order.customerName || "Pelanggan"}</div>
                                                         {order.customerPhone && (
                                                             <div className="text-[11px] text-gray-500 font-mono mt-0.5">📞 {order.customerPhone}</div>
                                                         )}
@@ -2334,7 +2375,9 @@ export default function AdminPage() {
                                                             {order.paymentMethod || 'TUNAI'}
                                                         </div>
                                                         {order.discount && order.discount > 0 && (
-                                                            <div className="text-[10px] text-red-500 font-semibold">-Rp {order.discount.toLocaleString('id-ID')}</div>
+                                                            <div className="text-[10px] text-emerald-600 font-semibold">
+                                                                {order.promoName ? `${order.promoName}: ` : ''}-Rp {order.discount.toLocaleString('id-ID')}
+                                                            </div>
                                                         )}
                                                     </td>
                                                     <td className="p-4 whitespace-nowrap">
@@ -2386,7 +2429,7 @@ export default function AdminPage() {
                                             <div className="flex justify-between items-start gap-2">
                                                 <div>
                                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <span className="font-bold text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</span>
+                                                        <span className="font-bold text-gray-800 text-sm">{order.customerName || "Pelanggan"}</span>
                                                         {orderShift && (
                                                             <span className="text-[9px] bg-[#0D2B20] text-amber-300 font-bold px-1.5 py-0.5 rounded-full">
                                                                 {orderShift.shiftBadge}
@@ -2414,9 +2457,14 @@ export default function AdminPage() {
                                             </div>
 
                                             <div className="flex flex-wrap justify-between items-center gap-2 pt-2 border-t border-gray-50">
-                                                <div>
+                                                <div className="min-w-0">
                                                     <span className="text-xs text-gray-400 block font-mono uppercase">{order.paymentMethod || 'TUNAI'}</span>
                                                     <span className="font-black text-forest text-sm">Rp {order.total.toLocaleString('id-ID')}</span>
+                                                    {order.discount && order.discount > 0 && (
+                                                        <span className="block text-[10px] text-emerald-600 font-semibold">
+                                                            {order.promoName ? `${order.promoName}: ` : ''}-Rp {order.discount.toLocaleString('id-ID')}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <OrderActions
                                                     order={order}
@@ -2437,7 +2485,9 @@ export default function AdminPage() {
 
 
                 {/* === PRODUCTS TAB (MENU & RESEP BOM) === */}
-                {activeTab === 'products' && (
+                {activeTab === 'products' && (() => {
+                    const bundlePromos = promos.filter(p => p.type === 'bundle');
+                    return (
                     <div className="animate-fade-in">
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                             <div className="p-4 md:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-gray-50/50">
@@ -2451,6 +2501,44 @@ export default function AdminPage() {
                                     </button>
                                 )}
                             </div>
+
+                            {bundlePromos.length > 0 && (
+                                <div className="px-4 md:px-6 py-3 bg-emerald-50/70 border-b border-emerald-100 space-y-2">
+                                    {bundlePromos.map(bp => {
+                                        const qty = bp.bundleQty || 3;
+                                        const sz = bp.targetSize || 'M';
+                                        const prodName = products.find(p => p.id === bp.productId)?.name || 'Imperial Jasmine';
+                                        return (
+                                            <div key={bp.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wide flex-shrink-0">
+                                                        🏷️ Promo Paket
+                                                    </span>
+                                                    <span className="font-bold text-emerald-950">{bp.name}</span>
+                                                    <span className="text-emerald-800">
+                                                        · {prodName} ({sz}): {qty} cup Rp {bp.value.toLocaleString('id-ID')} · {qty * 2} cup Rp {(bp.value * 2).toLocaleString('id-ID')}
+                                                    </span>
+                                                </div>
+                                                {user.role === 'admin' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            togglePromo(bp.id);
+                                                            toast.success(`Promo "${bp.name}" ${bp.isActive ? 'dinonaktifkan' : 'diaktifkan'}.`);
+                                                        }}
+                                                        className={`px-2.5 py-1 rounded-full font-bold text-[11px] border transition flex-shrink-0 ${bp.isActive
+                                                            ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700'
+                                                            : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+                                                            }`}
+                                                    >
+                                                        {bp.isActive ? '● Aktif' : '○ Nonaktif'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
 
                             {/* Desktop Table */}
                             <div className="hidden md:block overflow-x-auto">
@@ -2476,6 +2564,9 @@ export default function AdminPage() {
                                                 const can = Math.floor(ing.stock / r.quantity);
                                                 maxCups = maxCups === null ? can : Math.min(maxCups, can);
                                             });
+                                            const matchingBundle = bundlePromos.find(bp =>
+                                                bp.isActive && (!bp.productId || bp.productId === item.id || (bp.productId === '2' && item.name.toLowerCase().includes('imperial jasmine')))
+                                            );
                                             return (
                                                 <tr key={item.id} className={`hover:bg-blue-50/50 transition bg-white ${!item.isAvailable ? 'opacity-60' : ''}`}>
                                                     <td className="p-4">
@@ -2486,7 +2577,14 @@ export default function AdminPage() {
                                                         </div>
                                                     </td>
                                                     <td className="p-4">
-                                                        <p className="font-bold text-gray-800">{item.name}</p>
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <p className="font-bold text-gray-800">{item.name}</p>
+                                                            {matchingBundle && (
+                                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                                    🏷️ {matchingBundle.bundleQty || 3}{matchingBundle.targetSize || 'M'}={Math.round(matchingBundle.value / 1000)}rb
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <p className="text-xs text-gray-400 line-clamp-1">{item.description}</p>
                                                     </td>
                                                     <td className="p-4">
@@ -2528,8 +2626,15 @@ export default function AdminPage() {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="p-4 text-right font-mono font-bold text-forest">
-                                                        Rp {item.price.toLocaleString('id-ID')}
+                                                    <td className="p-4 text-right font-mono font-bold text-forest whitespace-nowrap">
+                                                        {typeof item.largePrice === 'number' ? (
+                                                            <div className="leading-tight">
+                                                                <div>M: Rp {item.price.toLocaleString('id-ID')}</div>
+                                                                <div className="text-[11px] font-semibold text-gray-500 mt-0.5">L: Rp {item.largePrice.toLocaleString('id-ID')}</div>
+                                                            </div>
+                                                        ) : (
+                                                            <>Rp {item.price.toLocaleString('id-ID')}</>
+                                                        )}
                                                     </td>
                                                     <td className="p-4 text-center">
                                                         <button
@@ -2564,7 +2669,11 @@ export default function AdminPage() {
 
                             {/* Mobile Cards */}
                             <div className="md:hidden divide-y divide-gray-100">
-                                {products.map(item => (
+                                {products.map(item => {
+                                    const matchingBundle = bundlePromos.find(bp =>
+                                        bp.isActive && (!bp.productId || bp.productId === item.id || (bp.productId === '2' && item.name.toLowerCase().includes('imperial jasmine')))
+                                    );
+                                    return (
                                     <div key={item.id} className={`p-4 flex gap-3 items-start ${!item.isAvailable ? 'opacity-60' : ''}`}>
                                         <div className="w-14 h-14 flex-shrink-0 rounded-xl bg-gray-100 overflow-hidden border border-gray-200 relative">
                                             {item.image ? (
@@ -2573,7 +2682,14 @@ export default function AdminPage() {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-start gap-2">
-                                                <p className="font-bold text-gray-800 text-sm leading-tight">{item.name}</p>
+                                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                                    <p className="font-bold text-gray-800 text-sm leading-tight">{item.name}</p>
+                                                    {matchingBundle && (
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                            🏷️ {matchingBundle.bundleQty || 3}{matchingBundle.targetSize || 'M'}={Math.round(matchingBundle.value / 1000)}rb
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 {user.role === 'admin' && (
                                                     <div className="flex gap-1 flex-shrink-0">
                                                         <button onClick={() => openEditModal(item)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition"><Edit size={14} /></button>
@@ -2596,15 +2712,26 @@ export default function AdminPage() {
                                                 <span className={`font-mono font-bold text-sm ${item.stock === 0 ? 'text-red-500' : item.stock <= (item.minStockThreshold || 5) ? 'text-yellow-600' : 'text-green-600'}`}>
                                                     {item.stock} stok
                                                 </span>
-                                                <span className="font-mono font-bold text-sm text-forest ml-auto">Rp {item.price.toLocaleString('id-ID')}</span>
+                                                <div className="font-mono font-bold text-sm text-forest ml-auto text-right">
+                                                    {typeof item.largePrice === 'number' ? (
+                                                        <>
+                                                            <span>M: Rp {item.price.toLocaleString('id-ID')}</span>
+                                                            <span className="block text-[11px] font-semibold text-gray-500">L: Rp {item.largePrice.toLocaleString('id-ID')}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span>Rp {item.price.toLocaleString('id-ID')}</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
-                )}
+                    );
+                })()}
 
                 {/* === LOGS TAB === */}
                 {activeTab === 'logs' && user.role === 'admin' && (
@@ -2963,11 +3090,38 @@ export default function AdminPage() {
                                                 <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${promo.isActive ? 'translate-x-5' : ''}`} />
                                             </button>
                                         </div>
-                                        <p className="text-3xl font-black text-orange-600 mt-3">
-                                            {promo.type === 'amount' ? `Rp ${promo.value.toLocaleString('id-ID')}` : `${promo.value}%`}
-                                        </p>
+                                        <div className="flex flex-wrap items-baseline gap-1.5 mt-3">
+                                            <p className="text-3xl font-black text-orange-600">
+                                                {(promo.type === 'amount' || promo.type === 'bundle')
+                                                    ? `Rp ${promo.value.toLocaleString('id-ID')}`
+                                                    : `${promo.value}%`}
+                                            </p>
+                                            {promo.type === 'bundle' && (
+                                                <span className="text-xs font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                                                    untuk {promo.bundleQty || 3} cup ({promo.targetSize || 'M'})
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex flex-wrap gap-1.5 mt-2 text-[10px] font-bold">
-                                            <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full uppercase">{promo.type === 'happy_hour' ? 'Happy Hour' : promo.type === 'percent' ? 'Diskon %' : 'Potongan Rp'}</span>
+                                            <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full uppercase">
+                                                {promo.type === 'bundle'
+                                                    ? 'Paket Bundle'
+                                                    : promo.type === 'happy_hour'
+                                                        ? 'Happy Hour'
+                                                        : promo.type === 'percent'
+                                                            ? 'Diskon %'
+                                                            : 'Potongan Rp'}
+                                            </span>
+                                            {promo.type === 'bundle' && (
+                                                <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full">
+                                                    ☕ {products.find(p => p.id === promo.productId)?.name || 'Semua Produk'} ({promo.targetSize || 'M'})
+                                                </span>
+                                            )}
+                                            {promo.alwaysApplyInPkl && (
+                                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                                    ✓ Aktif di Mode PKL
+                                                </span>
+                                            )}
                                             {promo.type === 'happy_hour' && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">⏰ {String(promo.startHour ?? 0).padStart(2, '0')}:00 - {String(promo.endHour ?? 0).padStart(2, '0')}:00</span>}
                                             {promo.minSubtotal ? <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">Min. Rp {promo.minSubtotal.toLocaleString('id-ID')}</span> : null}
                                             {liveNow && <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full animate-pulse">● Berlaku Sekarang</span>}
@@ -3195,7 +3349,7 @@ export default function AdminPage() {
                             <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
                         </div>
                         <div className="p-4 sm:p-6 space-y-5">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-gray-600">Nama Produk *</label>
                                     <input
@@ -3204,14 +3358,29 @@ export default function AdminPage() {
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-bold text-gray-600">Harga (Rp)</label>
-                                    <input
-                                        type="number"
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm text-gray-900"
-                                        value={formData.price}
-                                        onChange={e => setFormData({ ...formData, price: Number(e.target.value) })}
-                                    />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-bold text-gray-600">Harga Normal / Size M (Rp)</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm text-gray-900"
+                                            value={formData.price}
+                                            onChange={e => setFormData({ ...formData, price: Number(e.target.value) })}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-bold text-gray-600">Harga Size Large / L (Rp) <span className="font-normal text-xs text-gray-400">opsional</span></label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            placeholder="Default +Rp 2.000"
+                                            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-forest text-sm text-gray-900"
+                                            value={formData.largePrice ?? ''}
+                                            onChange={e => setFormData({ ...formData, largePrice: e.target.value === '' ? undefined : Number(e.target.value) })}
+                                        />
+                                        <p className="text-[11px] text-gray-400">Kosongkan agar Size L otomatis +Rp 2.000 dari harga M.</p>
+                                    </div>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4 bg-yellow-50 p-4 rounded-lg border border-yellow-100">
@@ -3679,21 +3848,88 @@ export default function AdminPage() {
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-600 mb-1 block">Tipe Promo</label>
-                                <select value={promoForm.type} onChange={e => setPromoForm(f => ({ ...f, type: e.target.value as 'percent' | 'amount' | 'happy_hour' }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition bg-white">
+                                <select
+                                    value={promoForm.type}
+                                    onChange={e => {
+                                        const nextType = e.target.value as PromoType;
+                                        setPromoForm(f => ({
+                                            ...f,
+                                            type: nextType,
+                                            value: nextType === 'bundle' && f.value <= 100 ? 10000 : f.value,
+                                            alwaysApplyInPkl: nextType === 'bundle' ? true : f.alwaysApplyInPkl,
+                                        }));
+                                    }}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition bg-white"
+                                >
                                     <option value="percent">Diskon Persen (%)</option>
                                     <option value="amount">Diskon Nominal (Rp)</option>
                                     <option value="happy_hour">Happy Hour (Jam Tertentu)</option>
+                                    <option value="bundle">Paket Bundle Produk (misal 3 Cup = Rp 10.000)</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-600 mb-1 block">
-                                    Nilai Diskon {promoForm.type === 'percent' ? '(%)' : '(Rp)'}
+                                    {promoForm.type === 'bundle'
+                                        ? 'Harga Paket Bundle (Rp)'
+                                        : `Nilai Diskon ${promoForm.type === 'amount' ? '(Rp)' : '(%)'}`}
                                 </label>
                                 <input type="number" min={0} value={promoForm.value}
                                     onChange={e => setPromoForm(f => ({ ...f, value: Number(e.target.value) }))}
                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition" />
                             </div>
+                            {promoForm.type === 'bundle' && (
+                                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-3">
+                                    <div>
+                                        <label className="text-xs font-bold text-amber-900 mb-1 block">Produk Target</label>
+                                        <select
+                                            value={promoForm.productId}
+                                            onChange={e => setPromoForm(f => ({ ...f, productId: e.target.value }))}
+                                            className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-amber-500"
+                                        >
+                                            {products.map(p => (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.name} (Rp {p.price.toLocaleString('id-ID')})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-xs font-bold text-amber-900 mb-1 block">Ukuran Target</label>
+                                            <select
+                                                value={promoForm.targetSize}
+                                                onChange={e => setPromoForm(f => ({ ...f, targetSize: e.target.value as 'M' | 'L' }))}
+                                                className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-amber-500"
+                                            >
+                                                <option value="M">Size M (Normal)</option>
+                                                <option value="L">Size L (Large)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-amber-900 mb-1 block">Jumlah Cup / Paket</label>
+                                            <input
+                                                type="number"
+                                                min={2}
+                                                value={promoForm.bundleQty}
+                                                onChange={e => setPromoForm(f => ({ ...f, bundleQty: Math.max(2, Number(e.target.value) || 2) }))}
+                                                className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-amber-500"
+                                            />
+                                        </div>
+                                    </div>
+                                    <p className="text-[11px] text-amber-900/80 font-medium leading-snug">
+                                        Simulasi: {promoForm.bundleQty || 3} cup ({promoForm.targetSize}) = Rp {Number(promoForm.value || 0).toLocaleString('id-ID')} · {(promoForm.bundleQty || 3) * 2} cup = Rp {(Number(promoForm.value || 0) * 2).toLocaleString('id-ID')}
+                                    </p>
+                                    <label className="flex items-center gap-2 text-xs font-bold text-amber-900 cursor-pointer pt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={promoForm.alwaysApplyInPkl}
+                                            onChange={e => setPromoForm(f => ({ ...f, alwaysApplyInPkl: e.target.checked }))}
+                                            className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                                        />
+                                        Tetap berlaku di Mode PKL (Kasir &amp; Web Menu)
+                                    </label>
+                                </div>
+                            )}
                             {promoForm.type === 'happy_hour' && (
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>

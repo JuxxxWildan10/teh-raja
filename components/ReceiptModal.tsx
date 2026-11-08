@@ -55,7 +55,11 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
     };
 
     const handleWhatsApp = async () => {
-        const itemsList = order.items.map(i => `• ${i.quantity}x ${i.name} - ${formatRp(i.price * i.quantity)}${i.variants ? ` (${formatVariantLabel(i.variants)})` : ''}`).join('\n');
+        const itemsList = order.items.map(i => {
+            const unit = i.finalPrice ?? i.price;
+            return `• ${i.quantity}x ${i.name} - ${formatRp(unit * i.quantity)}${i.variants ? ` (${formatVariantLabel(i.variants)})` : ''}`;
+        }).join('\n');
+        const discountTitle = order.promoName ? `Promo (${order.promoName})` : 'Diskon';
         const textReceipt = `🍵 *STRUK PEMBELIAN TEH RAJA*
 _Rajanya Es Teh_
 📍 2XVC+5Q3, Siandong, Kec. Larangan, Kab. Brebes, Jawa Tengah 52262
@@ -63,13 +67,13 @@ _Rajanya Es Teh_
 No. Order : #${order.id.slice(0, 8).toUpperCase()}
 Tanggal   : ${new Date(order.date).toLocaleString('id-ID')}
 Kasir     : ${order.cashierName || 'Kasir Teh Raja'}
-Pelanggan : ${order.customerName || 'Tamu'}
+Pelanggan : ${order.customerName || 'Pelanggan'}
 ${order.tableNumber ? `Meja/Tipe : ${order.tableNumber} (${order.orderType || 'Dine-in'})\n` : ''}──────────────────────────────
 *PESANAN:*
 ${itemsList}
 ──────────────────────────────
 Subtotal  : ${formatRp(order.subtotal || order.total)}
-${order.discount ? `Diskon    : -${formatRp(order.discount)}\n` : ''}*TOTAL     : ${formatRp(order.total)}*
+${order.discount ? `${discountTitle} : -${formatRp(order.discount)}\n` : ''}*TOTAL     : ${formatRp(order.total)}*
 Bayar     : ${(order.paymentMethod || 'cash').toUpperCase()} (${formatRp(order.cashReceived || order.total)})
 ${order.changeAmount ? `Kembali   : ${formatRp(order.changeAmount)}\n` : ''}──────────────────────────────
 _Terima kasih telah menikmati Teh Raja!_
@@ -144,7 +148,7 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
                 <div className="mb-3 border-b border-dashed border-gray-300 pb-3 space-y-0.5">
                     <div className="flex justify-between">
                         <span className="text-gray-600">Pelanggan</span>
-                        <span className="font-bold">{order.customerName || 'Guest'}</span>
+                        <span className="font-bold">{order.customerName || 'Pelanggan'}</span>
                     </div>
                     {order.tableNumber && (
                         <div className="flex justify-between">
@@ -198,11 +202,13 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
                                 <span>Subtotal</span>
                                 <span>{formatRp(order.subtotal || order.total + order.discount)}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-red-600 font-bold">
-                                <span>
-                                    Diskon{order.discountType === 'percent' ? ` (${order.discountValue}%)` : ''}
+                            <div className="flex justify-between gap-2 text-xs text-red-600 font-bold">
+                                <span className="min-w-0 break-words">
+                                    {order.promoName
+                                        ? order.promoName
+                                        : `Diskon${order.discountType === 'percent' ? ` (${order.discountValue}%)` : ''}`}
                                 </span>
-                                <span>-{formatRp(order.discount)}</span>
+                                <span className="flex-shrink-0">-{formatRp(order.discount)}</span>
                             </div>
                         </>
                     )}

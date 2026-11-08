@@ -21,6 +21,7 @@ export type Product = {
     id: string;
     name: string;
     price: number;
+    largePrice?: number; // Opsional: harga khusus cup ukuran L jika berbeda dari default (+Rp 2.000)
     description: string;
     image: string;
     category: 'signature' | 'milk' | 'fruit' | 'classic' | 'snack' | 'food';
@@ -54,8 +55,9 @@ export const products: Product[] = [
     {
         id: '2',
         name: 'Imperial Jasmine',
-        price: 3000,
-        description: 'Teh melati wangi yang harum dan menenangkan .',
+        price: 3500,
+        largePrice: 5000,
+        description: 'Teh melati wangi yang harum dan menenangkan. Promo Size M: beli 3 cup Rp 10.000, 6 cup Rp 20.000!',
         image: 'https://i.pinimg.com/736x/15/0d/e4/150de4882a02714ec9c4f585f29a433e.jpg',
         category: 'classic',
         attributes: { sweet: 6, creamy: 0, fruity: 2 },

@@ -13,7 +13,7 @@
  * 3. `useProductStore`         : Mengelola katalog produk, harga, ketersediaan menu, dan pemotongan/pengembalian stok langsung.
  * 4. `useSalesStore`           : Mengelola daftar pesanan (`orders`), antrean offline (`offlineOrders`), sesi buka/tutup shift kasir (`sessions`),
  *                                rekonsiliasi uang laci, *hold order*, dan analitik penjualan harian.
- * 5. `usePromoStore`           : Mengelola aturan diskon otomatis (Persen, Nominal, Happy Hour) — *Fitur Pengembangan Lanjutan*.
+ * 5. `usePromoStore`           : Mengelola aturan diskon otomatis (Persen, Nominal, Happy Hour) & Paket Bundle produk (aktif di Mode PKL & Full, misal Imperial Jasmine 3M = Rp 10.000).
  * 6. `useCustomerStore`        : Mengelola member CRM dan poin loyalitas — *Fitur Pengembangan Lanjutan*.
  * 7. `useInventoryStore`       : **INTI MANAJEMEN BAHAN BAKU (BOM)** — Mengelola 9 bahan baku utama, rumus pemotongan takaran resep
  *                                (`calculateRecipeIngredientQty` & `decrementIngredientsForOrder`), *rollback* stok saat order batal
@@ -77,6 +77,42 @@ export interface ProductVariants {
 
 const VARIANT_SIZE_UPCHARGE: Record<string, number> = { M: 0, L: 2000 };
 
+/**
+ * Menghitung tambahan harga untuk ukuran cup (`M` = normal, `L` = +Rp 2.000 default
+ * atau menggunakan `product.largePrice` khusus seperti Imperial Jasmine L = Rp 5.000).
+ */
+export function getSizeUpcharge(
+    product: Pick<Product, 'id' | 'price' | 'largePrice'>,
+    size: 'M' | 'L' = 'M'
+): number {
+    if (size !== 'L') return 0;
+    if (typeof product.largePrice === 'number' && product.largePrice >= 0) {
+        return Math.max(0, product.largePrice - product.price);
+    }
+    if (product.id === '2') {
+        return Math.max(0, 5000 - product.price);
+    }
+    return VARIANT_SIZE_UPCHARGE.L;
+}
+
+/**
+ * Menghitung harga satuan akhir suatu produk berdasarkan ukuran (`M` / `L`).
+ */
+export function getVariantUnitPrice(
+    product: Pick<Product, 'id' | 'price' | 'largePrice'>,
+    size: 'M' | 'L' = 'M'
+): number {
+    if (size === 'L') {
+        if (typeof product.largePrice === 'number' && product.largePrice >= 0) {
+            return product.largePrice;
+        }
+        if (product.id === '2') {
+            return 5000;
+        }
+    }
+    return product.price + getSizeUpcharge(product, size);
+}
+
 export function formatVariantLabel(v?: ProductVariants): string {
     if (!v) return '';
     const parts = [];
@@ -119,6 +155,7 @@ export interface ExtendedProduct extends Product {
     minStockThreshold?: number;
     recipe?: RecipeItem[]; // BOM
     hasCustomRecipe?: boolean; // Menandai resep sudah pernah diedit/dihapus agar tidak ditimpa ulang oleh default seed
+    hasCustomPrice?: boolean;  // Menandai harga sudah diperbarui Admin agar tidak tertimpa seed awal
 }
 
 export interface ActivityLog {
@@ -138,6 +175,7 @@ export interface Order {
     discount?: number; // Nominal discount
     discountType?: 'amount' | 'percent';
     discountValue?: number; // Original input (e.g. 10 for 10%)
+    promoName?: string; // Nama promo otomatis yang diterapkan (misal Paket Imperial Jasmine 3 Cup M)
     customerName?: string;
     cashierName?: string;
     status: 'pending' | 'awaiting_payment' | 'processing' | 'completed' | 'cancelled';
@@ -276,19 +314,130 @@ export function getEnrichedSessions(sessions: StoreSession[]): EnrichedStoreSess
     });
 }
 
+/**
+ * Menghasilkan label pembeli otomatis berurutan ("Customer 1", "Customer 2", "Customer 3", ...)
+ * untuk tanggal tertentu (default: hari ini) dan otomatis reset ke "Customer 1" setiap pergantian hari.
+ */
+export function getNextCustomerLabel(orders: Order[], dateKey: string = getTodayDateKey()): string {
+    const validTodayOrders = orders.filter(
+        o => o.status !== 'cancelled' && toLocalDateKey(o.date) === dateKey
+    );
+    let maxSeq = 0;
+    for (const o of validTodayOrders) {
+        const match = (o.customerName || '').trim().match(/^customer\s+(\d+)$/i);
+        if (match) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > maxSeq) maxSeq = num;
+        }
+    }
+    const nextNumber = Math.max(maxSeq + 1, validTodayOrders.length + 1);
+    return `Customer ${nextNumber}`;
+}
+
 // ── Promo Engine ─────────────────────────────────────────────
-export type PromoType = 'percent' | 'amount' | 'happy_hour';
+export type PromoType = 'percent' | 'amount' | 'happy_hour' | 'bundle';
 
 export interface Promo {
     id: string;
-    name: string;            // e.g. "Happy Hour Sore"
+    name: string;            // e.g. "Paket Hemat Imperial Jasmine (M)"
     type: PromoType;
-    value: number;           // e.g. 10 for 10% | 5000 for Rp5.000
+    value: number;           // e.g. 10 for 10% | 5000 for Rp5.000 | 10000 for bundle 3 cup = Rp10.000
     minSubtotal?: number;    // Minimum purchase to apply (optional)
     startHour?: number;      // For happy_hour type (0-23)
     endHour?: number;        // For happy_hour type (0-23)
+    productId?: string;      // Khusus type 'bundle': ID produk target (misal '2' untuk Imperial Jasmine)
+    targetSize?: 'M' | 'L';  // Khusus type 'bundle': ukuran cup target (misal 'M')
+    bundleQty?: number;      // Khusus type 'bundle': jumlah cup per paket (misal 3)
+    alwaysApplyInPkl?: boolean; // True = tetap berlaku walau Mode Pengembangan Lanjutan dikunci
     isActive: boolean;
     description?: string;
+}
+
+export const DEFAULT_JASMINE_BUNDLE_PROMO: Promo = {
+    id: 'promo-jasmine-bundle-3',
+    name: 'Paket Hemat Imperial Jasmine (M)',
+    type: 'bundle',
+    productId: '2',
+    targetSize: 'M',
+    bundleQty: 3,
+    value: 10000, // 3 cup M = Rp 10.000, 6 cup M = Rp 20.000
+    alwaysApplyInPkl: true,
+    isActive: true,
+    description: 'Beli 3 cup Imperial Jasmine (M) hanya Rp 10.000, 6 cup Rp 20.000 (kelipatan 3 cup).',
+};
+
+/**
+ * Mengecek apakah sebuah CartItem memenuhi kriteria promo produk tertentu.
+ */
+export function doesCartItemMatchBundlePromo(item: CartItem, promo: Promo): boolean {
+    if (promo.type !== 'bundle') return false;
+    const itemSize = item.variants?.size || 'M';
+    if (promo.targetSize && itemSize !== promo.targetSize) return false;
+    if (promo.productId) {
+        if (item.id === promo.productId) return true;
+        if (promo.productId === '2' && item.name.toLowerCase().includes('imperial jasmine')) return true;
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Menghitung total diskon nominal dari promo tipe `bundle` (kelipatan X cup = Rp Y),
+ * menggabungkan semua varian gula/es asalkan produk & ukuran (`M`/`L`) cocok.
+ */
+export function calculateBundlePromoDiscount(promo: Promo, items: CartItem[]): number {
+    if (promo.type !== 'bundle' || !promo.isActive || items.length === 0) return 0;
+    const bundleQty = Math.max(1, promo.bundleQty || 3);
+    const bundlePrice = Math.max(0, promo.value || 0);
+
+    const eligibleUnitPrices: number[] = [];
+    for (const item of items) {
+        if (!doesCartItemMatchBundlePromo(item, promo)) continue;
+        const unitPrice = item.finalPrice ?? item.price;
+        for (let q = 0; q < item.quantity; q++) {
+            eligibleUnitPrices.push(unitPrice);
+        }
+    }
+
+    const bundles = Math.floor(eligibleUnitPrices.length / bundleQty);
+    if (bundles <= 0) return 0;
+
+    eligibleUnitPrices.sort((a, b) => b - a);
+    const coveredCount = bundles * bundleQty;
+    let normalCost = 0;
+    for (let i = 0; i < coveredCount; i++) {
+        normalCost += eligibleUnitPrices[i];
+    }
+    const targetCost = bundles * bundlePrice;
+    return Math.max(0, normalCost - targetCost);
+}
+
+/**
+ * Menghitung info progres paket bundle untuk ditampilkan sebagai hint/upsell ringan
+ * di keranjang pelanggan & kasir (misal: "Tambah 1 cup lagi untuk paket 3 cup = Rp 10.000!").
+ */
+export function getBundlePromoStatus(promo: Promo, items: CartItem[]): {
+    eligibleQty: number;
+    bundleQty: number;
+    activeBundles: number;
+    remainingForNextBundle: number;
+    discountAmount: number;
+} {
+    const bundleQty = Math.max(1, promo.bundleQty || 3);
+    const eligibleQty = items
+        .filter(item => doesCartItemMatchBundlePromo(item, promo))
+        .reduce((sum, item) => sum + item.quantity, 0);
+    const activeBundles = Math.floor(eligibleQty / bundleQty);
+    const remainder = eligibleQty % bundleQty;
+    const remainingForNextBundle = eligibleQty > 0 && remainder > 0 ? bundleQty - remainder : 0;
+    const discountAmount = calculateBundlePromoDiscount(promo, items);
+    return {
+        eligibleQty,
+        bundleQty,
+        activeBundles,
+        remainingForNextBundle,
+        discountAmount,
+    };
 }
 
 // ── Customer Loyalty ─────────────────────────────────────────
@@ -547,13 +696,17 @@ export const useProductStore = create<ProductState>()(
                 firebaseSet(ref(rtdb, `products/${product.id}`), JSON.parse(JSON.stringify(product))).catch(err => console.warn(err));
             },
             updateProduct: (id, updated) => {
-                const payload = updated.recipe !== undefined
-                    ? { ...updated, hasCustomRecipe: true }
-                    : updated;
+                const payload: Partial<ExtendedProduct> = { ...updated };
+                if (updated.recipe !== undefined) payload.hasCustomRecipe = true;
+                if (updated.price !== undefined || 'largePrice' in updated) payload.hasCustomPrice = true;
                 set((state) => ({
                     products: state.products.map((p) => (p.id === id ? { ...p, ...payload } : p))
                 }));
-                firebaseUpdate(ref(rtdb, `products/${id}`), JSON.parse(JSON.stringify(payload))).catch(err => console.warn(err));
+                const rtdbPayload = JSON.parse(JSON.stringify(payload));
+                if ('largePrice' in updated && updated.largePrice === undefined) {
+                    rtdbPayload.largePrice = null;
+                }
+                firebaseUpdate(ref(rtdb, `products/${id}`), rtdbPayload).catch(err => console.warn(err));
             },
             deleteProduct: (id) => {
                 set((state) => ({
@@ -625,7 +778,35 @@ export const useProductStore = create<ProductState>()(
                 })
             }
         }),
-        { name: 'teh-raja-products-v4', storage: createJSONStorage(() => idbStorage) }
+        {
+            name: 'teh-raja-products-v4',
+            storage: createJSONStorage(() => idbStorage),
+            version: 2,
+            migrate: (persistedState: unknown, version: number) => {
+                const s = persistedState as { products?: ExtendedProduct[] } | undefined;
+                if (!s || !Array.isArray(s.products)) return persistedState as ProductState;
+                if (version < 2) {
+                    return {
+                        ...s,
+                        products: s.products.map((p) => {
+                            if (p.id === '2' && !p.hasCustomPrice && (p.price === 3000 || p.largePrice === undefined)) {
+                                return {
+                                    ...p,
+                                    price: 3500,
+                                    largePrice: 5000,
+                                    hasCustomPrice: true,
+                                    description: p.description?.trim().startsWith('Teh melati wangi yang harum')
+                                        ? 'Teh melati wangi yang harum dan menenangkan. Promo Size M: beli 3 cup Rp 10.000, 6 cup Rp 20.000!'
+                                        : p.description,
+                                };
+                            }
+                            return p;
+                        }),
+                    };
+                }
+                return s;
+            },
+        }
     )
 );
 
@@ -719,8 +900,14 @@ export const useSalesStore = create<SalesState>()(
 
             addOrder: (order) => {
                 const activeSessionId = get().isStoreOpen ? (get().currentSessionId || undefined) : undefined;
+                const autoCustomerName = order.customerName?.trim()
+                    || getNextCustomerLabel(
+                        [...get().orders, ...get().heldOrders],
+                        toLocalDateKey(order.date) || getTodayDateKey()
+                    );
                 const orderWithBranch: Order = {
                     ...order,
+                    customerName: autoCustomerName,
                     branchId: order.branchId || get().branchId || 'main',
                     sessionId: order.sessionId || activeSessionId,
                 };
@@ -871,18 +1058,24 @@ export const useSalesStore = create<SalesState>()(
 // ══════════════════════════════════════════════════════
 interface PromoState {
     promos: Promo[];
+    deletedPromoIds: string[];
     addPromo: (promo: Promo) => void;
     updatePromo: (id: string, updated: Partial<Promo>) => void;
     deletePromo: (id: string) => void;
     togglePromo: (id: string) => void;
-    /** Returns the best applicable promo for a given subtotal & current time */
-    getApplicablePromo: (subtotal: number) => { promo: Promo; discountAmount: number } | null;
+    /** Mengembalikan promo terbaik yang berlaku (mendukung promo produk bundle di Mode PKL) */
+    getApplicablePromo: (
+        subtotal: number,
+        items?: CartItem[],
+        includeAdvancedPromos?: boolean
+    ) => { promo: Promo; discountAmount: number } | null;
 }
 
 export const usePromoStore = create<PromoState>()(
     persist(
         (set, get) => ({
             promos: [
+                DEFAULT_JASMINE_BUNDLE_PROMO,
                 {
                     id: 'promo-happy-hour',
                     name: 'Happy Hour Sore',
@@ -903,9 +1096,16 @@ export const usePromoStore = create<PromoState>()(
                     description: 'Diskon 10% otomatis untuk pembelian min. Rp 25.000',
                 },
             ],
+            deletedPromoIds: [],
             addPromo: (promo) => {
-                set((s) => ({ promos: [...s.promos, promo] }));
-                firebaseSet(ref(rtdb, `promos/${promo.id}`), JSON.parse(JSON.stringify(promo))).catch(console.warn);
+                set((s) => ({
+                    promos: [...s.promos.filter(p => p.id !== promo.id), promo],
+                    deletedPromoIds: (s.deletedPromoIds || []).filter(id => id !== promo.id),
+                }));
+                firebaseUpdate(ref(rtdb), {
+                    [`promos/${promo.id}`]: JSON.parse(JSON.stringify(promo)),
+                    [`deletedPromos/${promo.id}`]: null,
+                }).catch(console.warn);
             },
             updatePromo: (id, updated) => {
                 set((s) => ({
@@ -914,8 +1114,17 @@ export const usePromoStore = create<PromoState>()(
                 firebaseUpdate(ref(rtdb, `promos/${id}`), JSON.parse(JSON.stringify(updated))).catch(console.warn);
             },
             deletePromo: (id) => {
-                set((s) => ({ promos: s.promos.filter((p) => p.id !== id) }));
-                firebaseSet(ref(rtdb, `promos/${id}`), null).catch(console.warn);
+                set((s) => {
+                    const prevDeleted = s.deletedPromoIds || [];
+                    return {
+                        promos: s.promos.filter((p) => p.id !== id),
+                        deletedPromoIds: prevDeleted.includes(id) ? prevDeleted : [...prevDeleted, id],
+                    };
+                });
+                firebaseUpdate(ref(rtdb), {
+                    [`promos/${id}`]: null,
+                    [`deletedPromos/${id}`]: true,
+                }).catch(console.warn);
             },
             togglePromo: (id) => {
                 set((s) => {
@@ -930,10 +1139,12 @@ export const usePromoStore = create<PromoState>()(
                     return { promos: updatedPromos };
                 });
             },
-            getApplicablePromo: (subtotal) => {
+            getApplicablePromo: (subtotal, items = [], includeAdvancedPromos = true) => {
                 const now = new Date();
                 const currentHour = now.getHours();
-                const activePromos = get().promos.filter((p) => p.isActive);
+                const activePromos = get().promos.filter(
+                    (p) => p.isActive && (includeAdvancedPromos || p.type === 'bundle' || p.alwaysApplyInPkl)
+                );
                 let best: { promo: Promo; discountAmount: number } | null = null;
 
                 for (const promo of activePromos) {
@@ -941,7 +1152,9 @@ export const usePromoStore = create<PromoState>()(
 
                     let discountAmount = 0;
 
-                    if (promo.type === 'happy_hour') {
+                    if (promo.type === 'bundle') {
+                        discountAmount = calculateBundlePromoDiscount(promo, items);
+                    } else if (promo.type === 'happy_hour') {
                         const start = promo.startHour ?? 0;
                         const end = promo.endHour ?? 23;
                         if (currentHour < start || currentHour >= end) continue;
@@ -959,7 +1172,27 @@ export const usePromoStore = create<PromoState>()(
                 return best;
             },
         }),
-        { name: 'teh-raja-promos-v1', storage: createJSONStorage(() => idbStorage) }
+        {
+            name: 'teh-raja-promos-v1',
+            storage: createJSONStorage(() => idbStorage),
+            version: 2,
+            migrate: (persistedState: unknown, version: number) => {
+                const s = persistedState as { promos?: Promo[]; deletedPromoIds?: string[] } | undefined;
+                if (!s || !Array.isArray(s.promos)) return persistedState as PromoState;
+                if (version < 2) {
+                    const deleted = s.deletedPromoIds || [];
+                    const hasJasmineBundle = s.promos.some(p => p.id === DEFAULT_JASMINE_BUNDLE_PROMO.id);
+                    return {
+                        ...s,
+                        deletedPromoIds: deleted,
+                        promos: (!hasJasmineBundle && !deleted.includes(DEFAULT_JASMINE_BUNDLE_PROMO.id))
+                            ? [DEFAULT_JASMINE_BUNDLE_PROMO, ...s.promos]
+                            : s.promos,
+                    };
+                }
+                return s;
+            },
+        }
     )
 );
 

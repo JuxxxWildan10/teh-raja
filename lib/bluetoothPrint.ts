@@ -25,13 +25,14 @@ function encoder(text: string): Uint8Array {
 
 function buildReceipt(order: {
     id: string;
-    customerName: string;
-    items: Array<{ name: string; quantity: number; price: number; variants?: Record<string, string> }>;
+    customerName?: string;
+    items: Array<{ name: string; quantity: number; price: number; finalPrice?: number; variants?: Record<string, string> }>;
     total: number;
     paymentMethod: string;
     cashReceived?: number;
     changeAmount?: number;
     discount?: number;
+    promoName?: string;
     date: string;
     tableNumber?: string;
     orderType?: string;
@@ -77,14 +78,14 @@ function buildReceipt(order: {
     });
     pushText(`Order : #${order.id.slice(0, 8).toUpperCase()}\n`);
     pushText(`Waktu : ${dateStr}\n`);
-    pushText(`Nama  : ${order.customerName}\n`);
+    pushText(`Nama  : ${order.customerName || 'Pelanggan'}\n`);
     if (order.tableNumber) pushText(`Meja  : ${order.tableNumber}\n`);
     pushText(`Tipe  : ${order.orderType === 'dine-in' ? 'Dine In' : 'Take Away'}\n`);
     pushText('--------------------------------\n');
 
     // Items
     order.items.forEach(item => {
-        const subtotal = item.price * item.quantity;
+        const subtotal = (item.finalPrice ?? item.price) * item.quantity;
         const itemLine = `${item.quantity}x ${item.name}`;
         pushText(rightAlignRow(itemLine, formatRp(subtotal)) + '\n');
         if (item.variants && Object.keys(item.variants).length > 0) {
@@ -97,7 +98,8 @@ function buildReceipt(order: {
 
     // Totals
     if (order.discount && order.discount > 0) {
-        pushText(rightAlignRow('Diskon', `-${formatRp(order.discount)}`) + '\n');
+        const discLabel = order.promoName ? `Promo: ${order.promoName}` : 'Diskon';
+        pushText(rightAlignRow(discLabel.slice(0, 20), `-${formatRp(order.discount)}`) + '\n');
     }
     push([ESC, 0x45, 0x01]); // bold
     pushText(rightAlignRow('TOTAL', formatRp(order.total)) + '\n');

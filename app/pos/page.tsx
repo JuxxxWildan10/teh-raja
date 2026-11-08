@@ -31,7 +31,8 @@ import {
     useAuthStore, useCartStore, useProductStore, useSalesStore,
     usePromoStore, useCustomerStore, useInventoryStore, useExpenseStore, useStoreConfigStore,
     SHOP_CLOSE_PRESETS, Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES, POINTS_REDEEM_VALUE,
-    getEnrichedSessions, isOrderInSession, isExpenseInSession, getTodayDateKey, toLocalDateKey, getInsufficientBomIngredients
+    getEnrichedSessions, isOrderInSession, isExpenseInSession, getTodayDateKey, toLocalDateKey, getInsufficientBomIngredients,
+    getNextCustomerLabel, getVariantUnitPrice, getBundlePromoStatus
 } from "@/lib/store";
 import { nanoid } from "nanoid";
 import Image from "next/image";
@@ -77,7 +78,7 @@ export default function POSPage() {
     const { items, addToCart, removeFromCart, updateQuantity, updateNote, clearCart, total } = useCartStore();
     const { products, decrementStock } = useProductStore();
     const { addOrder, addLog, isStoreOpen, openStore, closeStore, heldOrders, holdOrder, resumeOrder, deleteHeldOrder, orders, updateOrderStatus, branchId, branchName, sessions, currentSessionId } = useSalesStore();
-    const { getApplicablePromo } = usePromoStore();
+    const { promos, getApplicablePromo } = usePromoStore();
     const { findByPhone, addCustomer, addPoints, redeemPoints } = useCustomerStore();
     const { decrementIngredientsForOrder, ingredients } = useInventoryStore();
     const { isOnlineOrderOpen, closedBadge, openOnlineStore, closeOnlineStore } = useStoreConfigStore();
@@ -303,9 +304,20 @@ export default function POSPage() {
     }, [products, activeCategory, search, showFlavorFinder, flavorRecommendations]);
 
     // ── Cart & Loyalty Calculations ───────────────────────────
+    const nextCustomerLabel = useMemo(
+        () => getNextCustomerLabel([...orders, ...heldOrders]),
+        [orders, heldOrders]
+    );
     const subtotal = total();
-    // Promo Engine otomatis hanya berlaku jika fitur lanjutan dibuka (isAdvancedUnlocked)
-    const applicablePromo = isAdvancedUnlocked ? getApplicablePromo(subtotal) : null;
+    // Promo bundle produk (misal Imperial Jasmine 3 cup M = 10rb) tetap berlaku otomatis di Mode PKL
+    const applicablePromo = getApplicablePromo(subtotal, items, isAdvancedUnlocked);
+    const bundleNudge = useMemo(() => {
+        const candidate = promos
+            .filter(p => p.isActive && p.type === 'bundle' && (isAdvancedUnlocked || p.alwaysApplyInPkl || p.type === 'bundle'))
+            .map(p => ({ promo: p, ...getBundlePromoStatus(p, items) }))
+            .find(st => st.eligibleQty > 0 && st.remainingForNextBundle > 0);
+        return candidate || null;
+    }, [promos, items, isAdvancedUnlocked]);
 
     const discountAmount = useMemo(() => {
         if (discountMode === 'none' && applicablePromo) {
@@ -387,15 +399,27 @@ export default function POSPage() {
     // ── Hold Order ────────────────────────────────────────────
     const handleHoldOrder = useCallback(() => {
         if (items.length === 0) { toast.warning('Keranjang kosong.'); return; }
+        const resolvedHoldName = customerName.trim() || getNextCustomerLabel([...orders, ...heldOrders]);
+        const heldDiscountType: Order['discountType'] = discountMode !== 'none'
+            ? discountMode
+            : (applicablePromo
+                ? ((applicablePromo.promo.type === 'percent' || applicablePromo.promo.type === 'happy_hour') ? 'percent' : 'amount')
+                : undefined);
+        const heldDiscountValue = discountMode !== 'none'
+            ? parseFloat(discountValue)
+            : (applicablePromo
+                ? (heldDiscountType === 'percent' ? applicablePromo.promo.value : applicablePromo.discountAmount)
+                : undefined);
         const heldOrder: Order = {
             id: nanoid(),
             date: new Date().toISOString(),
             items: items.map(it => ({ ...it })),
             total: orderTotal, subtotal,
             discount: discountAmount,
-            discountType: discountMode !== 'none' ? discountMode : undefined,
-            discountValue: discountMode !== 'none' ? parseFloat(discountValue) : undefined,
-            customerName: customerName || '(hold)',
+            discountType: heldDiscountType,
+            discountValue: heldDiscountValue,
+            promoName: discountMode === 'none' && applicablePromo ? applicablePromo.promo.name : undefined,
+            customerName: resolvedHoldName,
             customerPhone: customerPhone.trim() || undefined,
             cashierName: user?.name || 'Kasir',
             status: 'pending', orderType,
@@ -407,8 +431,8 @@ export default function POSPage() {
         setCustomerName(''); setCustomerPhone(''); setTableNumber(''); setCashReceived('');
         setDiscountMode('none'); setDiscountValue('');
         toast.info(`Pesanan "${heldOrder.customerName}" di-hold.`);
-    }, [items, orderTotal, subtotal, discountAmount, discountMode, discountValue,
-        customerName, customerPhone, orderType, tableNumber, user, branchId, holdOrder, clearCart, toast]);
+    }, [items, orderTotal, subtotal, discountAmount, discountMode, discountValue, applicablePromo,
+        customerName, customerPhone, orderType, tableNumber, user, branchId, orders, heldOrders, holdOrder, clearCart, toast]);
 
     const handleResumeOrder = useCallback((heldId: string) => {
         const held = resumeOrder(heldId);
@@ -477,10 +501,7 @@ export default function POSPage() {
                     data.items.forEach((parsedItem: any) => {
                         const product = products.find(p => p.id === parsedItem.productId);
                         if (product) {
-                            let finalPrice = product.price;
-                            if (parsedItem.variants && parsedItem.variants.size === 'L') {
-                                finalPrice += 2000;
-                            }
+                            const finalPrice = getVariantUnitPrice(product, parsedItem.variants?.size || 'M');
                             for (let i = 0; i < (parsedItem.quantity || 1); i++) {
                                 addToCart(product, parsedItem.variants, finalPrice);
                             }
@@ -519,14 +540,15 @@ export default function POSPage() {
     }, [isListening, isProcessingVoice, products, addToCart, toast]);
 
     // ── FUNGSI UTAMA CHECKOUT TRANSAKSI KASIR & PEMOTONGAN RESEP BOM ──
-    // 1. Memvalidasi status buka shift, nama pelanggan, dan kecukupan uang tunai / konfirmasi QRIS.
+    // 1. Memvalidasi status buka shift dan kecukupan uang tunai / konfirmasi QRIS.
+    //    (Jika nama pelanggan kosong, otomatis memakai label Customer 1, 2, 3, ... harian).
     // 2. Menyimpan objek pesanan (`addOrder`) ke IndexedDB lokal & Firebase Realtime Database.
     // 3. Memotong stok produk (`decrementStock`) dan memotong takaran bahan baku sesuai resep BOM (`decrementIngredientsForOrder`).
     // 4. Membuka modal struk (`ReceiptModal`) untuk cetak Bluetooth 58mm / Browser / WhatsApp.
     const handleCheckout = useCallback(() => {
         if (!isStoreOpen) { toast.error('Toko harus dibuka terlebih dahulu!'); return; }
         if (items.length === 0) return;
-        if (!customerName.trim()) { toast.error('Mohon isi nama pelanggan.'); return; }
+        const resolvedCustomerName = customerName.trim() || getNextCustomerLabel([...orders, ...heldOrders]);
         if (paymentMethod === 'cash' && cashIn < orderTotal) {
             toast.error(`Uang kurang! Perlu ${formatRp(orderTotal - cashIn)} lagi.`);
             return;
@@ -555,7 +577,7 @@ export default function POSPage() {
                 if (!customer) {
                     addCustomer({
                         id: nanoid(),
-                        name: customerName.trim(),
+                        name: resolvedCustomerName,
                         phone: cleanPhone,
                         points: 0,
                         totalSpent: 0,
@@ -566,16 +588,36 @@ export default function POSPage() {
             }
         }
 
+        const totalOrderDiscount = discountAmount + pointsDiscount;
+        const resolvedDiscountType: Order['discountType'] = totalOrderDiscount > 0
+            ? (discountMode !== 'none'
+                ? discountMode
+                : (pointsDiscount === 0 && applicablePromo && (applicablePromo.promo.type === 'percent' || applicablePromo.promo.type === 'happy_hour')
+                    ? 'percent'
+                    : 'amount'))
+            : undefined;
+        const resolvedDiscountValue = totalOrderDiscount > 0
+            ? (discountMode !== 'none'
+                ? (parseFloat(discountValue) || 0)
+                : (resolvedDiscountType === 'percent' && applicablePromo ? applicablePromo.promo.value : totalOrderDiscount))
+            : undefined;
+        const resolvedPromoName = discountMode === 'none'
+            ? (applicablePromo
+                ? `${applicablePromo.promo.name}${pointsDiscount > 0 ? ' + Poin' : ''}`
+                : (pointsDiscount > 0 ? `Tukar ${pointsToRedeem} Poin` : undefined))
+            : undefined;
+
         const newOrder: Order = {
             id: nanoid(),
             date: new Date().toISOString(),
             items: items.map(it => ({ ...it })),
             subtotal,
-            discount: (discountAmount + pointsDiscount) > 0 ? (discountAmount + pointsDiscount) : undefined,
-            discountType: discountMode !== 'none' ? discountMode : (applicablePromo ? 'percent' : undefined),
-            discountValue: discountMode !== 'none' ? parseFloat(discountValue) : (applicablePromo ? applicablePromo.promo.value : undefined),
+            discount: totalOrderDiscount > 0 ? totalOrderDiscount : undefined,
+            discountType: resolvedDiscountType,
+            discountValue: resolvedDiscountValue,
+            promoName: resolvedPromoName,
             total: orderTotal,
-            customerName: customerName.trim(),
+            customerName: resolvedCustomerName,
             customerPhone: cleanPhone || undefined,
             cashierName: user?.name || 'Kasir',
             status: 'processing',
@@ -588,7 +630,7 @@ export default function POSPage() {
             sessionId: currentSessionId || undefined,
         };
         addOrder(newOrder);
-        addLog('SALE', `Order #${newOrder.id.slice(0, 6)} - ${formatRp(orderTotal)} via ${paymentMethod}`, user?.name || 'Kasir');
+        addLog('SALE', `Order #${newOrder.id.slice(0, 6)} (${resolvedCustomerName}) - ${formatRp(orderTotal)} via ${paymentMethod}`, user?.name || 'Kasir');
         decrementStock(items);
         decrementIngredientsForOrder(items, products);
         setLastOrder(newOrder);
@@ -600,10 +642,10 @@ export default function POSPage() {
         setMobileCartOpen(false);
         toast.success(
             isAdvancedUnlocked
-                ? `Order #${newOrder.id.slice(0, 6)} berhasil! Dikirim ke KDS (${formatRp(orderTotal)})`
-                : `Order #${newOrder.id.slice(0, 6)} berhasil! Stok bahan baku (BOM) otomatis dipotong (${formatRp(orderTotal)})`
+                ? `Order #${newOrder.id.slice(0, 6)} (${resolvedCustomerName}) berhasil! Dikirim ke KDS (${formatRp(orderTotal)})`
+                : `Order #${newOrder.id.slice(0, 6)} (${resolvedCustomerName}) berhasil! Stok bahan baku (BOM) otomatis dipotong (${formatRp(orderTotal)})`
         );
-    }, [isStoreOpen, items, customerName, paymentMethod, cashIn, orderTotal, subtotal,
+    }, [isStoreOpen, items, customerName, orders, heldOrders, paymentMethod, cashIn, qrisSuccess, orderTotal, subtotal,
         discountAmount, pointsDiscount, pointsToRedeem, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user, branchId, currentSessionId,
         usePoints, customer, customerPhone, redeemPoints, addCustomer, addPoints,
         addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, ingredients, clearCart, toast, isAdvancedUnlocked]);
@@ -623,15 +665,13 @@ export default function POSPage() {
         }
     };
 
-    const checkoutDisabled = items.length === 0 || !customerName.trim()
+    const checkoutDisabled = items.length === 0
         || (paymentMethod === 'cash' && (cashIn < orderTotal || (orderTotal > 0 && cashIn === 0)));
-    const checkoutDisabledReason = !customerName.trim()
-        ? 'Isi nama pelanggan'
-        : paymentMethod === 'cash' && orderTotal > 0 && cashIn === 0
-            ? 'Masukkan nominal uang diterima'
-            : paymentMethod === 'cash' && cashIn < orderTotal
-                ? `Uang kurang ${formatRp(orderTotal - cashIn)}`
-                : '';
+    const checkoutDisabledReason = paymentMethod === 'cash' && orderTotal > 0 && cashIn === 0
+        ? 'Masukkan nominal uang diterima'
+        : paymentMethod === 'cash' && cashIn < orderTotal
+            ? `Uang kurang ${formatRp(orderTotal - cashIn)}`
+            : '';
 
     if (!isClient || !user) return null;
 
@@ -917,12 +957,22 @@ export default function POSPage() {
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
                                 {filteredProducts.map(product => {
                                     const cartQty = items.filter(i => i.id === product.id).reduce((s, i) => s + i.quantity, 0);
+                                    const bundlePromo = promos.find(p =>
+                                        p.isActive &&
+                                        p.type === 'bundle' &&
+                                        (isAdvancedUnlocked || p.alwaysApplyInPkl || p.type === 'bundle') &&
+                                        (p.productId === product.id || (p.productId === '2' && product.name.toLowerCase().includes('imperial jasmine')))
+                                    );
+                                    const bundleBadge = bundlePromo
+                                        ? `${bundlePromo.bundleQty || 3}${bundlePromo.targetSize || 'M'}=${Math.round(bundlePromo.value / 1000)}rb`
+                                        : undefined;
                                     return (
                                         <ProductCard
                                             key={product.id}
                                             product={product}
                                             cartQty={cartQty}
                                             isRecommended={flavorRecommendations.has(product.id)}
+                                            bundleBadge={bundleBadge}
                                             onAdd={() => setVariantProduct(product)}
                                             ingredients={ingredients}
                                         />
@@ -1054,13 +1104,21 @@ export default function POSPage() {
                                     </div>
                                 )}
                                 <div className="flex gap-2">
-                                    <input type="text" placeholder="Nama Pelanggan *" value={customerName}
-                                        onChange={e => setCustomerName(e.target.value)}
-                                        className="flex-1 min-w-0 text-gray-900 px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
+                                    <div className="relative flex-1 min-w-0">
+                                        <input type="text" placeholder={`Otomatis: ${nextCustomerLabel} (opsional)`} value={customerName}
+                                            onChange={e => setCustomerName(e.target.value)}
+                                            className="w-full min-w-0 text-gray-900 px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
+                                    </div>
                                     <input type="text" placeholder="Meja" value={tableNumber}
                                         onChange={e => setTableNumber(e.target.value)}
                                         className="w-16 text-gray-900 px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition text-center" />
                                 </div>
+                                {!customerName.trim() && (
+                                    <p className="text-[10px] text-gray-500 flex items-center justify-between gap-1 px-0.5">
+                                        <span>Label pembeli otomatis:</span>
+                                        <span className="font-bold text-[#0D2B20] bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">{nextCustomerLabel}</span>
+                                    </p>
+                                )}
                             </div>
 
                             {/* Loyalty Points & AI Upsell (Hanya tampil jika fitur pengembangan di-unlock) */}
@@ -1091,11 +1149,17 @@ export default function POSPage() {
                                 </AnimatePresence>
                             )}
 
-                            {/* Auto Promo Info */}
+                            {/* Auto Promo Info & Bundle Nudge */}
                             {applicablePromo && discountMode === 'none' && (
-                                <div className="bg-green-50 border border-green-200 rounded-lg px-2 py-1.5 text-[10px] text-green-800 flex justify-between items-center">
-                                    <span className="font-bold">🎉 {applicablePromo.promo.name}</span>
-                                    <span>-{formatRp(applicablePromo.discountAmount)}</span>
+                                <div className="bg-green-50 border border-green-200 rounded-lg px-2 py-1.5 text-[10px] text-green-800 flex justify-between items-center gap-2">
+                                    <span className="font-bold min-w-0 truncate">🎉 {applicablePromo.promo.name}</span>
+                                    <span className="font-bold whitespace-nowrap">-{formatRp(applicablePromo.discountAmount)}</span>
+                                </div>
+                            )}
+                            {bundleNudge && discountMode === 'none' && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 text-[10px] text-amber-900 flex items-center gap-1.5">
+                                    <span>💡</span>
+                                    <span>Tambah <strong>{bundleNudge.remainingForNextBundle} cup ({bundleNudge.promo.targetSize || 'M'})</strong> lagi = <strong>{formatRp(bundleNudge.promo.value)}</strong></span>
                                 </div>
                             )}
 
@@ -1116,7 +1180,7 @@ export default function POSPage() {
                                         className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold transition border ${discountMode === mode
                                             ? mode === 'none' ? 'bg-gray-200 text-gray-700 border-gray-300' : 'bg-red-600 text-white border-red-600'
                                             : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'}`}>
-                                        {mode === 'none' ? (isAdvancedUnlocked ? 'Promo Otomatis' : 'Tanpa Diskon') : mode === 'amount' ? <><Tag size={10} /> Nominal</> : <><Percent size={10} /> Persen</>}
+                                        {mode === 'none' ? 'Promo Otomatis' : mode === 'amount' ? <><Tag size={10} /> Nominal</> : <><Percent size={10} /> Persen</>}
                                     </button>
                                 ))}
                             </div>
@@ -1287,9 +1351,13 @@ export default function POSPage() {
                                 </div>
                             )}
                             {discountAmount > 0 && (
-                                <div className="flex justify-between items-center text-xs">
-                                    <span className="text-red-500 font-medium">Diskon{discountMode === 'percent' ? ` (${discountValue}%)` : ''}</span>
-                                    <span className="text-red-500 font-bold">-{formatRp(discountAmount)}</span>
+                                <div className="flex justify-between items-center text-xs gap-2">
+                                    <span className="text-red-500 font-medium min-w-0 truncate">
+                                        {discountMode === 'none' && applicablePromo
+                                            ? applicablePromo.promo.name
+                                            : `Diskon${discountMode === 'percent' ? ` (${discountValue}%)` : ''}`}
+                                    </span>
+                                    <span className="text-red-500 font-bold whitespace-nowrap">-{formatRp(discountAmount)}</span>
                                 </div>
                             )}
                             {pointsDiscount > 0 && (
@@ -1539,7 +1607,7 @@ export default function POSPage() {
                                             <div className="flex items-start justify-between">
                                                 <div>
                                                     <div className="flex items-center gap-1.5">
-                                                        <span className="font-black text-gray-800 text-sm">{order.customerName || "Pelanggan Tamu"}</span>
+                                                        <span className="font-black text-gray-800 text-sm">{order.customerName || "Pelanggan"}</span>
                                                         {diffMins < 5 && !isCompleted && (
                                                             <span className="text-[9px] bg-red-100 text-red-600 font-bold px-1.5 py-0.2 rounded-full animate-pulse">BARU</span>
                                                         )}
@@ -1573,11 +1641,18 @@ export default function POSPage() {
                                                 ))}
                                             </div>
 
-                                            <div className="flex justify-between items-center pt-1 border-t border-gray-100 text-xs">
-                                                <span className="text-gray-500 uppercase text-[10px] font-mono font-bold">
-                                                    {order.paymentMethod || 'TUNAI'}
-                                                </span>
-                                                <span className="font-black text-[#0D2B20] text-sm">Rp {order.total.toLocaleString('id-ID')}</span>
+                                            <div className="flex justify-between items-center pt-1 border-t border-gray-100 text-xs gap-2">
+                                                <div className="min-w-0">
+                                                    <span className="text-gray-500 uppercase text-[10px] font-mono font-bold block">
+                                                        {order.paymentMethod || 'TUNAI'}
+                                                    </span>
+                                                    {order.discount && order.discount > 0 && (
+                                                        <span className="text-[10px] text-emerald-700 font-semibold block truncate">
+                                                            🏷 {order.promoName || 'Diskon'} (-Rp {order.discount.toLocaleString('id-ID')})
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="font-black text-[#0D2B20] text-sm flex-shrink-0">Rp {order.total.toLocaleString('id-ID')}</span>
                                             </div>
 
                                             <div className="flex gap-1.5 pt-1">
@@ -1878,10 +1953,11 @@ export default function POSPage() {
 }
 
 // ── Product Card ──────────────────────────────────────────────
-function ProductCard({ product, cartQty, isRecommended, onAdd, ingredients }: {
+function ProductCard({ product, cartQty, isRecommended, bundleBadge, onAdd, ingredients }: {
     product: ExtendedProduct;
     cartQty: number;
     isRecommended?: boolean;
+    bundleBadge?: string;
     onAdd: () => void;
     ingredients?: import('@/lib/store').Ingredient[];
 }) {
@@ -1907,6 +1983,7 @@ function ProductCard({ product, cartQty, isRecommended, onAdd, ingredients }: {
                     : <div className="w-full h-full flex items-center justify-center text-gray-300 text-3xl font-bold">{product.name[0]}</div>
                 }
                 <div className="absolute top-1.5 left-1.5 flex flex-col gap-1">
+                    {bundleBadge && !isOutOfStock && <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm">🏷 {bundleBadge}</span>}
                     {isRecommended && !isOutOfStock && <span className="bg-gradient-to-r from-amber-400 to-yellow-300 text-[#0D2B20] text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm">✨ Cocok!</span>}
                     {isOutOfStock && <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">HABIS</span>}
                     {isLimited && <span className="bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">Sisa {product.stock}</span>}
@@ -1920,7 +1997,12 @@ function ProductCard({ product, cartQty, isRecommended, onAdd, ingredients }: {
 
             <div className="p-2">
                 <p className="text-[11px] font-bold text-gray-800 truncate leading-tight">{product.name}</p>
-                <p className="text-[10px] font-bold text-amber-600 mt-0.5">{formatRp(product.price)}</p>
+                <p className="text-[10px] font-bold text-amber-600 mt-0.5 truncate">
+                    {formatRp(product.price)}
+                    {typeof product.largePrice === 'number' && (
+                        <span className="text-[9px] text-gray-400 font-semibold"> · L {Math.round(product.largePrice / 1000)}rb</span>
+                    )}
+                </p>
                 <button onClick={onAdd} disabled={isOutOfStock}
                     className="w-full mt-1.5 h-6 flex items-center justify-center gap-1 bg-[#0D2B20] hover:bg-[#1a4433] text-amber-400 rounded-lg transition text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed">
                     <Plus size={10} /> {cartQty > 0 ? `Tambah Lagi (${cartQty})` : 'Tambah'}
