@@ -20,9 +20,11 @@
  *                                (`restoreIngredientsForOrder`), serta pencatatan **Audit Stock Opname Fisik** (`recordOpname`).
  * 8. `useSupplierStore`        : Mengelola daftar pemasok bahan baku (`suppliers`) untuk fitur Restok Bahan (PO).
  * 9. `useForecastHistoryStore` : Menyimpan data histori penjualan (impor/simulasi) untuk modul AI Demand Forecasting.
- * 10. `useExpenseStore`        : Mengelola pengeluaran operasional & kas kecil laci kasir (*Petty Cash*).
+ * 10. `useExpenseStore`        : Mengelola pengeluaran operasional, restok bahan (PO), & kas kecil laci kasir (*Petty Cash*).
  * 11. `useStoreConfigStore`    : Mengelola status **Buka / Tutup (Lock / Unlock) Kedai & Menu Online Pelanggan** secara *real-time*
  *                                (termasuk pesan pengumuman saat Hari Libur Operasional / Tutup Sementara).
+ * 12. `useStoreAccountStore`   : Mengelola mutasi manual **Rekening Toko** (*Top-Up Modal* & *Tarik Dana / Laba*) serta helper *real-time*
+ *                                (`calculateStoreAccountSummary` & `buildStoreAccountLedger`) untuk memutar modal restok bahan dari total pendapatan kedai.
  * ============================================================================
  */
 import { create } from 'zustand';
@@ -1646,9 +1648,10 @@ export const useForecastHistoryStore = create<ForecastHistoryState>()(
 // ══════════════════════════════════════════════════════
 // EXPENSE & PETTY CASH STORE
 // ══════════════════════════════════════════════════════
-export type ExpenseCategory = 'bahan_tambahan' | 'operasional' | 'utilitas' | 'gaji' | 'lainnya';
+export type ExpenseCategory = 'restok_bahan' | 'bahan_tambahan' | 'operasional' | 'utilitas' | 'gaji' | 'lainnya';
 
 export const EXPENSE_CATEGORIES: { id: ExpenseCategory; label: string }[] = [
+    { id: 'restok_bahan', label: 'Restok Bahan Baku (PO Suplier)' },
     { id: 'bahan_tambahan', label: 'Bahan Tambahan (Es batu, susu, sirup, dll)' },
     { id: 'operasional', label: 'Operasional Toko (Sedotan, kresek, sabun, dll)' },
     { id: 'utilitas', label: 'Utilitas (Listrik, air galon, internet)' },
@@ -1666,10 +1669,15 @@ export interface Expense {
     cashierName?: string;
     sessionId?: string;
     notes?: string;
+    ingredientId?: string;
+    supplierName?: string;
 }
+
+export const LEGACY_DEMO_EXPENSE_IDS = new Set(['exp-demo-1', 'exp-demo-2']);
 
 interface ExpenseState {
     expenses: Expense[];
+    deletedExpenseIds: string[];
     addExpense: (expense: Omit<Expense, 'id' | 'date'>) => Expense;
     deleteExpense: (id: string) => void;
     setExpenses: (expenses: Expense[]) => void;
@@ -1678,26 +1686,8 @@ interface ExpenseState {
 export const useExpenseStore = create<ExpenseState>()(
     persist(
         (set) => ({
-            expenses: [
-                {
-                    id: 'exp-demo-1',
-                    date: new Date(Date.now() - 3600000 * 5).toISOString(),
-                    category: 'bahan_tambahan',
-                    description: 'Beli Es Batu Kristal (2 Karung)',
-                    amount: 24000,
-                    paidVia: 'kas_laci',
-                    cashierName: 'Kasir Default',
-                },
-                {
-                    id: 'exp-demo-2',
-                    date: new Date(Date.now() - 3600000 * 24).toISOString(),
-                    category: 'utilitas',
-                    description: 'Air Mineral Galon (2 Galon)',
-                    amount: 40000,
-                    paidVia: 'kas_laci',
-                    cashierName: 'Kasir Default',
-                }
-            ],
+            expenses: [],
+            deletedExpenseIds: [],
             setExpenses: (expenses) => set({ expenses }),
             addExpense: (expenseData) => {
                 const salesState = useSalesStore.getState();
@@ -1708,16 +1698,44 @@ export const useExpenseStore = create<ExpenseState>()(
                     id: nanoid(),
                     date: new Date().toISOString(),
                 };
-                set((s) => ({ expenses: [newExp, ...s.expenses] }));
-                firebaseSet(ref(rtdb, `expenses/${newExp.id}`), JSON.parse(JSON.stringify(newExp))).catch(console.warn);
+                set((s) => ({
+                    expenses: [newExp, ...s.expenses],
+                    deletedExpenseIds: s.deletedExpenseIds.filter(did => did !== newExp.id),
+                }));
+                firebaseSet(ref(rtdb, `expenses/${newExp.id}`), JSON.parse(JSON.stringify(newExp))).catch(logRtdbWarn);
+                firebaseSet(ref(rtdb, `deletedExpenses/${newExp.id}`), null).catch(logRtdbWarn);
                 return newExp;
             },
             deleteExpense: (id) => {
-                set((s) => ({ expenses: s.expenses.filter(e => e.id !== id) }));
-                firebaseSet(ref(rtdb, `expenses/${id}`), null).catch(console.warn);
+                set((s) => ({
+                    expenses: s.expenses.filter(e => e.id !== id),
+                    deletedExpenseIds: Array.from(new Set([...s.deletedExpenseIds, id])),
+                }));
+                firebaseSet(ref(rtdb, `expenses/${id}`), null).catch(logRtdbWarn);
+                firebaseSet(ref(rtdb, `deletedExpenses/${id}`), true).catch(logRtdbWarn);
             }
         }),
-        { name: 'teh-raja-expenses-v1', storage: createJSONStorage(() => idbStorage) }
+        {
+            name: 'teh-raja-expenses-v1',
+            version: 2,
+            storage: createJSONStorage(() => idbStorage),
+            migrate: (persisted: unknown, version: number) => {
+                const state = persisted as Partial<ExpenseState> | undefined;
+                const deleted = Array.isArray(state?.deletedExpenseIds) ? [...state.deletedExpenseIds] : [];
+                let expenses = Array.isArray(state?.expenses) ? [...state.expenses] : [];
+                if (version < 2) {
+                    expenses = expenses.filter(e => !LEGACY_DEMO_EXPENSE_IDS.has(e.id));
+                    LEGACY_DEMO_EXPENSE_IDS.forEach(demoId => {
+                        if (!deleted.includes(demoId)) deleted.push(demoId);
+                    });
+                }
+                return {
+                    ...state,
+                    expenses,
+                    deletedExpenseIds: deleted,
+                };
+            },
+        }
     )
 );
 
@@ -1844,3 +1862,321 @@ export const useStoreConfigStore = create<StoreConfigState>()(
         { name: 'teh-raja-store-config-v1', storage: createJSONStorage(() => idbStorage) }
     )
 );
+
+// ══════════════════════════════════════════════════════
+// STORE ACCOUNT / REKENING TOKO REAL-TIME (PUTARAN MODAL RESTOK)
+// ══════════════════════════════════════════════════════
+export type StoreAccountMovementType = 'topup' | 'withdraw';
+
+export interface StoreAccountMovement {
+    id: string;
+    date: string; // ISO
+    type: StoreAccountMovementType;
+    amount: number;
+    description: string;
+    recordedBy?: string;
+    notes?: string;
+}
+
+interface StoreAccountState {
+    movements: StoreAccountMovement[];
+    deletedMovementIds: string[];
+    addMovement: (movement: Omit<StoreAccountMovement, 'id' | 'date'>) => StoreAccountMovement;
+    deleteMovement: (id: string) => void;
+    setMovements: (movements: StoreAccountMovement[]) => void;
+}
+
+export const useStoreAccountStore = create<StoreAccountState>()(
+    persist(
+        (set) => ({
+            movements: [],
+            deletedMovementIds: [],
+            setMovements: (movements) => set({ movements }),
+            addMovement: (movementData) => {
+                const newMov: StoreAccountMovement = {
+                    ...movementData,
+                    id: nanoid(),
+                    date: new Date().toISOString(),
+                };
+                set((s) => ({
+                    movements: [newMov, ...s.movements],
+                    deletedMovementIds: s.deletedMovementIds.filter(did => did !== newMov.id),
+                }));
+                firebaseSet(
+                    ref(rtdb, `storeAccountMovements/${newMov.id}`),
+                    JSON.parse(JSON.stringify(newMov))
+                ).catch(logRtdbWarn);
+                firebaseSet(ref(rtdb, `deletedStoreAccountMovements/${newMov.id}`), null).catch(logRtdbWarn);
+                return newMov;
+            },
+            deleteMovement: (id) => {
+                set((s) => ({
+                    movements: s.movements.filter(m => m.id !== id),
+                    deletedMovementIds: Array.from(new Set([...s.deletedMovementIds, id])),
+                }));
+                firebaseSet(ref(rtdb, `storeAccountMovements/${id}`), null).catch(logRtdbWarn);
+                firebaseSet(ref(rtdb, `deletedStoreAccountMovements/${id}`), true).catch(logRtdbWarn);
+            },
+        }),
+        {
+            name: 'teh-raja-store-account-v1',
+            storage: createJSONStorage(() => idbStorage),
+        }
+    )
+);
+
+export function isRestockExpense(expense: Expense): boolean {
+    return expense.category === 'restok_bahan' || (expense.description || '').startsWith('Restok PO ');
+}
+
+export interface StoreAccountSummary {
+    validOrderCount: number;
+    cashRevenue: number;
+    qrisRevenue: number;
+    transferRevenue: number;
+    digitalRevenue: number;
+    totalOrderRevenue: number;
+    totalTopUp: number;
+    totalWithdraw: number;
+    rekeningRestockCost: number;
+    rekeningOtherExpense: number;
+    rekeningExpenses: number;
+    cashDrawerRestockCost: number;
+    cashDrawerOtherExpense: number;
+    cashDrawerExpenses: number;
+    totalRestockCost: number;
+    totalOtherExpenses: number;
+    totalAllExpenses: number;
+    totalInflow: number;
+    totalOutflow: number;
+    availableBalance: number;
+}
+
+/**
+ * Menghitung Saldo & Rincian Rekening Toko secara real-time untuk putaran modal restok bahan:
+ * Saldo Rekening Toko =
+ *   Pendapatan Total Kedai (Tunai + QRIS + Transfer, tidak termasuk pesanan dibatalkan)
+ *   + Top-Up / Modal Awal Rekening
+ *   - Seluruh Pengeluaran & Restok (Rekening Toko + Kas Laci)
+ *   - Penarikan Dana / Ambil Laba
+ */
+export function calculateStoreAccountSummary(
+    orders: Order[],
+    expenses: Expense[],
+    movements: StoreAccountMovement[]
+): StoreAccountSummary {
+    const validOrders = (orders || []).filter(o => o && o.status !== 'cancelled');
+
+    let cashRevenue = 0;
+    let qrisRevenue = 0;
+    let transferRevenue = 0;
+
+    for (const o of validOrders) {
+        const amt = Number(o.total) || 0;
+        if (o.paymentMethod === 'qris') qrisRevenue += amt;
+        else if (o.paymentMethod === 'transfer') transferRevenue += amt;
+        else cashRevenue += amt;
+    }
+
+    const digitalRevenue = qrisRevenue + transferRevenue;
+    const totalOrderRevenue = cashRevenue + digitalRevenue;
+
+    let totalTopUp = 0;
+    let totalWithdraw = 0;
+    for (const m of movements || []) {
+        const amt = Number(m.amount) || 0;
+        if (m.type === 'topup') totalTopUp += amt;
+        else if (m.type === 'withdraw') totalWithdraw += amt;
+    }
+
+    let rekeningRestockCost = 0;
+    let rekeningOtherExpense = 0;
+    let cashDrawerRestockCost = 0;
+    let cashDrawerOtherExpense = 0;
+
+    for (const e of expenses || []) {
+        const amt = Number(e.amount) || 0;
+        const restock = isRestockExpense(e);
+        if (e.paidVia === 'rekening_toko') {
+            if (restock) rekeningRestockCost += amt;
+            else rekeningOtherExpense += amt;
+        } else {
+            if (restock) cashDrawerRestockCost += amt;
+            else cashDrawerOtherExpense += amt;
+        }
+    }
+
+    const rekeningExpenses = rekeningRestockCost + rekeningOtherExpense;
+    const cashDrawerExpenses = cashDrawerRestockCost + cashDrawerOtherExpense;
+    const totalRestockCost = rekeningRestockCost + cashDrawerRestockCost;
+    const totalOtherExpenses = rekeningOtherExpense + cashDrawerOtherExpense;
+    const totalAllExpenses = rekeningExpenses + cashDrawerExpenses;
+    const totalInflow = totalOrderRevenue + totalTopUp;
+    const totalOutflow = totalAllExpenses + totalWithdraw;
+    const availableBalance = totalInflow - totalOutflow;
+
+    return {
+        validOrderCount: validOrders.length,
+        cashRevenue,
+        qrisRevenue,
+        transferRevenue,
+        digitalRevenue,
+        totalOrderRevenue,
+        totalTopUp,
+        totalWithdraw,
+        rekeningRestockCost,
+        rekeningOtherExpense,
+        rekeningExpenses,
+        cashDrawerRestockCost,
+        cashDrawerOtherExpense,
+        cashDrawerExpenses,
+        totalRestockCost,
+        totalOtherExpenses,
+        totalAllExpenses,
+        totalInflow,
+        totalOutflow,
+        availableBalance,
+    };
+}
+
+export type StoreLedgerKind = 'order_revenue' | 'topup' | 'restock' | 'expense' | 'withdraw';
+
+export interface StoreAccountLedgerEntry {
+    id: string;
+    sourceId: string;
+    date: string;
+    kind: StoreLedgerKind;
+    direction: 'in' | 'out';
+    amount: number;
+    signedAmount: number;
+    balanceAfter: number;
+    title: string;
+    subtitle: string;
+    channelLabel: string;
+    actor?: string;
+    canDelete: boolean;
+}
+
+/**
+ * Membangun buku besar mutasi Rekening Toko real-time (terurut terbaru di atas)
+ * lengkap dengan running balance setelah tiap transaksi.
+ */
+export function buildStoreAccountLedger(
+    orders: Order[],
+    expenses: Expense[],
+    movements: StoreAccountMovement[]
+): StoreAccountLedgerEntry[] {
+    interface RawEntry {
+        id: string;
+        sourceId: string;
+        date: string;
+        ts: number;
+        kind: StoreLedgerKind;
+        direction: 'in' | 'out';
+        amount: number;
+        signedAmount: number;
+        title: string;
+        subtitle: string;
+        channelLabel: string;
+        actor?: string;
+        canDelete: boolean;
+    }
+
+    const raw: RawEntry[] = [];
+
+    for (const o of orders || []) {
+        if (!o || o.status === 'cancelled') continue;
+        const amt = Number(o.total) || 0;
+        const method = o.paymentMethod === 'qris'
+            ? 'QRIS'
+            : o.paymentMethod === 'transfer'
+                ? 'Transfer Bank'
+                : 'Tunai POS';
+        const itemsSummary = (o.items || [])
+            .slice(0, 2)
+            .map(i => `${i.quantity}x ${i.name}`)
+            .join(', ') + ((o.items?.length || 0) > 2 ? ` +${o.items.length - 2} lagi` : '');
+
+        raw.push({
+            id: `ord-${o.id}`,
+            sourceId: o.id,
+            date: o.date,
+            ts: new Date(o.date).getTime() || 0,
+            kind: 'order_revenue',
+            direction: 'in',
+            amount: amt,
+            signedAmount: amt,
+            title: `Pendapatan Order · ${o.customerName || 'Customer'}`,
+            subtitle: itemsSummary || 'Pesanan kedai',
+            channelLabel: method,
+            actor: o.cashierName || 'Kasir / Online',
+            canDelete: false,
+        });
+    }
+
+    for (const m of movements || []) {
+        const amt = Number(m.amount) || 0;
+        const isTopUp = m.type === 'topup';
+        raw.push({
+            id: `mov-${m.id}`,
+            sourceId: m.id,
+            date: m.date,
+            ts: new Date(m.date).getTime() || 0,
+            kind: isTopUp ? 'topup' : 'withdraw',
+            direction: isTopUp ? 'in' : 'out',
+            amount: amt,
+            signedAmount: isTopUp ? amt : -amt,
+            title: m.description || (isTopUp ? 'Top-Up Modal Rekening' : 'Penarikan Dana Rekening'),
+            subtitle: m.notes || (isTopUp ? 'Penambahan modal kerja Rekening Toko' : 'Penarikan dana / pengambilan laba'),
+            channelLabel: isTopUp ? 'Top-Up Modal' : 'Tarik Dana',
+            actor: m.recordedBy || 'Admin',
+            canDelete: true,
+        });
+    }
+
+    for (const e of expenses || []) {
+        const amt = Number(e.amount) || 0;
+        const restock = isRestockExpense(e);
+        raw.push({
+            id: `exp-${e.id}`,
+            sourceId: e.id,
+            date: e.date,
+            ts: new Date(e.date).getTime() || 0,
+            kind: restock ? 'restock' : 'expense',
+            direction: 'out',
+            amount: amt,
+            signedAmount: -amt,
+            title: e.description || (restock ? 'Restok Bahan Baku' : 'Biaya Operasional'),
+            subtitle: e.notes || (restock ? 'Putar modal untuk pembelian stok bahan' : 'Pengeluaran operasional / petty cash'),
+            channelLabel: e.paidVia === 'kas_laci' ? '💵 Kas Laci' : '🏦 Rekening Toko',
+            actor: e.cashierName || 'Admin',
+            canDelete: false,
+        });
+    }
+
+    // Hitung saldo berjalan secara kronologis (terlama -> terbaru)
+    raw.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+
+    let running = 0;
+    const withBalance: StoreAccountLedgerEntry[] = raw.map(entry => {
+        running += entry.signedAmount;
+        return {
+            id: entry.id,
+            sourceId: entry.sourceId,
+            date: entry.date,
+            kind: entry.kind,
+            direction: entry.direction,
+            amount: entry.amount,
+            signedAmount: entry.signedAmount,
+            balanceAfter: running,
+            title: entry.title,
+            subtitle: entry.subtitle,
+            channelLabel: entry.channelLabel,
+            actor: entry.actor,
+            canDelete: entry.canDelete,
+        };
+    });
+
+    // Tampilkan terbaru di paling atas
+    return withBalance.reverse();
+}

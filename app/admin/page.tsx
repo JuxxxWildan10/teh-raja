@@ -13,7 +13,7 @@
  *    - `products`  : CRUD produk menu & editor komposisi **Resep Bill of Materials (BOM)** per cup.
  *    - `inventory` : Manajemen 9 bahan baku utama, daftar suplier, **Restok Bahan (PO Suplier)**, & **Audit Stock Opname Fisik**.
  *    - `orders`    : Riwayat seluruh pesanan POS, filter status, batalkan pesanan (otomatis *rollback* BOM), & cetak struk.
- *    - `finance`   : Laporan Laba Rugi (*Profit & Loss*), riwayat shift kasir, *Petty Cash*, Export Excel/PDF/CSV, & Backup/Restore JSON.
+ *    - `keuangan`  : **Rekening Toko Real-Time (Putar Modal Restok)**, Laporan Laba Rugi (*Profit & Loss*), riwayat mutasi modal, *Petty Cash*, Export Excel/PDF/CSV, & Backup/Restore JSON.
  *    - `users`     : Manajemen akun staf Kasir dan Administrator.
  * 2. **Mode Pengembangan Lanjutan / Skripsi (`isAdvancedUnlocked: true`) — Tambahan 6 Tab**:
  *    - Dapat dibuka dalam 1 klik lewat tombol `[🔒 Mode PKL (POS & BOM)]` di navbar atas Admin untuk memunculkan tab:
@@ -25,9 +25,10 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
     useProductStore, useSalesStore, useAuthStore, usePromoStore,
-    useCustomerStore, useInventoryStore, useSupplierStore, useExpenseStore, useForecastHistoryStore, useStoreConfigStore,
+    useCustomerStore, useInventoryStore, useSupplierStore, useExpenseStore, useStoreAccountStore, useForecastHistoryStore, useStoreConfigStore,
     SHOP_CLOSE_PRESETS, ExtendedProduct, Order, ExpenseCategory, EXPENSE_CATEGORIES, DEFAULT_BRANCHES, RecipeItem, Role, PromoType,
-    getEnrichedSessions, isOrderInSession, isExpenseInSession, toLocalDateKey, getTodayDateKey, getYesterdayDateKey, EnrichedStoreSession
+    getEnrichedSessions, isOrderInSession, isExpenseInSession, toLocalDateKey, getTodayDateKey, getYesterdayDateKey, EnrichedStoreSession,
+    calculateStoreAccountSummary, buildStoreAccountLedger
 } from "@/lib/store";
 import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -55,7 +56,8 @@ import {
     CheckCircle, XCircle, Clock, Loader,
     Menu, Search, Sparkles, RefreshCw, Ticket, Users as UsersIcon, Box,
     Building2, BarChart2, TrendingUp, FileSpreadsheet, Bell, Wallet, DollarSign, Upload, Database, ClipboardCheck,
-    ChefHat, Coffee, Presentation, PackagePlus, Lock, Unlock, Calendar, Filter, Store, CalendarX2
+    ChefHat, Coffee, Presentation, PackagePlus, Lock, Unlock, Calendar, Filter, Store, CalendarX2,
+    Landmark, ArrowUpRight, ArrowDownRight
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -93,6 +95,7 @@ export default function AdminPage() {
     const { ingredients, addIngredient, updateIngredient, deleteIngredient, opnameLogs, recordOpname } = useInventoryStore();
     const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useSupplierStore();
     const { expenses, addExpense, deleteExpense } = useExpenseStore();
+    const { movements, addMovement, deleteMovement } = useStoreAccountStore();
     const {
         isOnlineOrderOpen,
         closedBadge,
@@ -213,7 +216,7 @@ export default function AdminPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    // ── Expense & P&L State ──────────────────────────────────────
+    // ── Expense, P&L & Rekening Toko State ───────────────────────
     const [expenseModalOpen, setExpenseModalOpen] = useState(false);
     const [expenseForm, setExpenseForm] = useState({
         amount: '',
@@ -222,6 +225,15 @@ export default function AdminPage() {
         paidVia: 'kas_laci' as 'kas_laci' | 'rekening_toko',
         notes: ''
     });
+
+    const [accountModalMode, setAccountModalMode] = useState<'topup' | 'withdraw' | null>(null);
+    const [accountForm, setAccountForm] = useState({
+        amount: '',
+        description: '',
+        notes: '',
+    });
+    const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'restock' | 'manual'>('all');
+    const [showAllLedger, setShowAllLedger] = useState(false);
 
     // ── Stock Opname State ───────────────────────────────────────
     const [opnameModalOpen, setOpnameModalOpen] = useState(false);
@@ -629,6 +641,76 @@ export default function AdminPage() {
         [orders]
     );
 
+    // ── Rekening Toko Real-Time (All-Time Working Capital) ──────
+    const storeAccount = useMemo(
+        () => calculateStoreAccountSummary(orders, expenses, movements),
+        [orders, expenses, movements]
+    );
+    const storeAccountLedger = useMemo(
+        () => buildStoreAccountLedger(orders, expenses, movements),
+        [orders, expenses, movements]
+    );
+    const filteredStoreLedger = useMemo(() => {
+        if (ledgerFilter === 'in') {
+            return storeAccountLedger.filter(entry => entry.kind === 'order_revenue' || entry.kind === 'topup');
+        }
+        if (ledgerFilter === 'restock') {
+            return storeAccountLedger.filter(entry => entry.kind === 'restock' || entry.kind === 'expense');
+        }
+        if (ledgerFilter === 'manual') {
+            return storeAccountLedger.filter(entry => entry.kind === 'topup' || entry.kind === 'withdraw');
+        }
+        return storeAccountLedger;
+    }, [storeAccountLedger, ledgerFilter]);
+
+    const openAccountMovementModal = (
+        mode: 'topup' | 'withdraw',
+        prefillAmount?: number,
+        prefillDesc?: string
+    ) => {
+        setAccountModalMode(mode);
+        setAccountForm({
+            amount: prefillAmount && prefillAmount > 0 ? String(Math.ceil(prefillAmount)) : '',
+            description: prefillDesc || (mode === 'topup' ? 'Top-Up Modal Putar Stok Kedai' : 'Penarikan Dana / Ambil Laba'),
+            notes: '',
+        });
+    };
+
+    const handleSaveAccountMovement = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!accountModalMode) return;
+        const amt = parseFloat(String(accountForm.amount).replace(/\D/g, '')) || 0;
+        if (amt <= 0 || !accountForm.description.trim()) {
+            toast.error("Nominal dan keterangan mutasi rekening wajib diisi!");
+            return;
+        }
+        if (accountModalMode === 'withdraw' && amt > storeAccount.availableBalance) {
+            toast.error(
+                `Saldo Rekening Toko (Rp ${storeAccount.availableBalance.toLocaleString('id-ID')}) tidak cukup untuk penarikan Rp ${amt.toLocaleString('id-ID')}!`
+            );
+            return;
+        }
+        addMovement({
+            type: accountModalMode,
+            amount: amt,
+            description: accountForm.description.trim(),
+            notes: accountForm.notes.trim() || undefined,
+            recordedBy: user?.name || 'Admin',
+        });
+        addLog(
+            accountModalMode === 'topup' ? 'STORE_ACCOUNT_TOPUP' : 'STORE_ACCOUNT_WITHDRAW',
+            `${accountModalMode === 'topup' ? 'Top-Up Modal' : 'Tarik Dana'} Rekening Toko: ${accountForm.description.trim()} (Rp ${amt.toLocaleString('id-ID')})`,
+            user?.name || 'Admin'
+        );
+        toast.success(
+            accountModalMode === 'topup'
+                ? `Top-Up Modal Rp ${amt.toLocaleString('id-ID')} masuk ke Rekening Toko!`
+                : `Penarikan dana Rp ${amt.toLocaleString('id-ID')} dari Rekening Toko berhasil dicatat!`
+        );
+        setAccountModalMode(null);
+        setAccountForm({ amount: '', description: '', notes: '' });
+    };
+
     // ── Financials (P&L) Calculations (mengikuti Filter Hari & Shift) ──
     const validOrders = useMemo(() => periodOrders.filter(o => o.status !== 'cancelled'), [periodOrders]);
     const grossRevenue = useMemo(() => validOrders.reduce((sum, o) => sum + o.total, 0), [validOrders]);
@@ -645,6 +727,12 @@ export default function AdminPage() {
         const amt = parseFloat(String(expenseForm.amount).replace(/\D/g, '')) || 0;
         if (amt <= 0 || !expenseForm.description.trim()) {
             toast.error("Nominal dan keperluan pengeluaran wajib diisi!");
+            return;
+        }
+        if (expenseForm.paidVia === 'rekening_toko' && amt > storeAccount.availableBalance) {
+            toast.error(
+                `Saldo Rekening Toko tidak cukup (Rp ${storeAccount.availableBalance.toLocaleString('id-ID')}). Lakukan Top-Up Modal atau ganti ke Kas Laci!`
+            );
             return;
         }
         addExpense({
@@ -712,22 +800,33 @@ export default function AdminPage() {
             toast.error("Jumlah tambahan stok harus lebih dari 0!");
             return;
         }
+        const cost = parseFloat(String(restockForm.costAmount).replace(/\D/g, '')) || 0;
+        if (cost > 0 && restockForm.paidVia === 'rekening_toko' && cost > storeAccount.availableBalance) {
+            toast.error(
+                `Saldo Rekening Toko tidak cukup untuk restok Rp ${cost.toLocaleString('id-ID')} (saldo: Rp ${storeAccount.availableBalance.toLocaleString('id-ID')}). Lakukan Top-Up Modal atau ganti ke Kas Laci!`
+            );
+            return;
+        }
+
         const newStock = Math.round((ing.stock + addQty) * 100) / 100;
         updateIngredient(ing.id, { stock: newStock });
 
-        const cost = parseFloat(String(restockForm.costAmount).replace(/\D/g, '')) || 0;
         if (cost > 0) {
             addExpense({
                 amount: cost,
                 description: `Restok PO ${ing.name} (+${addQty} ${ing.unit})${restockForm.supplierName ? ` dari ${restockForm.supplierName}` : ''}`,
-                category: 'bahan_tambahan',
+                category: 'restok_bahan',
                 paidVia: restockForm.paidVia,
                 cashierName: user?.name || 'Admin',
+                ingredientId: ing.id,
+                supplierName: restockForm.supplierName || undefined,
             });
         }
 
         addLog("RESTOCK_INGREDIENT", `Restok ${ing.name} +${addQty} ${ing.unit} -> Total: ${newStock} ${ing.unit}`, user?.name || 'Admin');
-        toast.success(`Stok ${ing.name} bertambah +${addQty} ${ing.unit}${cost > 0 ? ' & tercatat di Pengeluaran' : ''}!`);
+        toast.success(
+            `Stok ${ing.name} bertambah +${addQty} ${ing.unit}${cost > 0 ? ` & dibayar via ${restockForm.paidVia === 'rekening_toko' ? 'Rekening Toko' : 'Kas Laci'}` : ''}!`
+        );
         setRestockModalOpen(false);
         setRestockForm({ ingredientId: '', addQty: '', costAmount: '', paidVia: 'rekening_toko', supplierName: '' });
     };
@@ -773,6 +872,36 @@ export default function AdminPage() {
         const wsExp = XLSX.utils.aoa_to_sheet(expRows);
         XLSX.utils.book_append_sheet(wb, wsExp, "Daftar Pengeluaran");
 
+        const accRows = [
+            ["RINGKASAN REKENING TOKO (PUTARAN MODAL REAL-TIME)"],
+            [`Tanggal Cetak : ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}`],
+            [],
+            ["Komponen Rekening Toko", "Nominal (Rp)"],
+            ["Saldo Rekening Toko Tersedia (Siap Putar Modal)", storeAccount.availableBalance],
+            ["Total Pendapatan Total Kedai (Tunai + QRIS + Transfer)", storeAccount.totalOrderRevenue],
+            ["  - Pendapatan Tunai POS", storeAccount.cashRevenue],
+            ["  - Pendapatan QRIS & Transfer", storeAccount.digitalRevenue],
+            ["Total Top-Up / Modal Tambahan", storeAccount.totalTopUp],
+            ["Total Restok Bahan Baku (PO)", -storeAccount.totalRestockCost],
+            ["Total Biaya Operasional Lain & Kas Laci", -storeAccount.totalOtherExpenses],
+            ["Total Penarikan Dana / Laba", -storeAccount.totalWithdraw],
+            [],
+            ["MUTASI ARUS MODAL REKENING TOKO"],
+            ["No", "Waktu", "Jenis", "Keterangan", "Sumber/Metode", "Nominal (+/-)", "Saldo Rekening (Rp)", "Petugas"],
+            ...storeAccountLedger.map((entry, idx) => [
+                idx + 1,
+                new Date(entry.date).toLocaleString('id-ID'),
+                entry.kind === 'order_revenue' ? 'Penjualan' : entry.kind === 'topup' ? 'Top-Up Modal' : entry.kind === 'restock' ? 'Restok Bahan' : entry.kind === 'withdraw' ? 'Tarik Dana' : 'Biaya Operasional',
+                entry.title,
+                entry.channelLabel,
+                entry.signedAmount,
+                entry.balanceAfter,
+                entry.actor || '-',
+            ]),
+        ];
+        const wsAcc = XLSX.utils.aoa_to_sheet(accRows);
+        XLSX.utils.book_append_sheet(wb, wsAcc, "Rekening Toko");
+
         const fileSuffix = selectedShiftObj
             ? `${selectedShiftObj.dateKey}_Shift${selectedShiftObj.shiftNumber}`
             : (activeDateKey || getTodayDateKey());
@@ -783,7 +912,7 @@ export default function AdminPage() {
     const handleExportBackup = () => {
         const backupData = {
             appName: "Teh Raja POS & Management",
-            version: "3.0.0",
+            version: "3.1.0",
             exportDate: new Date().toISOString(),
             products: useProductStore.getState().products,
             orders: useSalesStore.getState().orders,
@@ -791,6 +920,7 @@ export default function AdminPage() {
             opnameLogs: useInventoryStore.getState().opnameLogs || [],
             suppliers: useSupplierStore.getState().suppliers,
             expenses: useExpenseStore.getState().expenses,
+            storeAccountMovements: useStoreAccountStore.getState().movements,
             promos: usePromoStore.getState().promos,
             customers: useCustomerStore.getState().customers,
             sessions: useSalesStore.getState().sessions,
@@ -829,6 +959,7 @@ export default function AdminPage() {
                     if (data.ingredients) useInventoryStore.setState({ ingredients: data.ingredients, opnameLogs: data.opnameLogs || [] });
                     if (data.suppliers) useSupplierStore.setState({ suppliers: data.suppliers });
                     if (data.expenses) useExpenseStore.setState({ expenses: data.expenses });
+                    if (data.storeAccountMovements) useStoreAccountStore.setState({ movements: data.storeAccountMovements });
                     if (data.promos) usePromoStore.setState({ promos: data.promos });
                     if (data.customers) useCustomerStore.setState({ customers: data.customers });
                     if (data.sessions) useSalesStore.setState({ sessions: data.sessions });
@@ -1240,6 +1371,18 @@ export default function AdminPage() {
         }
     };
 
+    const restockCostNum = parseFloat(String(restockForm.costAmount).replace(/\D/g, '')) || 0;
+    const isRestockBlockedByBalance = restockCostNum > 0 && restockForm.paidVia === 'rekening_toko' && restockCostNum > storeAccount.availableBalance;
+    const restockShortfall = Math.max(0, restockCostNum - storeAccount.availableBalance);
+    const selectedRestockIng = ingredients.find(i => i.id === restockForm.ingredientId);
+
+    const expenseAmountNum = parseFloat(String(expenseForm.amount).replace(/\D/g, '')) || 0;
+    const isExpenseBlockedByBalance = expenseAmountNum > 0 && expenseForm.paidVia === 'rekening_toko' && expenseAmountNum > storeAccount.availableBalance;
+    const expenseShortfall = Math.max(0, expenseAmountNum - storeAccount.availableBalance);
+
+    const accountAmountNum = parseFloat(String(accountForm.amount).replace(/\D/g, '')) || 0;
+    const isWithdrawOverBalance = accountModalMode === 'withdraw' && accountAmountNum > storeAccount.availableBalance;
+
     return (
         <div className="min-h-screen bg-gray-50 text-forest relative flex flex-col">
             {/* ============ ADMIN NAVBAR ============ */}
@@ -1546,6 +1689,83 @@ export default function AdminPage() {
                             onReset={resetPeriodFilter}
                         />
 
+                        {/* Kartu Saldo Rekening Toko Real-Time (Sumber Putaran Modal Restok Bahan) */}
+                        <div className={`rounded-2xl p-4 md:p-5 border shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                            storeAccount.availableBalance > 0
+                                ? 'bg-gradient-to-r from-[#0D2B20] via-[#133829] to-[#1a4433] text-white border-emerald-700/40'
+                                : 'bg-gradient-to-r from-[#2c1515] to-[#3f1d1d] text-white border-red-700/40'
+                        }`}>
+                            <div className="flex items-start gap-3.5 min-w-0">
+                                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                                    storeAccount.availableBalance > 0 ? 'bg-amber-400 text-[#0D2B20]' : 'bg-red-500 text-white'
+                                }`}>
+                                    <Landmark size={22} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-amber-300">
+                                            Rekening Toko · Putaran Modal Kedai (Real-Time)
+                                        </span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                            storeAccount.availableBalance > 0
+                                                ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30'
+                                                : 'bg-red-500/30 text-red-200 border border-red-400/40'
+                                        }`}>
+                                            {storeAccount.availableBalance > 0 ? 'Siap Putar Restok' : 'Saldo Kosong · Perlu Top-Up'}
+                                        </span>
+                                    </div>
+                                    <p className="text-2xl sm:text-3xl font-black font-mono text-white mt-1 break-all">
+                                        Rp {storeAccount.availableBalance.toLocaleString('id-ID')}
+                                    </p>
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/75 mt-1.5">
+                                        <span>Pendapatan Kedai: <strong className="text-emerald-300 font-mono">+Rp {storeAccount.totalOrderRevenue.toLocaleString('id-ID')}</strong></span>
+                                        {storeAccount.totalTopUp > 0 && (
+                                            <span>Top-Up: <strong className="text-sky-300 font-mono">+Rp {storeAccount.totalTopUp.toLocaleString('id-ID')}</strong></span>
+                                        )}
+                                        <span>Restok &amp; Biaya: <strong className="text-amber-200 font-mono">-Rp {storeAccount.totalAllExpenses.toLocaleString('id-ID')}</strong></span>
+                                        {storeAccount.totalWithdraw > 0 && (
+                                            <span>Tarik Dana: <strong className="text-red-200 font-mono">-Rp {storeAccount.totalWithdraw.toLocaleString('id-ID')}</strong></span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {user.role === 'admin' && (
+                                <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => openAccountMovementModal('topup')}
+                                        className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#0D2B20] text-xs font-black transition flex items-center gap-1.5 shadow-sm"
+                                    >
+                                        <Plus size={14} /> Top-Up Modal
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setRestockForm({
+                                                ingredientId: ingredients[0]?.id || '',
+                                                addQty: '',
+                                                costAmount: '',
+                                                paidVia: 'rekening_toko',
+                                                supplierName: '',
+                                            });
+                                            setRestockModalOpen(true);
+                                        }}
+                                        className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                                    >
+                                        <PackagePlus size={14} /> Restok Bahan (PO)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleTabChange('keuangan')}
+                                        className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold transition flex items-center gap-1.5"
+                                    >
+                                        <Wallet size={14} /> Mutasi Rekening
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Low Stock Alert Banner */}
                         {(lowStockProducts.length > 0 || lowStockIngredients.length > 0) && (
                             <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1812,21 +2032,37 @@ export default function AdminPage() {
                             </div>
                             <div className="flex gap-2 flex-wrap">
                                 <button
+                                    type="button"
+                                    onClick={() => openAccountMovementModal('topup')}
+                                    className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-white px-3.5 py-2.5 rounded-xl font-black text-xs transition shadow-md">
+                                    <ArrowDownRight size={15} /> Top-Up Modal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => openAccountMovementModal('withdraw')}
+                                    className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-amber-200 border border-amber-300/30 px-3.5 py-2.5 rounded-xl font-bold text-xs transition">
+                                    <ArrowUpRight size={15} /> Tarik Dana / Laba
+                                </button>
+                                <button
+                                    type="button"
                                     onClick={() => setExpenseModalOpen(true)}
                                     className="flex items-center gap-2 bg-amber-400 text-[#0D2B20] px-4 py-2.5 rounded-xl font-black text-xs hover:bg-amber-300 transition shadow-lg">
                                     <Plus size={15} /> Catat Biaya Operasional
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleExportPNL}
                                     className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2.5 rounded-xl font-bold text-xs transition">
                                     <FileSpreadsheet size={15} /> Export P&amp;L (.xlsx)
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleExportBackup}
                                     className="flex items-center gap-2 bg-blue-600/80 hover:bg-blue-600 text-white px-3.5 py-2.5 rounded-xl font-bold text-xs transition">
                                     <Database size={15} /> Backup Data
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => backupFileRef.current?.click()}
                                     className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3.5 py-2.5 rounded-xl font-bold text-xs transition">
                                     <Upload size={15} /> Restore Data
@@ -1839,6 +2075,147 @@ export default function AdminPage() {
                                     className="hidden"
                                 />
                             </div>
+                        </div>
+
+                        {/* Panel Rekening Toko Real-Time (Sumber Putaran Modal Kedai) */}
+                        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-4 sm:p-6 space-y-4">
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <div className="flex items-start gap-3.5 min-w-0">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-xs ${
+                                        storeAccount.availableBalance > 0 ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                                    }`}>
+                                        <Landmark size={24} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-[11px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
+                                                🏦 Rekening Toko (Putar Modal Real-Time)
+                                            </span>
+                                            <span className="text-[11px] text-gray-400">
+                                                Mengikuti total pendapatan valid kedai ({storeAccount.validOrderCount} order)
+                                            </span>
+                                        </div>
+                                        <p className={`text-2xl sm:text-3xl font-black font-mono mt-1.5 break-all ${
+                                            storeAccount.availableBalance > 0 ? 'text-[#0D2B20]' : 'text-red-600'
+                                        }`}>
+                                            Rp {storeAccount.availableBalance.toLocaleString('id-ID')}
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Dana masuk dari penjualan kedai (Tunai + QRIS + Transfer) + Top-Up Modal, dikurangi biaya restok bahan, pengeluaran kas laci/bank, dan penarikan dana.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => openAccountMovementModal('topup')}
+                                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-1.5 shadow-xs"
+                                    >
+                                        <ArrowDownRight size={14} /> + Top-Up Modal
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => openAccountMovementModal('withdraw')}
+                                        disabled={storeAccount.availableBalance <= 0}
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+                                            storeAccount.availableBalance <= 0
+                                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                : 'bg-white text-red-700 border-red-200 hover:bg-red-50'
+                                        }`}
+                                    >
+                                        <ArrowUpRight size={14} /> - Tarik Dana
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setRestockForm({
+                                                ingredientId: ingredients[0]?.id || '',
+                                                addQty: '',
+                                                costAmount: '',
+                                                paidVia: 'rekening_toko',
+                                                supplierName: '',
+                                            });
+                                            setRestockModalOpen(true);
+                                        }}
+                                        className="px-3.5 py-2 rounded-xl bg-[#0D2B20] hover:bg-[#1a4433] text-amber-300 text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                                    >
+                                        <PackagePlus size={14} /> Putar ke Restok Bahan (PO)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-2 border-t border-gray-100">
+                                <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
+                                    <p className="text-[10px] font-bold uppercase text-emerald-700">+ Pendapatan Kedai</p>
+                                    <p className="text-sm sm:text-base font-black font-mono text-emerald-900 mt-0.5">
+                                        +Rp {storeAccount.totalOrderRevenue.toLocaleString('id-ID')}
+                                    </p>
+                                    <p className="text-[10px] text-emerald-700/80 mt-0.5">
+                                        Tunai Rp {storeAccount.cashRevenue.toLocaleString('id-ID')} · QRIS/TF Rp {storeAccount.digitalRevenue.toLocaleString('id-ID')}
+                                    </p>
+                                </div>
+                                <div className="bg-sky-50/70 border border-sky-100 rounded-xl p-3">
+                                    <p className="text-[10px] font-bold uppercase text-sky-700">+ Top-Up Modal</p>
+                                    <p className="text-sm sm:text-base font-black font-mono text-sky-900 mt-0.5">
+                                        +Rp {storeAccount.totalTopUp.toLocaleString('id-ID')}
+                                    </p>
+                                    <p className="text-[10px] text-sky-700/80 mt-0.5">Suntikan modal kerja kedai</p>
+                                </div>
+                                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3">
+                                    <p className="text-[10px] font-bold uppercase text-amber-800">- Restok Bahan (PO)</p>
+                                    <p className="text-sm sm:text-base font-black font-mono text-amber-900 mt-0.5">
+                                        -Rp {storeAccount.totalRestockCost.toLocaleString('id-ID')}
+                                    </p>
+                                    <p className="text-[10px] text-amber-800/80 mt-0.5">
+                                        Rekening Rp {storeAccount.rekeningRestockCost.toLocaleString('id-ID')} · Laci Rp {storeAccount.cashDrawerRestockCost.toLocaleString('id-ID')}
+                                    </p>
+                                </div>
+                                <div className="bg-orange-50/70 border border-orange-200 rounded-xl p-3">
+                                    <p className="text-[10px] font-bold uppercase text-orange-800">- Biaya Operasional</p>
+                                    <p className="text-sm sm:text-base font-black font-mono text-orange-900 mt-0.5">
+                                        -Rp {storeAccount.totalOtherExpenses.toLocaleString('id-ID')}
+                                    </p>
+                                    <p className="text-[10px] text-orange-800/80 mt-0.5">
+                                        Rekening Rp {storeAccount.rekeningOtherExpense.toLocaleString('id-ID')} · Laci Rp {storeAccount.cashDrawerOtherExpense.toLocaleString('id-ID')}
+                                    </p>
+                                </div>
+                                <div className="bg-red-50/70 border border-red-200 rounded-xl p-3 col-span-2 sm:col-span-1">
+                                    <p className="text-[10px] font-bold uppercase text-red-700">- Tarik Dana / Laba</p>
+                                    <p className="text-sm sm:text-base font-black font-mono text-red-900 mt-0.5">
+                                        -Rp {storeAccount.totalWithdraw.toLocaleString('id-ID')}
+                                    </p>
+                                    <p className="text-[10px] text-red-700/80 mt-0.5">Setoran profit ke pemilik</p>
+                                </div>
+                            </div>
+
+                            {storeAccount.totalInflow > 0 && (
+                                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                    <div className="flex flex-wrap justify-between items-center gap-2 text-[11px] font-bold text-gray-600 mb-1.5">
+                                        <span>Rasio Perputaran Modal (Restok + Biaya vs Total Dana Masuk)</span>
+                                        <span className="font-mono text-forest">
+                                            {Math.min(100, Math.round((storeAccount.totalAllExpenses / storeAccount.totalInflow) * 100))}% Terpakai · Sisa {Math.max(0, Math.round((storeAccount.availableBalance / storeAccount.totalInflow) * 100))}%
+                                        </span>
+                                    </div>
+                                    <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden flex">
+                                        <div
+                                            className="bg-amber-500 h-full transition-all"
+                                            style={{ width: `${Math.min(100, Math.round((storeAccount.totalRestockCost / storeAccount.totalInflow) * 100))}%` }}
+                                            title="Restok Bahan"
+                                        />
+                                        <div
+                                            className="bg-orange-500 h-full transition-all"
+                                            style={{ width: `${Math.min(100, Math.round((storeAccount.totalOtherExpenses / storeAccount.totalInflow) * 100))}%` }}
+                                            title="Biaya Operasional"
+                                        />
+                                        <div
+                                            className="bg-red-500 h-full transition-all"
+                                            style={{ width: `${Math.min(100, Math.round((storeAccount.totalWithdraw / storeAccount.totalInflow) * 100))}%` }}
+                                            title="Penarikan Dana"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Filter Per Hari & Per Sesi Shift untuk Laporan Laba Rugi & Petty Cash */}
@@ -1901,16 +2278,16 @@ export default function AdminPage() {
 
                         {/* Petty Cash Table */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                            <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+                            <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                                 <div>
                                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                        <DollarSign size={18} className="text-amber-500" /> Rincian Pengeluaran Operasional &amp; Kas Kecil (Petty Cash)
+                                        <DollarSign size={18} className="text-amber-500 flex-shrink-0" /> Rincian Pengeluaran Operasional &amp; Kas Kecil (Petty Cash)
                                     </h3>
                                     <p className="text-xs text-gray-400 mt-0.5">Catatan uang keluar dari Kasir POS, Restok PO Bahan Baku, maupun Biaya Operasional Toko.</p>
                                 </div>
                                 <button
                                     onClick={() => setExpenseModalOpen(true)}
-                                    className="bg-amber-100 hover:bg-amber-200 text-[#0D2B20] font-bold text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1.5">
+                                    className="bg-amber-100 hover:bg-amber-200 text-[#0D2B20] font-bold text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 self-start sm:self-auto flex-shrink-0">
                                     <Plus size={14} /> Tambah Biaya
                                 </button>
                             </div>
@@ -1983,6 +2360,205 @@ export default function AdminPage() {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+
+                        {/* Mutasi Rekening Toko Real-Time (Ledger Arus Modal) */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-emerald-200/80 overflow-hidden">
+                            <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                <div>
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                        <Landmark size={18} className="text-emerald-600 flex-shrink-0" /> Buku Mutasi Rekening Toko (Arus Modal Real-Time)
+                                    </h3>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        Riwayat kronologis setiap pendapatan masuk kedai, top-up modal, belanja restok bahan (PO), dan penarikan dana beserta saldo akhir berjalan.
+                                    </p>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {([
+                                        { id: 'all', label: `Semua (${storeAccountLedger.length})` },
+                                        { id: 'in', label: 'Masuk' },
+                                        { id: 'restock', label: 'Restok & Biaya' },
+                                        { id: 'manual', label: `Top-Up / Tarik (${movements.length})` },
+                                    ] as const).map(f => (
+                                        <button
+                                            key={f.id}
+                                            type="button"
+                                            onClick={() => setLedgerFilter(f.id)}
+                                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition border ${
+                                                ledgerFilter === f.id
+                                                    ? 'bg-[#0D2B20] text-amber-300 border-[#0D2B20]'
+                                                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {f.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Desktop Ledger Table */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <thead className="bg-gray-50 uppercase text-gray-500 font-bold tracking-wider">
+                                        <tr>
+                                            <th className="p-3.5">Waktu</th>
+                                            <th className="p-3.5">Jenis Mutasi</th>
+                                            <th className="p-3.5">Keterangan</th>
+                                            <th className="p-3.5">Sumber / Metode</th>
+                                            <th className="p-3.5 text-right">Nominal (+/-)</th>
+                                            <th className="p-3.5 text-right">Saldo Rekening</th>
+                                            <th className="p-3.5 text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {(showAllLedger ? filteredStoreLedger : filteredStoreLedger.slice(0, 25)).map(entry => (
+                                            <tr key={entry.id} className="hover:bg-gray-50 transition">
+                                                <td className="p-3.5 text-gray-500 font-mono whitespace-nowrap">
+                                                    {new Date(entry.date).toLocaleString('id-ID', {
+                                                        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                                                    })}
+                                                </td>
+                                                <td className="p-3.5 whitespace-nowrap">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                                        entry.kind === 'order_revenue' ? 'bg-emerald-100 text-emerald-800' :
+                                                        entry.kind === 'topup' ? 'bg-sky-100 text-sky-800' :
+                                                        entry.kind === 'restock' ? 'bg-amber-100 text-amber-800' :
+                                                        entry.kind === 'withdraw' ? 'bg-red-100 text-red-800' :
+                                                        'bg-orange-100 text-orange-800'
+                                                    }`}>
+                                                        {entry.kind === 'order_revenue' ? '💰 Penjualan' :
+                                                         entry.kind === 'topup' ? '⬆️ Top-Up Modal' :
+                                                         entry.kind === 'restock' ? '📦 Restok (PO)' :
+                                                         entry.kind === 'withdraw' ? '⬇️ Tarik Dana' :
+                                                         '💸 Biaya Ops'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3.5">
+                                                    <p className="font-bold text-gray-800">{entry.title}</p>
+                                                    <p className="text-[11px] text-gray-400">{entry.subtitle}</p>
+                                                </td>
+                                                <td className="p-3.5 text-gray-600 whitespace-nowrap">
+                                                    <span className="font-semibold">{entry.channelLabel}</span>
+                                                    {entry.actor && <span className="block text-[10px] text-gray-400">oleh {entry.actor}</span>}
+                                                </td>
+                                                <td className={`p-3.5 text-right font-mono font-black whitespace-nowrap ${
+                                                    entry.direction === 'in' ? 'text-emerald-600' : 'text-red-600'
+                                                }`}>
+                                                    {entry.direction === 'in' ? '+' : '-'}Rp {entry.amount.toLocaleString('id-ID')}
+                                                </td>
+                                                <td className={`p-3.5 text-right font-mono font-bold whitespace-nowrap ${
+                                                    entry.balanceAfter >= 0 ? 'text-[#0D2B20]' : 'text-red-600'
+                                                }`}>
+                                                    Rp {entry.balanceAfter.toLocaleString('id-ID')}
+                                                </td>
+                                                <td className="p-3.5 text-center">
+                                                    {entry.canDelete ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (confirm(`Hapus catatan mutasi "${entry.title}"? Saldo rekening akan disesuaikan otomatis.`)) {
+                                                                    deleteMovement(entry.sourceId);
+                                                                    toast.success("Mutasi rekening dihapus & saldo disesuaikan.");
+                                                                }
+                                                            }}
+                                                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition"
+                                                            title="Hapus mutasi manual"
+                                                        >
+                                                            <Trash size={14} />
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-300 font-semibold">Auto</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {filteredStoreLedger.length === 0 && (
+                                            <tr>
+                                                <td colSpan={7} className="p-8 text-center text-gray-400 italic">
+                                                    Belum ada mutasi Rekening Toko pada filter ini.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Ledger Cards (Bebas Terpotong di Layar Kecil) */}
+                            <div className="md:hidden divide-y divide-gray-100">
+                                {(showAllLedger ? filteredStoreLedger : filteredStoreLedger.slice(0, 25)).map(entry => (
+                                    <div key={entry.id} className="p-3.5 space-y-1.5">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                                        entry.kind === 'order_revenue' ? 'bg-emerald-100 text-emerald-800' :
+                                                        entry.kind === 'topup' ? 'bg-sky-100 text-sky-800' :
+                                                        entry.kind === 'restock' ? 'bg-amber-100 text-amber-800' :
+                                                        entry.kind === 'withdraw' ? 'bg-red-100 text-red-800' :
+                                                        'bg-orange-100 text-orange-800'
+                                                    }`}>
+                                                        {entry.kind === 'order_revenue' ? '💰 Penjualan' :
+                                                         entry.kind === 'topup' ? '⬆️ Top-Up' :
+                                                         entry.kind === 'restock' ? '📦 Restok' :
+                                                         entry.kind === 'withdraw' ? '⬇️ Tarik' :
+                                                         '💸 Biaya'}
+                                                    </span>
+                                                    <span className="text-[10px] text-gray-400 font-mono">
+                                                        {new Date(entry.date).toLocaleString('id-ID', {
+                                                            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                </div>
+                                                <p className="font-bold text-xs text-gray-800 mt-1 break-words">{entry.title}</p>
+                                                <p className="text-[11px] text-gray-400 break-words">{entry.subtitle} · {entry.channelLabel}</p>
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                                <p className={`font-mono font-black text-xs ${
+                                                    entry.direction === 'in' ? 'text-emerald-600' : 'text-red-600'
+                                                }`}>
+                                                    {entry.direction === 'in' ? '+' : '-'}Rp {entry.amount.toLocaleString('id-ID')}
+                                                </p>
+                                                <p className="text-[10px] font-mono text-gray-500 mt-0.5">
+                                                    Saldo Rp {entry.balanceAfter.toLocaleString('id-ID')}
+                                                </p>
+                                                {entry.canDelete && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (confirm(`Hapus catatan mutasi "${entry.title}"?`)) {
+                                                                deleteMovement(entry.sourceId);
+                                                                toast.success("Mutasi dihapus.");
+                                                            }
+                                                        }}
+                                                        className="mt-1 text-[10px] text-red-500 font-bold underline"
+                                                    >
+                                                        Hapus
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {filteredStoreLedger.length === 0 && (
+                                    <p className="p-6 text-center text-xs text-gray-400 italic">
+                                        Belum ada mutasi Rekening Toko pada filter ini.
+                                    </p>
+                                )}
+                            </div>
+
+                            {filteredStoreLedger.length > 25 && (
+                                <div className="p-3 bg-gray-50 border-t border-gray-100 text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAllLedger(prev => !prev)}
+                                        className="text-xs font-bold text-[#0D2B20] hover:underline"
+                                    >
+                                        {showAllLedger
+                                            ? 'Tampilkan 25 Mutasi Terakhir'
+                                            : `Tampilkan Semua (${filteredStoreLedger.length} Mutasi)`}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -2877,6 +3453,52 @@ export default function AdminPage() {
                             </div>
                         </div>
 
+                        {/* Rekening Toko Real-Time Siap Putar Modal Restok */}
+                        <div className={`rounded-2xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            storeAccount.availableBalance > 0
+                                ? 'bg-emerald-50/80 border-emerald-200'
+                                : 'bg-red-50/80 border-red-200'
+                        }`}>
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className={`p-2.5 rounded-xl flex-shrink-0 ${
+                                    storeAccount.availableBalance > 0 ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                                }`}>
+                                    <Landmark size={20} />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                                        Saldo Rekening Toko Siap Putar Modal Restok (Real-Time)
+                                    </p>
+                                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 mt-0.5">
+                                        <span className={`text-lg sm:text-xl font-black font-mono ${
+                                            storeAccount.availableBalance > 0 ? 'text-emerald-800' : 'text-red-700'
+                                        }`}>
+                                            Rp {storeAccount.availableBalance.toLocaleString('id-ID')}
+                                        </span>
+                                        <span className="text-[11px] text-gray-500">
+                                            (Total sudah terpakai restok: <strong className="font-mono text-amber-800">Rp {storeAccount.totalRestockCost.toLocaleString('id-ID')}</strong>)
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2 flex-shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => openAccountMovementModal('topup')}
+                                    className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#0D2B20] text-xs font-black transition flex items-center gap-1"
+                                >
+                                    <Plus size={13} /> Top-Up Modal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleTabChange('keuangan')}
+                                    className="px-3 py-2 rounded-xl bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-bold transition"
+                                >
+                                    Riwayat Rekening →
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Ingredients Table */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                             <div className="p-5 border-b border-gray-100 flex justify-between items-center">
@@ -3542,6 +4164,28 @@ export default function AdminPage() {
                             <button type="button" onClick={() => setRestockModalOpen(false)} className="p-1 hover:bg-white/10 rounded-lg flex-shrink-0"><X size={20} /></button>
                         </div>
                         <div className="p-4 sm:p-6 space-y-3 overflow-y-auto flex-1">
+                            {/* Info Saldo Rekening Toko Real-Time */}
+                            <div className={`rounded-xl p-3 border text-xs flex flex-wrap items-center justify-between gap-2 ${
+                                storeAccount.availableBalance > 0
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                    : 'bg-red-50 border-red-200 text-red-900'
+                            }`}>
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider opacity-75">Saldo Rekening Toko Tersedia</p>
+                                    <p className="text-base font-black font-mono">
+                                        Rp {storeAccount.availableBalance.toLocaleString('id-ID')}
+                                    </p>
+                                </div>
+                                {restockCostNum > 0 && restockForm.paidVia === 'rekening_toko' && (
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider opacity-75">Sisa Setelah Restok</p>
+                                        <p className={`text-sm font-black font-mono ${isRestockBlockedByBalance ? 'text-red-600' : 'text-emerald-700'}`}>
+                                            Rp {(storeAccount.availableBalance - restockCostNum).toLocaleString('id-ID')}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
                             <div>
                                 <label className="text-xs font-bold text-gray-600 mb-1 block">Bahan Baku *</label>
                                 <select required value={restockForm.ingredientId} onChange={e => setRestockForm(f => ({ ...f, ingredientId: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900">
@@ -3554,7 +4198,7 @@ export default function AdminPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="text-xs font-bold text-gray-600 mb-1 block">Jumlah Tambahan *</label>
-                                    <input required type="number" min={0} step="any" value={restockForm.addQty} onChange={e => setRestockForm(f => ({ ...f, addQty: e.target.value }))} placeholder={ingredients.find(i => i.id === restockForm.ingredientId)?.unit || ''} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900" />
+                                    <input required type="number" min={0} step="any" value={restockForm.addQty} onChange={e => setRestockForm(f => ({ ...f, addQty: e.target.value }))} placeholder={selectedRestockIng?.unit || ''} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900" />
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-gray-600 mb-1 block">Biaya Pembelian (Rp)</label>
@@ -3577,10 +4221,55 @@ export default function AdminPage() {
                                     </select>
                                 </div>
                             </div>
+
+                            {/* Guard: Saldo Rekening Toko Tidak Mencukupi (A2) */}
+                            {isRestockBlockedByBalance && (
+                                <div role="alert" className="bg-red-50 border border-red-300 rounded-xl p-3 space-y-2.5 text-xs text-red-900">
+                                    <div className="flex items-start gap-2">
+                                        <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="font-black text-red-700">Saldo Rekening Toko Tidak Mencukupi!</p>
+                                            <p className="text-[11px] mt-0.5">
+                                                Biaya restok <strong>Rp {restockCostNum.toLocaleString('id-ID')}</strong> kurang <strong className="font-mono">Rp {restockShortfall.toLocaleString('id-ID')}</strong> dari saldo tersedia.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => openAccountMovementModal(
+                                                'topup',
+                                                restockShortfall,
+                                                `Top-Up Modal Restok ${selectedRestockIng?.name || 'Bahan Baku'}`
+                                            )}
+                                            className="flex-1 py-2 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#0D2B20] font-black text-[11px] transition flex items-center justify-center gap-1"
+                                        >
+                                            <Plus size={12} /> Top-Up Modal (+Rp {restockShortfall.toLocaleString('id-ID')})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRestockForm(f => ({ ...f, paidVia: 'kas_laci' }))}
+                                            className="flex-1 py-2 px-3 rounded-lg bg-white hover:bg-amber-50 text-gray-800 border border-gray-300 font-bold text-[11px] transition"
+                                        >
+                                            Ganti ke 💵 Kas Laci
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="flex gap-2 px-4 sm:px-6 pb-4 sm:pb-6 pt-2 flex-shrink-0 border-t border-gray-100">
                             <button type="button" onClick={() => setRestockModalOpen(false)} className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-lg font-bold text-sm hover:bg-gray-50">Batal</button>
-                            <button type="submit" className="flex-1 py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 flex items-center justify-center gap-2"><Save size={14} /> Simpan Restok</button>
+                            <button
+                                type="submit"
+                                disabled={isRestockBlockedByBalance}
+                                className={`flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition ${
+                                    isRestockBlockedByBalance
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                }`}
+                            >
+                                <Save size={14} /> {isRestockBlockedByBalance ? 'Saldo Kurang' : 'Simpan Restok'}
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -4066,11 +4755,41 @@ export default function AdminPage() {
                                 <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-amber-600" />
                                 <div>
                                     {expenseForm.paidVia === 'kas_laci'
-                                        ? <span><strong>Kas Laci:</strong> Pengeluaran ini otomatis memotong total uang tunai yang wajib disetor kasir saat tutup shift.</span>
-                                        : <span><strong>Rekening Toko:</strong> Pengeluaran dicatat ke Laporan Laba Rugi tanpa mengurangi saldo fisik kas laci kasir.</span>
+                                        ? <span><strong>Kas Laci:</strong> Pengeluaran memotong uang laci kasir sekaligus memperbarui saldo Rekening Toko (Saldo: <strong>Rp {storeAccount.availableBalance.toLocaleString('id-ID')}</strong>).</span>
+                                        : <span><strong>Rekening Toko:</strong> Saldo tersedia saat ini <strong className="font-mono">Rp {storeAccount.availableBalance.toLocaleString('id-ID')}</strong> (tidak memotong laci kasir).</span>
                                     }
                                 </div>
                             </div>
+
+                            {isExpenseBlockedByBalance && (
+                                <div role="alert" className="bg-red-50 border border-red-300 rounded-xl p-3 space-y-2.5 text-xs text-red-900">
+                                    <div className="flex items-start gap-2">
+                                        <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="font-black text-red-700">Saldo Rekening Toko Tidak Mencukupi!</p>
+                                            <p className="text-[11px] mt-0.5">
+                                                Kurang <strong className="font-mono">Rp {expenseShortfall.toLocaleString('id-ID')}</strong> untuk mencatat biaya via Rekening Toko.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => openAccountMovementModal('topup', expenseShortfall, 'Top-Up Modal Operasional Kedai')}
+                                            className="flex-1 py-2 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#0D2B20] font-black text-[11px] transition flex items-center justify-center gap-1"
+                                        >
+                                            <Plus size={12} /> Top-Up (+Rp {expenseShortfall.toLocaleString('id-ID')})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setExpenseForm(f => ({ ...f, paidVia: 'kas_laci' }))}
+                                            className="flex-1 py-2 px-3 rounded-lg bg-white hover:bg-amber-50 text-gray-800 border border-gray-300 font-bold text-[11px] transition"
+                                        >
+                                            Ganti ke 💵 Kas Laci
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
@@ -4095,9 +4814,14 @@ export default function AdminPage() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 py-2.5 bg-[#0D2B20] text-amber-400 rounded-xl font-bold text-sm hover:bg-[#1a3d2e] transition flex items-center justify-center gap-2 shadow-md"
+                                    disabled={isExpenseBlockedByBalance}
+                                    className={`flex-1 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition ${
+                                        isExpenseBlockedByBalance
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-[#0D2B20] text-amber-400 hover:bg-[#1a3d2e]'
+                                    }`}
                                 >
-                                    <Save size={15} /> Simpan
+                                    <Save size={15} /> {isExpenseBlockedByBalance ? 'Saldo Kurang' : 'Simpan'}
                                 </button>
                             </div>
                         </form>
@@ -4378,6 +5102,146 @@ export default function AdminPage() {
                                 >
                                     <Lock size={15} />
                                     {isOnlineOrderOpen ? 'Kunci & Tutup Kedai Sekarang' : 'Simpan Perubahan Pesan Tutup'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ============ MODAL: TOP-UP MODAL / TARIK DANA REKENING TOKO ============ */}
+            {accountModalMode && (
+                <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border border-gray-100 animate-scale-up">
+                        <div className={`px-4 sm:px-6 py-4 flex justify-between items-center flex-shrink-0 text-white ${
+                            accountModalMode === 'topup' ? 'bg-emerald-700' : 'bg-red-700'
+                        }`}>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="p-2 bg-white/15 rounded-xl flex-shrink-0">
+                                    <Landmark size={18} />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="font-serif font-bold text-base">
+                                        {accountModalMode === 'topup' ? 'Top-Up Modal Rekening Toko' : 'Tarik Dana / Ambil Laba'}
+                                    </h3>
+                                    <p className="text-xs text-white/80">
+                                        Saldo Saat Ini: <strong className="font-mono">Rp {storeAccount.availableBalance.toLocaleString('id-ID')}</strong>
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setAccountModalMode(null)}
+                                className="p-1 hover:bg-white/10 rounded-lg flex-shrink-0"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveAccountMovement} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                    Nominal {accountModalMode === 'topup' ? 'Setoran Modal' : 'Penarikan'} (Rp) <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-gray-500 text-sm">Rp</span>
+                                    <input
+                                        type="number"
+                                        required
+                                        min="1"
+                                        placeholder="0"
+                                        value={accountForm.amount}
+                                        onChange={e => setAccountForm(f => ({ ...f, amount: e.target.value }))}
+                                        className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] font-bold text-lg text-forest"
+                                    />
+                                </div>
+                                {accountModalMode === 'topup' && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {[50000, 100000, 250000, 500000].map(preset => (
+                                            <button
+                                                key={preset}
+                                                type="button"
+                                                onClick={() => setAccountForm(f => ({ ...f, amount: String(preset) }))}
+                                                className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-bold font-mono transition"
+                                            >
+                                                +Rp {preset.toLocaleString('id-ID')}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {accountAmountNum > 0 && (
+                                <div className={`rounded-xl p-3 border text-xs flex items-center justify-between ${
+                                    isWithdrawOverBalance
+                                        ? 'bg-red-50 border-red-300 text-red-800'
+                                        : 'bg-gray-50 border-gray-200 text-gray-700'
+                                }`}>
+                                    <span className="font-bold">Estimasi Saldo Setelah Mutasi:</span>
+                                    <span className={`font-black font-mono ${isWithdrawOverBalance ? 'text-red-600' : 'text-[#0D2B20]'}`}>
+                                        Rp {(accountModalMode === 'topup'
+                                            ? storeAccount.availableBalance + accountAmountNum
+                                            : storeAccount.availableBalance - accountAmountNum
+                                        ).toLocaleString('id-ID')}
+                                    </span>
+                                </div>
+                            )}
+
+                            {isWithdrawOverBalance && (
+                                <p className="text-xs text-red-600 font-bold flex items-center gap-1.5">
+                                    <AlertTriangle size={14} className="flex-shrink-0" />
+                                    Nominal melebihi saldo Rekening Toko tersedia!
+                                </p>
+                            )}
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                    Keterangan <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={accountForm.description}
+                                    onChange={e => setAccountForm(f => ({ ...f, description: e.target.value }))}
+                                    placeholder={accountModalMode === 'topup' ? 'cth: Modal Awal Kedai / Suntikan Modal Restok' : 'cth: Setor Laba Harian ke Pemilik'}
+                                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                    Catatan Tambahan (Opsional)
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    value={accountForm.notes}
+                                    onChange={e => setAccountForm(f => ({ ...f, notes: e.target.value }))}
+                                    placeholder="No. referensi transfer / keterangan..."
+                                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] text-xs"
+                                />
+                            </div>
+
+                            <div className="flex gap-2 pt-2 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setAccountModalMode(null)}
+                                    className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isWithdrawOverBalance}
+                                    className={`flex-1 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition ${
+                                        isWithdrawOverBalance
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : accountModalMode === 'topup'
+                                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                                : 'bg-red-600 hover:bg-red-700 text-white'
+                                    }`}
+                                >
+                                    <Save size={15} />
+                                    {accountModalMode === 'topup' ? 'Simpan Top-Up' : 'Simpan Penarikan'}
                                 </button>
                             </div>
                         </form>

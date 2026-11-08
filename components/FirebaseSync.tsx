@@ -9,7 +9,7 @@
  *
  * FUNGSI UTAMA (Jantung Arsitektur Offline-First & Real-Time):
  * 1. **Auto-Flush Antrean Offline**: Saat koneksi internet kembali *online*, otomatis mengunggah `offlineOrders` dan `offlineLogs` dari IndexedDB ke Firebase RTDB.
- * 2. **Real-Time Listener (`onValue`)**: Mendengarkan perubahan node `orders`, `products`, `ingredients` (BOM), `sessions`, `expenses`, `suppliers`, `opnameLogs`, `users`, dan `storeConfig` (Lock/Unlock Buka-Tutup Kedai Online) agar layar Pelanggan, Kasir POS, dan Admin selalu sinkron (<500ms).
+ * 2. **Real-Time Listener (`onValue`)**: Mendengarkan perubahan node `orders`, `products`, `ingredients` (BOM), `sessions`, `expenses`, `storeAccountMovements` (Rekening Toko), `suppliers`, `opnameLogs`, `users`, dan `storeConfig` (Lock/Unlock Buka-Tutup Kedai Online) agar layar Pelanggan, Kasir POS, dan Admin selalu sinkron (<500ms).
  * 3. **Notifikasi Audio Otomatis**: Memutar bunyi bel saat ada pesanan baru masuk di kasir atau saat pesanan pelanggan selesai diracik.
  * ============================================================================
  */
@@ -24,6 +24,7 @@ import {
     useProductStore,
     useForecastHistoryStore,
     useExpenseStore,
+    useStoreAccountStore,
     usePromoStore,
     useCustomerStore,
     useSupplierStore,
@@ -32,7 +33,10 @@ import {
     DEFAULT_STORE_CONFIG,
     DEFAULT_INGREDIENTS,
     DEFAULT_JASMINE_BUNDLE_PROMO,
+    LEGACY_DEMO_EXPENSE_IDS,
     Order,
+    Expense,
+    StoreAccountMovement,
     ActivityLog,
     ExtendedProduct,
     StoreSession,
@@ -398,16 +402,80 @@ export default function FirebaseSync() {
             console.debug("[FirebaseSync] salesHistory sync paused:", err.message);
         });
 
+        const deletedExpensesRef = ref(rtdb, 'deletedExpenses');
+        let remoteDeletedExpenseIds = new Set<string>(useExpenseStore.getState().deletedExpenseIds || []);
+        const unsubDeletedExpenses = onValue(deletedExpensesRef, (snapshot) => {
+            const val = snapshot.val();
+            const fromRemote = val && typeof val === 'object' ? Object.keys(val).filter(k => val[k]) : [];
+            const localDel = useExpenseStore.getState().deletedExpenseIds || [];
+            remoteDeletedExpenseIds = new Set([
+                ...fromRemote,
+                ...localDel,
+                ...Array.from(LEGACY_DEMO_EXPENSE_IDS),
+            ]);
+            useExpenseStore.setState((s) => ({
+                expenses: s.expenses.filter(e => !remoteDeletedExpenseIds.has(e.id)),
+                deletedExpenseIds: Array.from(remoteDeletedExpenseIds),
+            }));
+        }, () => {});
+
         const expensesRef = ref(rtdb, 'expenses');
         const unsubExpenses = onValue(expensesRef, (snapshot) => {
             const data = snapshot.val();
+            const currentDeleted = new Set([
+                ...remoteDeletedExpenseIds,
+                ...(useExpenseStore.getState().deletedExpenseIds || []),
+                ...Array.from(LEGACY_DEMO_EXPENSE_IDS),
+            ]);
             if (data) {
-                const loaded = Object.values(data) as any[];
+                const loaded = (Object.values(data) as Expense[]).filter(
+                    e => e && e.id && !currentDeleted.has(e.id)
+                );
                 loaded.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 useExpenseStore.setState({ expenses: loaded });
+            } else {
+                useExpenseStore.setState((s) => ({
+                    expenses: s.expenses.filter(e => !currentDeleted.has(e.id)),
+                }));
             }
         }, (err) => {
             console.debug("[FirebaseSync] expenses sync paused:", err.message);
+        });
+
+        // Sinkronisasi Real-Time Mutasi Manual Rekening Toko (Top-Up Modal & Tarik Dana)
+        const deletedMovementsRef = ref(rtdb, 'deletedStoreAccountMovements');
+        let remoteDeletedMovementIds = new Set<string>(useStoreAccountStore.getState().deletedMovementIds || []);
+        const unsubDeletedMovements = onValue(deletedMovementsRef, (snapshot) => {
+            const val = snapshot.val();
+            const fromRemote = val && typeof val === 'object' ? Object.keys(val).filter(k => val[k]) : [];
+            const localDel = useStoreAccountStore.getState().deletedMovementIds || [];
+            remoteDeletedMovementIds = new Set([...fromRemote, ...localDel]);
+            useStoreAccountStore.setState((s) => ({
+                movements: s.movements.filter(m => !remoteDeletedMovementIds.has(m.id)),
+                deletedMovementIds: Array.from(remoteDeletedMovementIds),
+            }));
+        }, () => {});
+
+        const storeMovementsRef = ref(rtdb, 'storeAccountMovements');
+        const unsubMovements = onValue(storeMovementsRef, (snapshot) => {
+            const data = snapshot.val();
+            const currentDeleted = new Set([
+                ...remoteDeletedMovementIds,
+                ...(useStoreAccountStore.getState().deletedMovementIds || []),
+            ]);
+            if (data) {
+                const loaded = (Object.values(data) as StoreAccountMovement[]).filter(
+                    m => m && m.id && !currentDeleted.has(m.id)
+                );
+                loaded.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                useStoreAccountStore.setState({ movements: loaded });
+            } else {
+                useStoreAccountStore.setState((s) => ({
+                    movements: s.movements.filter(m => !currentDeleted.has(m.id)),
+                }));
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] storeAccountMovements sync paused:", err.message);
         });
 
         // Sinkronisasi Real-Time Status Buka / Tutup (Lock / Unlock) Kedai & Menu Online Pelanggan
@@ -479,7 +547,10 @@ export default function FirebaseSync() {
             unsubLogs();
             unsubSessions();
             unsubHistory();
+            unsubDeletedExpenses();
             unsubExpenses();
+            unsubDeletedMovements();
+            unsubMovements();
             unsubStoreConfig();
             unsubscribeStatus();
         };
