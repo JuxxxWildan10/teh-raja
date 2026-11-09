@@ -17,7 +17,7 @@
 
 
 import { useRef } from "react";
-import { Order, formatVariantLabel } from "@/lib/store";
+import { Order, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLabel } from "@/lib/store";
 import { X, Printer, Share2, Bluetooth } from "lucide-react";
 import { motion } from "framer-motion";
 import { buildReceiptPayload, printViaBluetooth } from "@/lib/printer";
@@ -40,6 +40,8 @@ function formatRp(n: number) {
 
 export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
     const receiptRef = useRef<HTMLDivElement>(null);
+    const totalCups = countOrderCupQuantity(order.items, []);
+    const kresekPackagingText = getKresekPackagingLabel(totalCups);
 
     const handleBluetoothPrint = async () => {
         try {
@@ -68,7 +70,7 @@ No. Order : #${order.id.slice(0, 8).toUpperCase()}
 Tanggal   : ${new Date(order.date).toLocaleString('id-ID')}
 Kasir     : ${order.cashierName || 'Kasir Teh Raja'}
 Pelanggan : ${order.customerName || 'Pelanggan'}
-${order.tableNumber ? `Meja/Tipe : ${order.tableNumber} (${order.orderType || 'Dine-in'})\n` : ''}──────────────────────────────
+${order.tableNumber ? `Meja/Tipe : ${order.tableNumber} (${order.orderType || 'Dine-in'})\n` : ''}${kresekPackagingText ? `Kemasan   : ${kresekPackagingText}\n` : ''}──────────────────────────────
 *PESANAN:*
 ${itemsList}
 ──────────────────────────────
@@ -160,6 +162,12 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
                         <div className="flex justify-between">
                             <span className="text-gray-600">Tipe Order</span>
                             <span className="font-bold uppercase">{order.orderType === 'dine-in' ? 'Makan di Tempat' : 'Bawa Pulang'}</span>
+                        </div>
+                    )}
+                    {kresekPackagingText && (
+                        <div className="flex justify-between items-center text-[10px] text-gray-700 bg-gray-50 border border-gray-200/60 px-2 py-1 rounded mt-1">
+                            <span className="text-gray-500">Kemasan Kantong</span>
+                            <span className="font-bold text-gray-800">🛍️ {kresekPackagingText}</span>
                         </div>
                     )}
                 </div>

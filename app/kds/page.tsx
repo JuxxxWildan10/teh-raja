@@ -16,7 +16,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuthStore, useSalesStore, formatVariantLabel } from "@/lib/store";
+import { useAuthStore, useSalesStore, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLabel } from "@/lib/store";
 import { Clock, CheckCircle2, UtensilsCrossed, ShoppingBag, LayoutDashboard, AlertCircle, ShoppingCart, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -225,6 +225,24 @@ export default function KDSPage() {
                                                             </div>
                                                         </div>
                                                     ))}
+
+                                                    {/* Petunjuk Kantong Plastik Packing untuk Barista/Staf */}
+                                                    {(() => {
+                                                        const cups = countOrderCupQuantity(order.items, []);
+                                                        const kresek = getKresekPackagingLabel(cups);
+                                                        if (!kresek) return null;
+                                                        return (
+                                                            <div className="p-2.5 bg-emerald-950/70 border border-emerald-500/40 rounded-xl flex items-center justify-between text-xs text-emerald-300">
+                                                                <span className="font-bold flex items-center gap-1.5 min-w-0 truncate">
+                                                                    <span>🛍️</span>
+                                                                    <span className="truncate">Kemasan: <strong className="text-white">{kresek}</strong></span>
+                                                                </span>
+                                                                <span className="text-[10px] bg-emerald-900 border border-emerald-700 text-emerald-200 px-1.5 py-0.5 rounded font-black flex-shrink-0">
+                                                                    {cups} Cup
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
 
                                                 <div className="p-3 bg-gray-800 border-t border-gray-700 mt-auto">
@@ -312,6 +330,24 @@ export default function KDSPage() {
                                                             </div>
                                                         </div>
                                                     ))}
+
+                                                    {/* Petunjuk Kantong Plastik Packing untuk Barista/Staf */}
+                                                    {(() => {
+                                                        const cups = countOrderCupQuantity(order.items, []);
+                                                        const kresek = getKresekPackagingLabel(cups);
+                                                        if (!kresek) return null;
+                                                        return (
+                                                            <div className="p-2.5 bg-orange-950/70 border border-orange-500/40 rounded-xl flex items-center justify-between text-xs text-orange-300">
+                                                                <span className="font-bold flex items-center gap-1.5 min-w-0 truncate">
+                                                                    <span>🛍️</span>
+                                                                    <span className="truncate">Kemasan: <strong className="text-white">{kresek}</strong></span>
+                                                                </span>
+                                                                <span className="text-[10px] bg-orange-900 border border-orange-700 text-orange-200 px-1.5 py-0.5 rounded font-black flex-shrink-0">
+                                                                    {cups} Cup
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
 
                                                 <div className="p-3 bg-gray-800 border-t border-gray-700 mt-auto flex gap-2">

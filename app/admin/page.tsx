@@ -1327,6 +1327,12 @@ export default function AdminPage() {
         return result;
     }, [ingredients, ingSearch, ingSortMode]);
 
+    // Daftar bahan baku terurut abjad A-Z untuk dropdown modal (Restok, Opname, Resep, Suplier)
+    const alphabetizedIngredients = useMemo(
+        () => [...ingredients].sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' })),
+        [ingredients]
+    );
+
     const salesData = {
         labels: dailySales.map(d => d.date),
         datasets: [
@@ -4232,7 +4238,7 @@ export default function AdminPage() {
                                         className="min-w-[140px] flex-1 px-2 py-2 border border-gray-300 rounded-lg text-xs bg-white text-gray-900"
                                     >
                                         <option value="">-- Pilih bahan --</option>
-                                        {ingredients.map(i => (
+                                        {alphabetizedIngredients.map(i => (
                                             <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
                                         ))}
                                     </select>
@@ -4328,7 +4334,7 @@ export default function AdminPage() {
                                 <label className="text-xs font-bold text-gray-600 mb-1 block">Bahan Baku *</label>
                                 <select required value={restockForm.ingredientId} onChange={e => setRestockForm(f => ({ ...f, ingredientId: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-gray-900">
                                     <option value="">-- Pilih Bahan --</option>
-                                    {ingredients.map(i => (
+                                    {alphabetizedIngredients.map(i => (
                                         <option key={i.id} value={i.id}>{i.name} (stok: {i.stock.toLocaleString('id-ID')} {i.unit})</option>
                                     ))}
                                 </select>
@@ -4443,7 +4449,7 @@ export default function AdminPage() {
                             <div>
                                 <label className="text-xs font-bold text-gray-600 mb-1 block">Bahan yang Disuplai</label>
                                 <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                                    {ingredients.map(i => (
+                                    {alphabetizedIngredients.map(i => (
                                         <label key={i.id} className="flex items-center gap-1.5 text-xs text-gray-700">
                                             <input
                                                 type="checkbox"
@@ -5008,7 +5014,7 @@ export default function AdminPage() {
                                     className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm font-semibold bg-white"
                                 >
                                     <option value="">-- Pilih Bahan --</option>
-                                    {ingredients.map(ing => (
+                                    {alphabetizedIngredients.map(ing => (
                                         <option key={ing.id} value={ing.id}>
                                             {ing.name} (Stok Sistem: {ing.stock.toLocaleString('id-ID')} {ing.unit})
                                         </option>

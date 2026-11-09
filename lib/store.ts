@@ -1426,6 +1426,20 @@ export function calculateKresekForCupCount(totalCups: number): { ingredientId: s
 }
 
 /**
+ * Mendapatkan teks label kemasan kantong plastik kresek untuk struk belanja, layar KDS dapur, dan keranjang POS
+ */
+export function getKresekPackagingLabel(totalCups: number): string {
+    if (totalCups <= 0) return '';
+    const reqs = calculateKresekForCupCount(totalCups);
+    return reqs.map(r => {
+        const name = r.ingredientId === 'ing-kresek-1' ? 'Plastik Kresek 1 Cup'
+            : r.ingredientId === 'ing-kresek-21' ? 'Plastik Kresek 21 (2-4 Cup)'
+            : 'Plastik Kresek 28 (5-7 Cup)';
+        return `${name} (${r.quantity} pcs)`;
+    }).join(', ');
+}
+
+/**
  * Mengecek kecukupan akumulasi bahan baku BOM di gudang untuk seluruh isi keranjang sekaligus
  * (termasuk bahan baku bersama seperti Daun Teh, Gula Cair, Es Batu, Cup Plastik, dan Plastik Kresek).
  */

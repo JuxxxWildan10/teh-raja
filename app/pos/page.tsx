@@ -32,7 +32,7 @@ import {
     usePromoStore, useCustomerStore, useInventoryStore, useExpenseStore, useStoreConfigStore,
     SHOP_CLOSE_PRESETS, Order, ExtendedProduct, formatVariantLabel, ExpenseCategory, EXPENSE_CATEGORIES, POINTS_REDEEM_VALUE,
     getEnrichedSessions, isOrderInSession, isExpenseInSession, getTodayDateKey, toLocalDateKey, getInsufficientBomIngredients,
-    getNextCustomerLabel, getVariantUnitPrice, getBundlePromoStatus
+    getNextCustomerLabel, getVariantUnitPrice, getBundlePromoStatus, countOrderCupQuantity, getKresekPackagingLabel
 } from "@/lib/store";
 import { nanoid } from "nanoid";
 import Image from "next/image";
@@ -381,6 +381,8 @@ export default function POSPage() {
     const cashIn = parseFloat(cashReceived.replace(/\D/g, '')) || 0;
     const change = paymentMethod === 'cash' ? Math.max(0, cashIn - orderTotal) : 0;
     const isInsufficientCash = paymentMethod === 'cash' && cashIn < orderTotal && cashIn > 0;
+    const cartCups = useMemo(() => countOrderCupQuantity(items, products), [items, products]);
+    const cartKresekLabel = useMemo(() => getKresekPackagingLabel(cartCups), [cartCups]);
 
     // ── Variant Modal Handler ─────────────────────────────────
     const handleVariantConfirm = useCallback((
@@ -1086,6 +1088,19 @@ export default function POSPage() {
                                             </div>
                                         );
                                     })}
+
+                                    {/* Preview Alokasi Plastik Kresek Otomatis */}
+                                    {cartKresekLabel && (
+                                        <div className="mt-2.5 p-2 bg-emerald-50 border border-emerald-200/80 rounded-xl flex items-center justify-between text-xs text-emerald-900 shadow-2xs">
+                                            <span className="flex items-center gap-1.5 font-bold min-w-0 truncate">
+                                                <span>🛍️</span>
+                                                <span className="truncate">Packing: <span className="text-emerald-700">{cartKresekLabel}</span></span>
+                                            </span>
+                                            <span className="text-[10px] bg-white border border-emerald-200 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                                {cartCups} cup
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
