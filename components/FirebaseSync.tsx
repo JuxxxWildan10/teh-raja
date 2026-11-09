@@ -224,7 +224,23 @@ export default function FirebaseSync() {
                 const loadedIngredients = (Object.values(data) as Ingredient[]).filter(
                     i => i && i.id && !currentDeleted.has(i.id)
                 );
-                useInventoryStore.setState({ ingredients: loadedIngredients });
+
+                // Auto-seed bahan kemasan kresek baru jika belum ada di Firebase dan belum pernah dihapus oleh admin
+                const defaultKresekIds = ['ing-kresek-1', 'ing-kresek-21', 'ing-kresek-28'];
+                const loadedIds = new Set(loadedIngredients.map(i => i.id));
+                const missingKresek = DEFAULT_INGREDIENTS.filter(
+                    di => defaultKresekIds.includes(di.id) && !loadedIds.has(di.id) && !currentDeleted.has(di.id)
+                );
+
+                if (missingKresek.length > 0) {
+                    const merged = [...loadedIngredients, ...missingKresek];
+                    useInventoryStore.setState({ ingredients: merged });
+                    missingKresek.forEach((i) => {
+                        firebaseSet(ref(rtdb, `ingredients/${i.id}`), i).catch(console.warn);
+                    });
+                } else {
+                    useInventoryStore.setState({ ingredients: loadedIngredients });
+                }
             } else {
                 // Jika seluruh bahan sengaja dihapus oleh admin, biarkan kosong
                 if (currentDeleted.size > 0) {

@@ -57,7 +57,7 @@ import {
     Menu, Search, Sparkles, RefreshCw, Ticket, Users as UsersIcon, Box,
     Building2, BarChart2, TrendingUp, FileSpreadsheet, Bell, Wallet, DollarSign, Upload, Database, ClipboardCheck,
     ChefHat, Coffee, Presentation, PackagePlus, Lock, Unlock, Calendar, Filter, Store, CalendarX2,
-    Landmark, ArrowUpRight, ArrowDownRight
+    Landmark, ArrowUpRight, ArrowDownRight, ArrowUpDown
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -146,10 +146,12 @@ export default function AdminPage() {
         toast.info(`🔒 Kedai berhasil ditutup (${badgeClean}). Pelanggan tidak dapat mengakses menu.`);
     };
 
-    // ── Inventory CRUD State ──────────────────────────────────────
+    // ── Inventory CRUD & Filter State ─────────────────────────────
     const [ingModalOpen, setIngModalOpen] = useState(false);
     const [editingIngId, setEditingIngId] = useState<string | null>(null);
     const [ingForm, setIngForm] = useState({ name: '', stock: 0, unit: 'ml' as 'ml' | 'gram' | 'pcs', minStockThreshold: 100 });
+    const [ingSearch, setIngSearch] = useState('');
+    const [ingSortMode, setIngSortMode] = useState<'az' | 'za' | 'stock_asc' | 'stock_desc' | 'default'>('az');
 
     // ── Restock / Purchase Order Modal State ──────────────────────
     const [restockModalOpen, setRestockModalOpen] = useState(false);
@@ -1294,6 +1296,36 @@ export default function AdminPage() {
     // Low stock alerts
     const lowStockProducts = products.filter(p => p.stock <= (p.minStockThreshold ?? 5) && p.isAvailable);
     const lowStockIngredients = ingredients.filter(i => i.stock <= i.minStockThreshold);
+
+    // Filter & Urutan Bahan Baku Inventaris (Pencarian & Abjad)
+    const filteredIngredients = useMemo(() => {
+        let result = [...ingredients];
+        if (ingSearch.trim()) {
+            const q = ingSearch.trim().toLowerCase();
+            result = result.filter(ing =>
+                ing.name.toLowerCase().includes(q) ||
+                ing.id.toLowerCase().includes(q) ||
+                ing.unit.toLowerCase().includes(q)
+            );
+        }
+        switch (ingSortMode) {
+            case 'az':
+                result.sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }));
+                break;
+            case 'za':
+                result.sort((a, b) => b.name.localeCompare(a.name, 'id', { sensitivity: 'base' }));
+                break;
+            case 'stock_asc':
+                result.sort((a, b) => a.stock - b.stock);
+                break;
+            case 'stock_desc':
+                result.sort((a, b) => b.stock - a.stock);
+                break;
+            default:
+                break;
+        }
+        return result;
+    }, [ingredients, ingSearch, ingSortMode]);
 
     const salesData = {
         labels: dailySales.map(d => d.date),
@@ -3501,12 +3533,87 @@ export default function AdminPage() {
 
                         {/* Ingredients Table */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                            <div className="p-5 border-b border-gray-100 flex justify-between items-center">
-                                <h3 className="font-bold text-gray-800 flex items-center gap-2"><Box size={18} className="text-amber-500" /> Stok Bahan Baku ({ingredients.length})</h3>
-                                {lowStockIngredients.length > 0 && (
-                                    <span className="text-xs font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-full">{lowStockIngredients.length} bahan menipis</span>
-                                )}
+                            <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2 text-base">
+                                        <Box size={18} className="text-amber-500" /> Stok Bahan Baku ({ingredients.length})
+                                    </h3>
+                                    {lowStockIngredients.length > 0 && (
+                                        <span className="text-xs font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-full">
+                                            {lowStockIngredients.length} bahan menipis
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Bilah Navbar Kontrol: Fitur Pencarian & Urutan Abjad */}
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full md:w-auto">
+                                    {/* Search Input */}
+                                    <div className="relative flex-1 sm:w-64">
+                                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                        <input
+                                            type="text"
+                                            value={ingSearch}
+                                            onChange={(e) => setIngSearch(e.target.value)}
+                                            placeholder="Cari bahan (nama/ID/satuan)..."
+                                            className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 hover:bg-gray-100/70 focus:bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition"
+                                        />
+                                        {ingSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIngSearch('')}
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-200 transition"
+                                                title="Hapus filter pencarian"
+                                            >
+                                                <X size={13} />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Sort Dropdown (Abjad A-Z, Z-A, Stok Sedikit, Stok Banyak) */}
+                                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-amber-400 focus-within:border-amber-400">
+                                        <ArrowUpDown size={14} className="text-amber-600 flex-shrink-0" />
+                                        <select
+                                            value={ingSortMode}
+                                            onChange={(e) => setIngSortMode(e.target.value as any)}
+                                            className="bg-transparent text-xs font-bold text-gray-700 focus:outline-none cursor-pointer pr-1"
+                                            aria-label="Urutan Bahan Baku"
+                                        >
+                                            <option value="az">Urut: Abjad A - Z</option>
+                                            <option value="za">Urut: Abjad Z - A</option>
+                                            <option value="stock_asc">Urut: Stok Paling Sedikit</option>
+                                            <option value="stock_desc">Urut: Stok Paling Banyak</option>
+                                            <option value="default">Urut: Standar Bawaan</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
+
+                            {/* Banner Filter Aktif */}
+                            {(ingSearch.trim() || ingSortMode !== 'default') && (
+                                <div className="px-5 py-2 bg-amber-50/60 border-b border-amber-100/70 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-900">
+                                    <span className="flex items-center gap-1.5">
+                                        <Filter size={13} className="text-amber-600" />
+                                        Menampilkan <strong>{filteredIngredients.length}</strong> dari {ingredients.length} bahan baku
+                                        {ingSearch && <span> (kata kunci: &ldquo;{ingSearch}&rdquo;)</span>}
+                                        <span className="text-gray-500">· Urutan: {
+                                            ingSortMode === 'az' ? 'Abjad A-Z' :
+                                            ingSortMode === 'za' ? 'Abjad Z-A' :
+                                            ingSortMode === 'stock_asc' ? 'Stok Paling Sedikit' :
+                                            ingSortMode === 'stock_desc' ? 'Stok Paling Banyak' : 'Standar'
+                                        }</span>
+                                    </span>
+                                    {ingSearch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIngSearch('')}
+                                            className="text-[11px] font-bold text-amber-700 hover:text-amber-900 underline cursor-pointer"
+                                        >
+                                            Reset Pencarian
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse text-sm">
                                     <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider">
@@ -3519,16 +3626,26 @@ export default function AdminPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {ingredients.map(ing => {
+                                        {filteredIngredients.map(ing => {
                                             const isLow = ing.stock <= ing.minStockThreshold;
                                             const pct = Math.min(100, Math.round((ing.stock / Math.max(1, ing.minStockThreshold * 4)) * 100));
                                             const usedIn = products.filter(p => (p.recipe || []).some(r => r.ingredientId === ing.id));
+                                            const isKresek1 = ing.id === 'ing-kresek-1';
+                                            const isKresek21 = ing.id === 'ing-kresek-21';
+                                            const isKresek28 = ing.id === 'ing-kresek-28';
+                                            const isKresekAuto = isKresek1 || isKresek21 || isKresek28;
+
                                             return (
                                                 <tr key={ing.id} className={`transition ${isLow ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-gray-50'}`}>
                                                     <td className="p-4">
                                                         <p className="font-bold text-gray-800 flex items-center gap-1.5">
                                                             {isLow && <AlertTriangle size={14} className="text-red-500" />}
                                                             {ing.name}
+                                                            {isKresekAuto && (
+                                                                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-black">
+                                                                    Otomatis
+                                                                </span>
+                                                            )}
                                                         </p>
                                                         <p className="text-[10px] text-gray-400 font-mono">{ing.id} · min {ing.minStockThreshold} {ing.unit}</p>
                                                     </td>
@@ -3542,11 +3659,26 @@ export default function AdminPage() {
                                                     </td>
                                                     <td className="p-4">
                                                         <div className="flex flex-wrap gap-1 max-w-xs">
+                                                            {isKresek1 && (
+                                                                <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-bold">
+                                                                    📦 Pesanan 1 Cup
+                                                                </span>
+                                                            )}
+                                                            {isKresek21 && (
+                                                                <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-bold">
+                                                                    📦 Pesanan 2-4 Cup
+                                                                </span>
+                                                            )}
+                                                            {isKresek28 && (
+                                                                <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded font-bold">
+                                                                    📦 Pesanan 5-7 Cup
+                                                                </span>
+                                                            )}
                                                             {usedIn.slice(0, 4).map(p => (
                                                                 <span key={p.id} className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-bold">{p.name}</span>
                                                             ))}
                                                             {usedIn.length > 4 && <span className="text-[10px] text-gray-500">+{usedIn.length - 4}</span>}
-                                                            {usedIn.length === 0 && <span className="text-[10px] text-gray-400 italic">-</span>}
+                                                            {!isKresekAuto && usedIn.length === 0 && <span className="text-[10px] text-gray-400 italic">-</span>}
                                                         </div>
                                                     </td>
                                                     <td className="p-4 text-right">
@@ -3570,8 +3702,14 @@ export default function AdminPage() {
                                                 </tr>
                                             );
                                         })}
-                                        {ingredients.length === 0 && (
-                                            <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">Belum ada bahan baku.</td></tr>
+                                        {filteredIngredients.length === 0 && (
+                                            <tr>
+                                                <td colSpan={5} className="p-8 text-center text-gray-400 italic">
+                                                    {ingSearch
+                                                        ? `Tidak ada bahan baku yang cocok dengan pencarian "${ingSearch}".`
+                                                        : 'Belum ada bahan baku.'}
+                                                </td>
+                                            </tr>
                                         )}
                                     </tbody>
                                 </table>

@@ -474,6 +474,9 @@ export const DEFAULT_INGREDIENTS: Ingredient[] = [
     { id: 'ing-cup', name: 'Cup Plastik M/L', stock: 500, unit: 'pcs', minStockThreshold: 100 },
     { id: 'ing-snack', name: 'Kentang Beku / Snack', stock: 5000, unit: 'gram', minStockThreshold: 1000 },
     { id: 'ing-bread', name: 'Roti Gandum & Topping', stock: 100, unit: 'pcs', minStockThreshold: 20 },
+    { id: 'ing-kresek-1', name: 'Plastik Kresek 1 Cup', stock: 500, unit: 'pcs', minStockThreshold: 50 },
+    { id: 'ing-kresek-21', name: 'Plastik Kresek 21 (2-4 Cup)', stock: 500, unit: 'pcs', minStockThreshold: 50 },
+    { id: 'ing-kresek-28', name: 'Plastik Kresek 28 (5-7 Cup)', stock: 500, unit: 'pcs', minStockThreshold: 50 },
 ];
 
 // ── Supplier Management ──────────────────────────────────────
@@ -1362,8 +1365,69 @@ export function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: C
 }
 
 /**
+ * Memeriksa apakah suatu item pesanan merupakan minuman dalam kemasan cup
+ */
+export function isCupDrink(cartItem: CartItem, product?: ExtendedProduct): boolean {
+    if (product?.recipe && product.recipe.some(r => r.ingredientId === 'ing-cup')) return true;
+    if (cartItem.recipe && cartItem.recipe.some(r => r.ingredientId === 'ing-cup')) return true;
+    if (product?.category && product.category !== 'snack' && product.category !== 'food') return true;
+    return false;
+}
+
+/**
+ * Menghitung total cup minuman dalam sebuah daftar item pesanan
+ */
+export function countOrderCupQuantity(items: CartItem[], products: ExtendedProduct[]): number {
+    return items.reduce((total, item) => {
+        const product = products.find(p => p.id === item.id);
+        if (isCupDrink(item, product)) {
+            return total + (item.quantity || 1);
+        }
+        return total;
+    }, 0);
+}
+
+/**
+ * Menghitung alokasi kantong plastik kresek berdasarkan total cup minuman:
+ * 1. Pesanan 1 cup       -> Plastik Kresek 1 Cup (`ing-kresek-1`) sebanyak 1 pcs
+ * 2. Pesanan 2 s/d 4 cup -> Plastik Kresek 21 (`ing-kresek-21`) sebanyak 1 pcs
+ * 3. Pesanan 5 s/d 7 cup -> Plastik Kresek 28 (`ing-kresek-28`) sebanyak 1 pcs
+ * 4. Pesanan > 7 cup     -> Kombinasi efisien kresek 28 (kapasitas 7) + sisa kresek
+ */
+export function calculateKresekForCupCount(totalCups: number): { ingredientId: string; quantity: number }[] {
+    if (totalCups <= 0) return [];
+    if (totalCups === 1) {
+        return [{ ingredientId: 'ing-kresek-1', quantity: 1 }];
+    }
+    if (totalCups >= 2 && totalCups <= 4) {
+        return [{ ingredientId: 'ing-kresek-21', quantity: 1 }];
+    }
+    if (totalCups >= 5 && totalCups <= 7) {
+        return [{ ingredientId: 'ing-kresek-28', quantity: 1 }];
+    }
+
+    // Untuk pesanan borongan > 7 cup:
+    const counts: Record<string, number> = {};
+    const fullBags = Math.floor(totalCups / 7);
+    const remainder = totalCups % 7;
+
+    if (fullBags > 0) {
+        counts['ing-kresek-28'] = fullBags;
+    }
+    if (remainder === 1) {
+        counts['ing-kresek-1'] = (counts['ing-kresek-1'] || 0) + 1;
+    } else if (remainder >= 2 && remainder <= 4) {
+        counts['ing-kresek-21'] = (counts['ing-kresek-21'] || 0) + 1;
+    } else if (remainder >= 5) {
+        counts['ing-kresek-28'] = (counts['ing-kresek-28'] || 0) + 1;
+    }
+
+    return Object.entries(counts).map(([ingredientId, quantity]) => ({ ingredientId, quantity }));
+}
+
+/**
  * Mengecek kecukupan akumulasi bahan baku BOM di gudang untuk seluruh isi keranjang sekaligus
- * (termasuk bahan baku bersama seperti Daun Teh, Gula Cair, Es Batu, dan Cup Plastik).
+ * (termasuk bahan baku bersama seperti Daun Teh, Gula Cair, Es Batu, Cup Plastik, dan Plastik Kresek).
  */
 export function getInsufficientBomIngredients(
     items: CartItem[],
@@ -1387,6 +1451,18 @@ export function getInsufficientBomIngredients(
             }
         });
     });
+
+    // Perhitungkan kebutuhan kemasan plastik kresek berdasarkan total cup
+    const totalCups = countOrderCupQuantity(items, products);
+    if (totalCups > 0) {
+        const kresekNeeded = calculateKresekForCupCount(totalCups);
+        kresekNeeded.forEach(({ ingredientId, quantity }) => {
+            totalNeededMap.set(
+                ingredientId,
+                Math.round(((totalNeededMap.get(ingredientId) || 0) + quantity) * 100) / 100
+            );
+        });
+    }
 
     const shortages: { id: string; name: string; needed: number; available: number; unit: UnitType }[] = [];
     totalNeededMap.forEach((needed, ingId) => {
@@ -1493,6 +1569,7 @@ export const useInventoryStore = create<InventoryState>()(
                 set((state) => {
                     const newIngredients = [...state.ingredients];
                     
+                    // 1. Potong bahan baku sesuai resep BOM produk (teh, bubuk, susu, sirup, gula, es, cup kemasan)
                     items.forEach(cartItem => {
                         const product = products.find(p => p.id === cartItem.id);
                         const recipe = product?.recipe || cartItem.recipe;
@@ -1509,6 +1586,24 @@ export const useInventoryStore = create<InventoryState>()(
                             }
                         });
                     });
+
+                    // 2. Potong bahan baku plastik kresek otomatis berdasarkan akumulasi cup dalam pesanan:
+                    //    - 1 cup       -> Plastik Kresek 1 Cup (-1 pcs)
+                    //    - 2 s/d 4 cup -> Plastik Kresek 21 (-1 pcs)
+                    //    - 5 s/d 7 cup -> Plastik Kresek 28 (-1 pcs)
+                    const totalCups = countOrderCupQuantity(items, products);
+                    if (totalCups > 0) {
+                        const kresekDeductions = calculateKresekForCupCount(totalCups);
+                        kresekDeductions.forEach(({ ingredientId, quantity }) => {
+                            const ingIndex = newIngredients.findIndex(i => i.id === ingredientId);
+                            if (ingIndex !== -1) {
+                                newIngredients[ingIndex] = {
+                                    ...newIngredients[ingIndex],
+                                    stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - quantity) * 100) / 100)
+                                };
+                            }
+                        });
+                    }
                     
                     const updates: Record<string, any> = {};
                     newIngredients.forEach(ing => {
@@ -1525,6 +1620,7 @@ export const useInventoryStore = create<InventoryState>()(
                 set((state) => {
                     const newIngredients = [...state.ingredients];
 
+                    // 1. Kembalikan takaran resep produk saat pesanan dibatalkan
                     items.forEach(cartItem => {
                         const product = products.find(p => p.id === cartItem.id);
                         const recipe = product?.recipe || cartItem.recipe;
@@ -1542,6 +1638,21 @@ export const useInventoryStore = create<InventoryState>()(
                         });
                     });
 
+                    // 2. Kembalikan stok plastik kresek otomatis saat pesanan dibatalkan
+                    const totalCups = countOrderCupQuantity(items, products);
+                    if (totalCups > 0) {
+                        const kresekRestorations = calculateKresekForCupCount(totalCups);
+                        kresekRestorations.forEach(({ ingredientId, quantity }) => {
+                            const ingIndex = newIngredients.findIndex(i => i.id === ingredientId);
+                            if (ingIndex !== -1) {
+                                newIngredients[ingIndex] = {
+                                    ...newIngredients[ingIndex],
+                                    stock: Math.round((newIngredients[ingIndex].stock + quantity) * 100) / 100
+                                };
+                            }
+                        });
+                    }
+
                     const updates: Record<string, any> = {};
                     newIngredients.forEach(ing => {
                         updates[`ingredients/${ing.id}`] = ing;
@@ -1554,7 +1665,27 @@ export const useInventoryStore = create<InventoryState>()(
                 });
             }
         }),
-        { name: 'teh-raja-inventory-v1', storage: createJSONStorage(() => idbStorage) }
+        {
+            name: 'teh-raja-inventory-v1',
+            storage: createJSONStorage(() => idbStorage),
+            version: 2,
+            migrate: (persistedState: unknown, _version: number) => {
+                const s = persistedState as { ingredients?: Ingredient[]; deletedIngredientIds?: string[] } | undefined;
+                if (!s || !Array.isArray(s.ingredients)) return persistedState as any;
+                const existingIds = new Set(s.ingredients.map(i => i.id));
+                const deletedSet = new Set(s.deletedIngredientIds || []);
+                const missingKresek = DEFAULT_INGREDIENTS.filter(
+                    di => di.id.startsWith('ing-kresek-') && !existingIds.has(di.id) && !deletedSet.has(di.id)
+                );
+                if (missingKresek.length > 0) {
+                    return {
+                        ...s,
+                        ingredients: [...s.ingredients, ...missingKresek],
+                    };
+                }
+                return s;
+            }
+        }
     )
 );
 
@@ -1574,7 +1705,7 @@ export const useSupplierStore = create<SupplierState>()(
             suppliers: [
                 { id: 'sup-1', name: 'PT Surya Daun Teh', contactPerson: 'Pak Budi', phone: '08123456789', address: 'Bandung, Jawa Barat', itemsSupplied: ['ing-tea', 'ing-matcha'] },
                 { id: 'sup-2', name: 'CV Gula & Sirup Nusantara', contactPerson: 'Bu Ani', phone: '08987654321', address: 'Cirebon, Jawa Barat', itemsSupplied: ['ing-sugar', 'ing-syrup'] },
-                { id: 'sup-3', name: 'UD Dairy & Kemasan Prima', contactPerson: 'Pak Hendra', phone: '081322334455', address: 'Lembang, Bandung', itemsSupplied: ['ing-milk', 'ing-cup', 'ing-snack', 'ing-bread'] },
+                { id: 'sup-3', name: 'UD Dairy & Kemasan Prima', contactPerson: 'Pak Hendra', phone: '081322334455', address: 'Lembang, Bandung', itemsSupplied: ['ing-milk', 'ing-cup', 'ing-snack', 'ing-bread', 'ing-kresek-1', 'ing-kresek-21', 'ing-kresek-28'] },
             ],
             addSupplier: (supplier) => {
                 set((s) => ({ suppliers: [...s.suppliers, supplier] }));
