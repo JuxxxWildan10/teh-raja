@@ -45,11 +45,6 @@ function buildReceipt(order: {
 
     const pushText = (text: string) => push(encoder(text));
 
-    const centerText = (text: string, width = 32) => {
-        const pad = Math.max(0, Math.floor((width - text.length) / 2));
-        return ' '.repeat(pad) + text;
-    };
-
     const rightAlignRow = (left: string, right: string, width = 32) => {
         const space = Math.max(1, width - left.length - right.length);
         return left + ' '.repeat(space) + right;
@@ -123,23 +118,48 @@ function buildReceipt(order: {
     return new Uint8Array(lines);
 }
 
+interface BluetoothCharacteristicCompat {
+    writeValue: (data: Uint8Array) => Promise<void>;
+}
+
+interface BluetoothDeviceCompat {
+    gatt?: {
+        connect: () => Promise<{
+            getPrimaryService: (service: number) => Promise<{
+                getCharacteristic: (characteristic: number) => Promise<BluetoothCharacteristicCompat>;
+            }>;
+        }>;
+        disconnect: () => Promise<void> | void;
+    };
+}
+
+interface NavigatorWithBluetooth extends Navigator {
+    bluetooth?: {
+        requestDevice: (options: {
+            filters: Array<{ services: number[] }>;
+            optionalServices: number[];
+        }) => Promise<BluetoothDeviceCompat>;
+    };
+}
+
 const BLUETOOTH_SERVICE = 0x18F0;
 const BLUETOOTH_CHAR    = 0x2AF1;
 const CHUNK_SIZE        = 100;
 
-async function writeChunked(char: any, data: Uint8Array) {
+async function writeChunked(characteristic: BluetoothCharacteristicCompat, data: Uint8Array) {
     for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-        await char.writeValue(data.slice(i, i + CHUNK_SIZE));
+        await characteristic.writeValue(data.slice(i, i + CHUNK_SIZE));
         await new Promise(r => setTimeout(r, 30));
     }
 }
 
 export async function printReceipt(order: Parameters<typeof buildReceipt>[0]): Promise<void> {
-    if (!('bluetooth' in navigator)) {
+    const nav = navigator as NavigatorWithBluetooth;
+    if (!nav.bluetooth) {
         throw new Error('Browser ini tidak mendukung Web Bluetooth API. Gunakan Chrome/Edge.');
     }
 
-    const device = await (navigator as any).bluetooth.requestDevice({
+    const device = await nav.bluetooth.requestDevice({
         filters: [{ services: [BLUETOOTH_SERVICE] }],
         optionalServices: [BLUETOOTH_SERVICE],
     });

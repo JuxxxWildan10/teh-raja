@@ -16,30 +16,65 @@
  */
 import { NextResponse } from 'next/server';
 import { generate, hasGeminiKey } from '@/lib/gemini';
-import { runForecast, assessQuality } from '@/lib/forecast/engine';
-import { buildDaily, toSeries, ingredientNeeds, productTotals, Target, SourceFilter } from '@/lib/forecast/data';
+import { runForecast, type ModelEvaluation } from '@/lib/forecast/engine';
+import { buildDaily, toSeries, ingredientNeeds, productTotals, Target, SourceFilter, DailyRecord } from '@/lib/forecast/data';
 import { interpretMape } from '@/lib/forecast/metrics';
+import type { Order, ExtendedProduct, Ingredient } from '@/lib/store';
+
+interface BomItem {
+    name: string;
+    stock: number;
+    unit: string;
+    need: number;
+    shortage: number;
+    daysCover: number;
+    reorder: number;
+}
+
+interface ForecastSummary {
+    target: Target;
+    horizon: number;
+    criterion?: 'mape' | 'rmse' | 'mae';
+    bestModel: ModelEvaluation;
+    projectedStats?: {
+        totalProjected: number;
+        avgDailyProjected: number;
+        growthPct?: number;
+        projectedDates?: unknown[];
+    };
+    historicalStats?: Record<string, unknown>;
+    bomRequirements?: BomItem[];
+    modelRankings?: ModelEvaluation[];
+    topProducts?: unknown[];
+    forecastResult?: unknown;
+    dataQuality?: {
+        n: number;
+        activeDays?: number;
+        label?: string;
+        message?: string;
+    };
+}
 
 interface ForecastPayload {
-    summary?: any;
-    orders?: any[];
-    history?: any[];
-    products?: any[];
-    ingredients?: any[];
+    summary?: ForecastSummary;
+    orders?: Order[];
+    history?: DailyRecord[];
+    products?: ExtendedProduct[];
+    ingredients?: Ingredient[];
     target?: Target;
     horizon?: number;
     criterion?: 'mape' | 'rmse' | 'mae';
     filter?: SourceFilter;
 }
 
-function buildRuleBasedNarrative(summary: any): string {
-    const { target, horizon, bestModel, projectedStats, historicalStats, bomRequirements, dataQuality } = summary;
+function buildRuleBasedNarrative(summary: ForecastSummary): string {
+    const { target, horizon, bestModel, projectedStats, bomRequirements, dataQuality } = summary;
     const targetLabel = target === 'revenue' ? 'Pendapatan' : target === 'transactions' ? 'Jumlah Transaksi' : 'Total Cup';
     const unit = target === 'revenue' ? 'Rp ' : '';
-    const mapeVal = bestModel?.metrics?.mape !== null ? `${bestModel.metrics.mape.toFixed(2)}%` : 'N/A';
-    const mapeStatus = interpretMape(bestModel?.metrics?.mape);
+    const mapeVal = bestModel?.metrics?.mape !== null && bestModel?.metrics?.mape !== undefined ? `${bestModel.metrics.mape.toFixed(2)}%` : 'N/A';
+    const mapeStatus = interpretMape(bestModel?.metrics?.mape ?? null);
 
-    const criticalBOM = (bomRequirements || []).filter((b: any) => b.shortage > 0 || b.daysCover <= horizon);
+    const criticalBOM = (bomRequirements || []).filter((b: BomItem) => b.shortage > 0 || b.daysCover <= horizon);
 
     return `## 📊 1. Ringkasan Eksekutif & Proyeksi ${horizon} Hari ke Depan
 Berdasarkan data historis selama **${dataQuality?.n || 0} hari**, total estimasi **${targetLabel}** untuk ${horizon} hari mendatang diperkirakan mencapai **${unit}${Math.round(projectedStats?.totalProjected || 0).toLocaleString('id-ID')}**, dengan rata-rata harian sekitar **${unit}${Math.round(projectedStats?.avgDailyProjected || 0).toLocaleString('id-ID')}**.
@@ -56,7 +91,7 @@ Model ini mengungguli model baseline (Naive dan Moving Average) karena mampu men
 ## 📦 3. Analisis Kebutuhan Bahan Baku (BOM - Bill of Materials)
 ${criticalBOM.length > 0
     ? `Ditemukan **${criticalBOM.length} bahan baku** yang memerlukan pengadaan ulang (restok) sebelum periode peramalan ${horizon} hari berakhir:
-${criticalBOM.map((b: any) => `- **${b.name}**: Sisa stok ${b.stock.toLocaleString('id-ID')} ${b.unit}, kebutuhan ${Math.round(b.need).toLocaleString('id-ID')} ${b.unit}. Ketahanan stok: **±${Math.floor(b.daysCover)} hari**. Disarankan pesan minimal **${Math.ceil(b.reorder).toLocaleString('id-ID')} ${b.unit}** segera.`).join('\n')}`
+${criticalBOM.map((b: BomItem) => `- **${b.name}**: Sisa stok ${b.stock.toLocaleString('id-ID')} ${b.unit}, kebutuhan ${Math.round(b.need).toLocaleString('id-ID')} ${b.unit}. Ketahanan stok: **±${Math.floor(b.daysCover)} hari**. Disarankan pesan minimal **${Math.ceil(b.reorder).toLocaleString('id-ID')} ${b.unit}** segera.`).join('\n')}`
     : `✅ Semua bahan baku berada dalam batas aman dan mencukupi proyeksi kebutuhan selama ${horizon} hari ke depan.`}
 
 ## 🚀 4. Rekomendasi Strategis Bisnis
@@ -113,16 +148,7 @@ export async function POST(req: Request) {
                 criterion,
                 dataQuality: result.quality,
                 bestModel: result.best,
-                modelRankings: result.evaluations.map(e => ({
-                    rank: e.rank,
-                    name: e.name,
-                    shortName: e.shortName,
-                    eligible: e.eligible,
-                    reason: e.reason,
-                    metrics: e.metrics,
-                    params: e.params,
-                    formula: e.formula
-                })),
+                modelRankings: result.evaluations,
                 projectedStats: {
                     totalProjected,
                     avgDailyProjected,
@@ -163,19 +189,19 @@ DATA STATISTIK PERAMALAN (HASIL ENGINE):
 - Model Terbaik Terpilih: ${summary.bestModel?.name}
 - Parameter Model: ${JSON.stringify(summary.bestModel?.params || {})}
 - Evaluasi Model Pemenang:
-    * MAPE: ${summary.bestModel?.metrics?.mape !== null ? summary.bestModel?.metrics?.mape.toFixed(2) + '%' : 'N/A'} (Kriteria Lewis 1982: ${interpretMape(summary.bestModel?.metrics?.mape).label})
+    * MAPE: ${summary.bestModel?.metrics?.mape !== null && summary.bestModel?.metrics?.mape !== undefined ? summary.bestModel.metrics.mape.toFixed(2) + '%' : 'N/A'} (Kriteria Lewis 1982: ${interpretMape(summary.bestModel?.metrics?.mape ?? null).label})
     * RMSE: ${Math.round(summary.bestModel?.metrics?.rmse || 0).toLocaleString('id-ID')}
     * MAE: ${Math.round(summary.bestModel?.metrics?.mae || 0).toLocaleString('id-ID')}
 - Komparasi Ranking Model:
-${(summary.modelRankings || []).slice(0, 5).map((m: any) => `  ${m.rank}. ${m.name} | MAPE: ${m.metrics?.mape !== null && m.metrics?.mape !== undefined ? m.metrics.mape.toFixed(2) + '%' : 'N/A'} | RMSE: ${Math.round(m.metrics?.rmse || 0)}`).join('\n')}
+${(summary.modelRankings || []).slice(0, 5).map((m: ModelEvaluation) => `  ${m.rank}. ${m.name} | MAPE: ${m.metrics?.mape !== null && m.metrics?.mape !== undefined ? m.metrics.mape.toFixed(2) + '%' : 'N/A'} | RMSE: ${Math.round(m.metrics?.rmse || 0)}`).join('\n')}
 
 PROYEKSI MENDATANG:
 - Total Proyeksi ${summary.horizon} Hari: ${summary.target === 'revenue' ? 'Rp ' : ''}${Math.round(summary.projectedStats?.totalProjected || 0).toLocaleString('id-ID')}
 - Rata-rata Proyeksi Harian: ${summary.target === 'revenue' ? 'Rp ' : ''}${Math.round(summary.projectedStats?.avgDailyProjected || 0).toLocaleString('id-ID')}
-- Perubahan Tren vs Historis: ${summary.projectedStats?.growthPct >= 0 ? '+' : ''}${(summary.projectedStats?.growthPct || 0).toFixed(1)}%
+- Perubahan Tren vs Historis: ${(summary.projectedStats?.growthPct || 0) >= 0 ? '+' : ''}${(summary.projectedStats?.growthPct || 0).toFixed(1)}%
 
 PERINGATAN BAHAN BAKU (BOM):
-${(summary.bomRequirements || []).filter((b: any) => b.shortage > 0 || b.daysCover <= summary.horizon).map((b: any) => `  * ${b.name}: sisa ${b.stock} ${b.unit}, butuh ${Math.round(b.need)} ${b.unit} (habis dalam ±${Math.floor(b.daysCover)} hari)`).join('\n') || '  Semua bahan baku tercukupi'}
+${(summary.bomRequirements || []).filter((b: BomItem) => b.shortage > 0 || b.daysCover <= summary.horizon).map((b: BomItem) => `  * ${b.name}: sisa ${b.stock} ${b.unit}, butuh ${Math.round(b.need)} ${b.unit} (habis dalam ±${Math.floor(b.daysCover)} hari)`).join('\n') || '  Semua bahan baku tercukupi'}
 
 Susun laporan profesional dalam format Markdown terstruktur dengan bagian berikut:
 1. 📊 RINGKASAN EKSEKUTIF PROYEKSI — Evaluasi angka proyeksi, tren naik/turun, dan implikasi omzet.
@@ -199,20 +225,22 @@ Gunakan gaya bahasa profesional, presisi, berbasis data, dan mudah dipahami oleh
                 narrative: text,
                 source: model,
             });
-        } catch (aiErr: any) {
-            console.warn('[AI Forecast fallback triggered]', aiErr.message);
+        } catch (aiErr: unknown) {
+            const aiMsg = aiErr instanceof Error ? aiErr.message : String(aiErr);
+            console.warn('[AI Forecast fallback triggered]', aiMsg);
             // Graceful fallback to rule-based narrative
             const fallbackNarrative = buildRuleBasedNarrative(summary);
             return NextResponse.json({
                 summary,
                 narrative: fallbackNarrative,
                 source: 'rule-based-fallback',
-                warning: `AI narrative menggunakan engine cadangan: ${aiErr.message}`
+                warning: `AI narrative menggunakan engine cadangan: ${aiMsg}`
             });
         }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Forecast Route Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({ error: msg }, { status: 500 });
     }
 }

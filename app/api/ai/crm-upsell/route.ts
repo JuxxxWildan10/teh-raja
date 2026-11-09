@@ -26,14 +26,14 @@ export async function POST(req: Request) {
             totalSpent: 0,
         };
 
-        const topProducts = availableProducts?.slice(0, 8).map((p: any) => p.name).join(', ') || '-';
+        const topProducts = availableProducts?.slice(0, 8).map((p: { name: string }) => p.name).join(', ') || '-';
         const historyText = orderHistory && orderHistory.length > 0
-            ? orderHistory.slice(-10).map((o: any) =>
-                o.items?.map((i: any) => `${i.quantity}x ${i.name}`).join(', ')
+            ? orderHistory.slice(-10).map((o: { items?: Array<{ name: string; quantity: number }> }) =>
+                o.items?.map((i: { name: string; quantity: number }) => `${i.quantity}x ${i.name}`).join(', ')
               ).join(' | ')
             : 'Belum ada riwayat (pelanggan baru)';
         const cartText = currentCart && currentCart.length > 0
-            ? currentCart.map((i: any) => `${i.quantity}x ${i.name}`).join(', ')
+            ? currentCart.map((i: { name: string; quantity: number }) => `${i.quantity}x ${i.name}`).join(', ')
             : 'Keranjang masih kosong';
 
         const prompt = `Kamu adalah kasir cerdas di kedai teh premium "Teh Raja". Berikan 1 saran upsell / cross-sell yang sangat natural, ramah, dan persuasif kepada kasir untuk diucapkan kepada pembeli ini.
@@ -70,12 +70,13 @@ Format: Berikan HANYA 1 atau 2 kalimat saran langsung dalam Bahasa Indonesia yan
 
         return NextResponse.json({ suggestion: text.trim().replace(/^["']|["']$/g, '') });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[CRM Upsell Error]', error);
+        const msg = error instanceof Error ? error.message : String(error);
         // Fallback gracefully so POS cashier UI never breaks
         return NextResponse.json({
             suggestion: 'Tawarkan upgrade ukuran Large (+Rp 2.000) atau cemilan pendamping hangat!',
-            error: error.message
+            error: msg
         }, { status: 200 });
     }
 }

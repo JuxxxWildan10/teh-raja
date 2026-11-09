@@ -368,8 +368,8 @@ export default function POSPage() {
                 if (!res.ok) return;
                 const data = await res.json();
                 if (data.suggestion) setUpsellHint(data.suggestion);
-            } catch (e: any) {
-                if (e.name !== 'AbortError') console.warn('[Upsell]', e.message);
+            } catch (e: unknown) {
+                if (e instanceof Error && e.name !== 'AbortError') console.warn('[Upsell]', e.message);
             } finally {
                 setIsLoadingUpsell(false);
             }
@@ -464,7 +464,24 @@ export default function POSPage() {
 
     // ── Voice Command ─────────────────────────────────────────
     const handleVoiceCommand = useCallback(() => {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        interface SpeechResultCompat {
+            results: Array<Array<{ transcript: string }>>;
+        }
+        interface SpeechInstanceCompat {
+            lang: string;
+            interimResults: boolean;
+            maxAlternatives: number;
+            onstart: (() => void) | null;
+            onresult: ((event: SpeechResultCompat) => Promise<void>) | null;
+            onerror: (() => void) | null;
+            onend: (() => void) | null;
+            start: () => void;
+        }
+        const win = window as unknown as {
+            SpeechRecognition?: new () => SpeechInstanceCompat;
+            webkitSpeechRecognition?: new () => SpeechInstanceCompat;
+        };
+        const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             toast.error('Browser Anda tidak mendukung Voice Command (gunakan Chrome/Edge).');
             return;
@@ -482,7 +499,7 @@ export default function POSPage() {
             toast.info('Mendengarkan pesanan...');
         };
 
-        recognition.onresult = async (event: any) => {
+        recognition.onresult = async (event: SpeechResultCompat) => {
             const transcript = event.results[0][0].transcript;
             toast.info(`Menangkap suara: "${transcript}"`);
             setIsProcessingVoice(true);
@@ -500,7 +517,7 @@ export default function POSPage() {
 
                 if (data.items && data.items.length > 0) {
                     let addedCount = 0;
-                    data.items.forEach((parsedItem: any) => {
+                    data.items.forEach((parsedItem: { productId: string; quantity?: number; variants?: import("@/lib/store").ProductVariants }) => {
                         const product = products.find(p => p.id === parsedItem.productId);
                         if (product) {
                             const finalPrice = getVariantUnitPrice(product, parsedItem.variants?.size || 'M');

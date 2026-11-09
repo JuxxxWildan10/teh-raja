@@ -19,15 +19,6 @@ import { Order, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLab
 // Default printer configs (80mm)
 const CPL = 48; // Characters Per Line for 80mm ESC/POS printer default font
 
-// Helper to pad strings
-function padRight(str: string, len: number): string {
-    return str.length >= len ? str.substring(0, len) : str + ' '.repeat(len - str.length);
-}
-
-function padLeft(str: string, len: number): string {
-    return str.length >= len ? str.substring(0, len) : ' '.repeat(len - str.length) + str;
-}
-
 // Convert a number to Rupiah string
 function formatRp(n: number) {
     return 'Rp' + n.toLocaleString('id-ID');
@@ -192,12 +183,34 @@ export function buildReceiptPayload(order: Order): Uint8Array {
     return p.getBuffer();
 }
 
+interface BluetoothDeviceCompat {
+    gatt?: {
+        connect: () => Promise<{
+            getPrimaryService: (service: string) => Promise<{
+                getCharacteristic: (characteristic: string) => Promise<{
+                    writeValue: (val: Uint8Array) => Promise<void>;
+                }>;
+            }>;
+        }>;
+        disconnect: () => void;
+    };
+}
+
+interface NavigatorWithBluetooth {
+    bluetooth?: {
+        requestDevice: (options: {
+            filters?: { services: string[] }[];
+            optionalServices?: string[];
+        }) => Promise<BluetoothDeviceCompat>;
+    };
+}
+
 /**
  * Request bluetooth device and send payload
  */
 export async function printViaBluetooth(payload: Uint8Array): Promise<void> {
-    const nav = navigator as any;
-    if (!('bluetooth' in nav)) {
+    const nav = navigator as unknown as NavigatorWithBluetooth;
+    if (!nav.bluetooth) {
         throw new Error('Web Bluetooth API tidak didukung pada browser ini.');
     }
 

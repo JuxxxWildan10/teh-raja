@@ -78,12 +78,9 @@ ChartJS.register(
 );
 
 export default function AdminPage() {
-    const { user, loginWithPassword, logout, users, addUser, removeUser, updateUser, isAdvancedUnlocked, toggleAdvancedUnlocked } = useAuthStore();
+    const { user, logout, users, addUser, removeUser, updateUser, isAdvancedUnlocked, toggleAdvancedUnlocked } = useAuthStore();
     const router = useRouter();
     const toast = useToast();
-    const [loginUsername, setLoginUsername] = useState("");
-    const [loginPassword, setLoginPassword] = useState("");
-    const [loginError, setLoginError] = useState("");
 
     // Stores
     const { products, addProduct, updateProduct, deleteProduct, toggleAvailability } = useProductStore();
@@ -297,20 +294,6 @@ export default function AdminPage() {
             router.replace('/menu');
         }
     }, [isClient, authHydrated, user, router]);
-
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoginError("");
-        const loggedInUser = await loginWithPassword(loginUsername, loginPassword);
-        if (loggedInUser) {
-            addLog("LOGIN", `${loggedInUser.role === 'admin' ? 'Admin' : 'Cashier'} logged in`, loggedInUser.name);
-            if (loggedInUser.role === 'cashier') {
-                router.push('/pos');
-            }
-        } else {
-            setLoginError("Username atau Password salah!");
-        }
-    };
 
     const handleLogout = async () => {
         addLog("LOGOUT", `${user?.name} logged out`, user?.name || "Unknown");
@@ -969,8 +952,9 @@ export default function AdminPage() {
                     if (data.storeConfig) useStoreConfigStore.getState().updateStoreConfig(data.storeConfig);
                     toast.success("Database toko berhasil dipulihkan secara penuh!");
                 }
-            } catch (err: any) {
-                toast.error("Gagal membaca file backup: " + err.message);
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                toast.error("Gagal membaca file backup: " + msg);
             }
         };
         reader.readAsText(file);
@@ -1006,8 +990,9 @@ export default function AdminPage() {
             const data = await res.json();
             if (data.suggestion) setUpsellSuggestion(data.suggestion);
             else throw new Error('Tidak ada saran dari AI');
-        } catch (err: any) {
-            toast.error('Gagal mengambil saran AI: ' + err.message);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error('Gagal mengambil saran AI: ' + msg);
         } finally {
             setIsUpselling(false);
         }
@@ -2887,7 +2872,7 @@ export default function AdminPage() {
                                     <span className="text-xs text-gray-500 whitespace-nowrap font-medium hidden sm:inline">Urutan:</span>
                                     <select
                                         value={orderSortMode}
-                                        onChange={e => setOrderSortMode(e.target.value as any)}
+                                        onChange={e => setOrderSortMode(e.target.value as 'newest' | 'pipeline' | 'oldest')}
                                         className="border border-gray-200 rounded-xl text-xs font-bold text-gray-700 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0D2B20] bg-gray-50 transition"
                                     >
                                         <option value="newest">⚡ Pesanan Baru Paling Atas (Waktu Terbaru)</option>
@@ -2974,7 +2959,7 @@ export default function AdminPage() {
                                                                     <span className="font-bold text-gray-800">{i.quantity}x {i.name}</span>
                                                                     {i.note && (
                                                                         <div className="text-[11px] text-blue-600 italic flex items-center gap-1 mt-0.5">
-                                                                            📝 "{i.note}"
+                                                                            📝 &ldquo;{i.note}&rdquo;
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -3065,7 +3050,7 @@ export default function AdminPage() {
                                                 {order.items.map((i, idx) => (
                                                     <div key={idx} className="flex justify-between items-start">
                                                         <span className="font-semibold text-gray-800">{i.quantity}x {i.name}</span>
-                                                        {i.note && <span className="text-[10px] text-blue-600 italic">"{i.note}"</span>}
+                                                        {i.note && <span className="text-[10px] text-blue-600 italic">&ldquo;{i.note}&rdquo;</span>}
                                                     </div>
                                                 ))}
                                             </div>
@@ -3580,7 +3565,7 @@ export default function AdminPage() {
                                         <ArrowUpDown size={14} className="text-amber-600 flex-shrink-0" />
                                         <select
                                             value={ingSortMode}
-                                            onChange={(e) => setIngSortMode(e.target.value as any)}
+                                            onChange={(e) => setIngSortMode(e.target.value as 'az' | 'za' | 'stock_asc' | 'stock_desc' | 'default')}
                                             className="bg-transparent text-xs font-bold text-gray-700 focus:outline-none cursor-pointer pr-1"
                                             aria-label="Urutan Bahan Baku"
                                         >
@@ -5067,7 +5052,7 @@ export default function AdminPage() {
                                             </label>
                                             <select
                                                 value={opnameForm.reason}
-                                                onChange={e => setOpnameForm(f => ({ ...f, reason: e.target.value as any }))}
+                                                onChange={e => setOpnameForm(f => ({ ...f, reason: e.target.value as 'tumpah' | 'basi' | 'rusak' | 'koreksi_hitung' | 'lainnya' }))}
                                                 className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 text-xs font-medium bg-white"
                                             >
                                                 <option value="koreksi_hitung">🔍 Koreksi Hitung / Kesalahan Input Kasir</option>

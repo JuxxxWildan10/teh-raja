@@ -21,7 +21,6 @@ import { Order, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLab
 import { X, Printer, Share2, Bluetooth } from "lucide-react";
 import { motion } from "framer-motion";
 import { buildReceiptPayload, printViaBluetooth } from "@/lib/printer";
-import html2canvas from "html2canvas";
 
 interface ReceiptModalProps {
     order: Order;
@@ -47,8 +46,8 @@ export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
         try {
             const payload = buildReceiptPayload(order);
             await printViaBluetooth(payload);
-        } catch (err: any) {
-            alert(err.message || 'Gagal menyambung ke Printer Bluetooth');
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Gagal menyambung ke Printer Bluetooth');
         }
     };
 

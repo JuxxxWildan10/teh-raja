@@ -11,12 +11,14 @@
  * ============================================================================
  */
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRecommendations } from "@/lib/recommendation";
 import { useCartStore, useProductStore, ExtendedProduct, ProductVariants } from "@/lib/store";
 import { ShoppingBag, RefreshCcw } from "lucide-react";
 import VariantModal from "./VariantModal";
+
+const emptySubscribe = () => () => {};
 
 // Komponen Quiz Interaktif untuk memberikan rekomendasi teh 
 // berdasarkan selera dan preferensi pelanggan.
@@ -41,13 +43,8 @@ export default function RecommendationQuiz() {
         setVariantProduct(null);
     };
 
-    // state 'isClient' untuk memastikan render komponen hanya terjadi di sisi klien (mencegah error hidrasi Next.js)
-    const [isClient, setIsClient] = useState(false);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => {
-        setIsClient(true);
-    }, []);
+    // isClient untuk memastikan render komponen hanya terjadi di sisi klien (mencegah error hidrasi Next.js)
+    const isClient = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
     // Fungsi progres ke halaman (step) kuis berikutnya atau ke tampilan hasil
     const handleNext = () => {

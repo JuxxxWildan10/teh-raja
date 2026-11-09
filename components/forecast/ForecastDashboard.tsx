@@ -20,27 +20,25 @@
  * ============================================================================
  */
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
-    useSalesStore, useProductStore, useInventoryStore, useForecastHistoryStore,
-    ExtendedProduct, Ingredient
+    useSalesStore, useProductStore, useInventoryStore, useForecastHistoryStore
 } from "@/lib/store";
 import {
     buildDaily, toSeries, productTotals, ingredientNeeds,
     generateSimulation, parseImportRows, Target, SourceFilter, TARGET_LABEL,
-    formatDateID, DAY_NAMES, DailyRecord
+    formatDateID, DAY_NAMES
 } from "@/lib/forecast/data";
-import { runForecast, ForecastResult, ModelEvaluation, assessQuality } from "@/lib/forecast/engine";
+import { runForecast, ForecastResult, assessQuality } from "@/lib/forecast/engine";
 import { interpretMape, Criterion } from "@/lib/forecast/metrics";
-import { MODELS } from "@/lib/forecast/models";
 import { useToast } from "@/components/Toast";
 import * as XLSX from "xlsx";
 import { Line, Bar } from "react-chartjs-2";
 import {
-    Sparkles, BrainCircuit, RefreshCw, Download, FileSpreadsheet,
-    TrendingUp, Calendar, Box, AlertTriangle, CheckCircle, Info,
-    Database, Upload, Trash2, ArrowUpRight, ArrowDownRight, Layers,
-    Copy, Check, FileText, BarChart3, HelpCircle
+    Sparkles, BrainCircuit, RefreshCw, FileSpreadsheet,
+    TrendingUp, Box, AlertTriangle,
+    Database, Upload, Trash2, ArrowUpRight, ArrowDownRight,
+    Copy, Check, BarChart3
 } from "lucide-react";
 
 export default function ForecastDashboard() {
@@ -48,7 +46,7 @@ export default function ForecastDashboard() {
     const { orders } = useSalesStore();
     const { products } = useProductStore();
     const { ingredients } = useInventoryStore();
-    const { records: historyRecords, addRecords, clearBySource, clearAll } = useForecastHistoryStore();
+    const { records: historyRecords, addRecords, clearAll } = useForecastHistoryStore();
 
     // ── Filter Sumber Data ─────────────────────────────────────────
     const [sourceFilter, setSourceFilter] = useState<SourceFilter>({
@@ -94,7 +92,7 @@ export default function ForecastDashboard() {
     }, [series]);
 
     // ── 2. Jalankan Peramalan Statistik ────────────────────────────
-    const handleRunForecast = () => {
+    const handleRunForecast = useCallback(() => {
         if (series.length < 4) {
             toast.error("Data deret waktu belum cukup (minimal 4 hari). Buat data simulasi atau impor file Excel.");
             return;
@@ -115,14 +113,15 @@ export default function ForecastDashboard() {
                 } else {
                     toast.error("Gagal melakukan perhitungan peramalan.");
                 }
-            } catch (err: any) {
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
                 console.warn("Forecast Error:", err);
-                toast.error("Error: " + err.message);
+                toast.error("Error: " + msg);
             } finally {
                 setIsComputing(false);
             }
         }, 50);
-    };
+    }, [series, horizon, criterion, selectedModelId, toast]);
 
     // Jalankan peramalan otomatis saat pertama kali atau saat target/horizon/model berubah
     useEffect(() => {
@@ -131,7 +130,7 @@ export default function ForecastDashboard() {
         } else {
             setForecastResult(null);
         }
-    }, [series.length, target, horizon, criterion, selectedModelId]);
+    }, [series.length, handleRunForecast]);
 
     // ── 3. Analisis Kebutuhan Bahan Baku (BOM) ─────────────────────
     const bomAnalysis = useMemo(() => {
@@ -213,9 +212,10 @@ export default function ForecastDashboard() {
             setAiSource(data.source || "gemini");
             setActiveSubTab("narrative");
             toast.success("Narasi akademik dan rekomendasi AI berhasil dibuat!");
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
             console.warn("AI Narrative Error:", err);
-            toast.error("Gagal mendapatkan narasi AI: " + err.message);
+            toast.error("Gagal mendapatkan narasi AI: " + msg);
         } finally {
             setIsAiLoading(false);
         }
@@ -236,8 +236,9 @@ export default function ForecastDashboard() {
             addRecords(simRecords);
             setIsSimulateModalOpen(false);
             toast.success(`Berhasil menambahkan ${simRecords.length} hari data simulasi penjualan.`);
-        } catch (err: any) {
-            toast.error("Gagal membuat simulasi: " + err.message);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error("Gagal membuat simulasi: " + msg);
         }
     };
 
@@ -267,9 +268,10 @@ export default function ForecastDashboard() {
                 if (parsed.unmatched.length) {
                     toast.warning(`${parsed.unmatched.length} nama produk tidak cocok persis di menu, tetap tersimpan.`);
                 }
-            } catch (err: any) {
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
                 console.warn("Import Error:", err);
-                toast.error("Gagal membaca file: " + err.message);
+                toast.error("Gagal membaca file: " + msg);
             }
         };
         reader.readAsBinaryString(file);
@@ -740,7 +742,7 @@ export default function ForecastDashboard() {
                         <p className="font-bold">Data Historis Tersedia Masih {series.length} Hari</p>
                         <p className="text-amber-800/80 mt-0.5">
                             Metode peramalan seperti Holt-Winters memerlukan minimal 16 hari data untuk menangkap 2 siklus musiman mingguan.
-                            Klik tombol <strong>"🎲 Buat Simulasi Data"</strong> di atas untuk membuat 90 hari data penjualan yang realistis sesuai pola kedai Teh Raja.
+                            Klik tombol <strong>&ldquo;🎲 Buat Simulasi Data&rdquo;</strong> di atas untuk membuat 90 hari data penjualan yang realistis sesuai pola kedai Teh Raja.
                         </p>
                     </div>
                 </div>

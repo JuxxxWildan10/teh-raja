@@ -13,31 +13,37 @@
  * ============================================================================
  */
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore, useSalesStore, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLabel } from "@/lib/store";
 import { Clock, CheckCircle2, UtensilsCrossed, ShoppingBag, LayoutDashboard, AlertCircle, ShoppingCart, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+const emptySubscribe = () => () => {};
+const subscribeTime = (cb: () => void) => {
+    const t = setInterval(cb, 10000);
+    return () => clearInterval(t);
+};
+const getClientTime = () => Date.now();
+const getServerTime = () => 0;
+
 export default function KDSPage() {
     const router = useRouter();
     const { user } = useAuthStore();
     const { orders, updateOrderStatus, addLog } = useSalesStore();
-    const [isClient, setIsClient] = useState(false);
-    const [authHydrated, setAuthHydrated] = useState(false);
+    const isClient = useSyncExternalStore(emptySubscribe, () => true, () => false);
+    const currentTime = useSyncExternalStore(subscribeTime, getClientTime, getServerTime);
+    const [authHydrated, setAuthHydrated] = useState(() => useAuthStore.persist.hasHydrated());
     const [kdsTab, setKdsTab] = useState<'active' | 'incoming' | 'completed'>('active');
 
     useEffect(() => {
-        setIsClient(true);
-        if (useAuthStore.persist.hasHydrated()) {
-            setAuthHydrated(true);
-        } else {
+        if (!authHydrated) {
             const unsub = useAuthStore.persist.onFinishHydration(() => setAuthHydrated(true));
             const fallback = setTimeout(() => setAuthHydrated(true), 600);
             return () => { unsub(); clearTimeout(fallback); };
         }
-    }, []);
+    }, [authHydrated]);
 
     useEffect(() => {
         if (isClient && authHydrated && !user) {
@@ -120,8 +126,8 @@ export default function KDSPage() {
                             <button
                                 onClick={() => setKdsTab('active')}
                                 className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 transition whitespace-nowrap flex-shrink-0 ${kdsTab === 'active'
-                                        ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
-                                        : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
+                                    ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                                    : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
                                     }`}
                             >
                                 <Clock size={15} className={kdsTab === 'active' ? "animate-pulse" : ""} />
@@ -130,8 +136,8 @@ export default function KDSPage() {
                             <button
                                 onClick={() => setKdsTab('incoming')}
                                 className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 transition whitespace-nowrap flex-shrink-0 ${kdsTab === 'incoming'
-                                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                        : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
+                                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                    : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
                                     }`}
                             >
                                 <span className={`w-2 h-2 rounded-full bg-orange-400 ${pendingOrders.length > 0 ? 'animate-ping' : ''}`} />
@@ -140,8 +146,8 @@ export default function KDSPage() {
                             <button
                                 onClick={() => setKdsTab('completed')}
                                 className={`lg:hidden px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition whitespace-nowrap flex-shrink-0 ${kdsTab === 'completed'
-                                        ? 'bg-green-500 text-black shadow-lg shadow-green-500/20'
-                                        : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
+                                    ? 'bg-green-500 text-black shadow-lg shadow-green-500/20'
+                                    : 'bg-gray-700/60 text-gray-300 hover:bg-gray-700'
                                     }`}
                             >
                                 <CheckCircle2 size={15} />
@@ -173,7 +179,8 @@ export default function KDSPage() {
                             ) : (
                                 <AnimatePresence>
                                     {activeOrders.map(order => {
-                                        const waitTime = Math.floor((Date.now() - new Date(order.date).getTime()) / 60000);
+                                        const now = currentTime || new Date(order.date).getTime();
+                                        const waitTime = Math.floor((now - new Date(order.date).getTime()) / 60000);
                                         const isLate = waitTime >= 10;
 
                                         return (
@@ -275,7 +282,8 @@ export default function KDSPage() {
                                 <AnimatePresence>
                                     {pendingOrders.map(order => {
                                         const orderTime = new Date(order.date);
-                                        const diffMins = Math.floor((Date.now() - orderTime.getTime()) / 60000);
+                                        const now = currentTime || orderTime.getTime();
+                                        const diffMins = Math.floor((now - orderTime.getTime()) / 60000);
                                         const isAwaitingPayment = order.status === 'awaiting_payment';
 
                                         return (

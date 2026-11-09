@@ -49,7 +49,7 @@ function QRISDisplay({
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        setIsLoading(true);
+        let isCancelled = false;
         fetch('/api/payment/qris', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -57,10 +57,19 @@ function QRISDisplay({
         })
             .then(r => r.json())
             .then(d => {
-                setQrSrc(d.qrCodeUrl || d.qr_image_url || d.qrImageUrl || null);
+                if (!isCancelled) {
+                    setQrSrc(d.qrCodeUrl || d.qr_image_url || d.qrImageUrl || null);
+                }
             })
-            .catch(() => setQrSrc(null))
-            .finally(() => setIsLoading(false));
+            .catch(() => {
+                if (!isCancelled) setQrSrc(null);
+            })
+            .finally(() => {
+                if (!isCancelled) setIsLoading(false);
+            });
+        return () => {
+            isCancelled = true;
+        };
     }, [orderId, total]);
 
     return (
@@ -126,18 +135,19 @@ export default function OrderStatusOverlay() {
     const [showReceipt, setShowReceipt] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
     const [payStep, setPayStep] = useState<PaymentLocalStep>('choose');
+    const [prevActiveOrderId, setPrevActiveOrderId] = useState(activeOrderId);
+
+    if (prevActiveOrderId !== activeOrderId) {
+        setPrevActiveOrderId(activeOrderId);
+        setPayStep('choose');
+        setIsMinimized(false);
+    }
 
     useEffect(() => {
         const handleOpen = () => setIsMinimized(false);
         window.addEventListener('tehraja:open-order-overlay', handleOpen);
         return () => window.removeEventListener('tehraja:open-order-overlay', handleOpen);
     }, []);
-
-    // Reset local step when order ID changes
-    useEffect(() => {
-        setPayStep('choose');
-        setIsMinimized(false);
-    }, [activeOrderId]);
 
     if (!activeOrderId || !activeOrder) return null;
 

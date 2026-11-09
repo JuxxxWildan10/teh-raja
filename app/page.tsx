@@ -21,8 +21,10 @@
  * ============================================================================
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+
+const emptySubscribe = () => () => {};
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
@@ -166,7 +168,7 @@ export default function LandingPage() {
     const activeOrder = activeOrderId ? orders.find((o) => o.id === activeOrderId) : null;
 
     const [currentTea, setCurrentTea] = useState(0);
-    const [mounted, setMounted] = useState(false);
+    const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
     const [isSecretModalOpen, setIsSecretModalOpen] = useState(false);
     const [isTrackerModalOpen, setIsTrackerModalOpen] = useState(false);
 
@@ -175,7 +177,6 @@ export default function LandingPage() {
     });
 
     useEffect(() => {
-        setMounted(true);
         const interval = setInterval(() => {
             setCurrentTea((v) => (v + 1) % FEATURED_TEAS.length);
         }, 3500);

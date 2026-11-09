@@ -734,7 +734,7 @@ export const useProductStore = create<ProductState>()(
             },
             decrementStock: (items) => {
                 set((state) => {
-                    const updates: Record<string, any> = {};
+                    const updates: Record<string, unknown> = {};
                     // Aggregate total quantity per product ID across variants
                     const qtyByProductId = new Map<string, number>();
                     items.forEach(i => {
@@ -760,7 +760,7 @@ export const useProductStore = create<ProductState>()(
 
             restoreStock: (items) => {
                 set((state) => {
-                    const updates: Record<string, any> = {};
+                    const updates: Record<string, unknown> = {};
                     const qtyByProductId = new Map<string, number>();
                     items.forEach(i => {
                         qtyByProductId.set(i.id, (qtyByProductId.get(i.id) || 0) + i.quantity);
@@ -1539,7 +1539,7 @@ export const useInventoryStore = create<InventoryState>()(
                     };
                 });
 
-                const rtdbUpdates: Record<string, any> = {
+                const rtdbUpdates: Record<string, unknown> = {
                     [`ingredients/${id}`]: null,
                     [`deletedIngredients/${id}`]: true,
                 };
@@ -1619,7 +1619,7 @@ export const useInventoryStore = create<InventoryState>()(
                         });
                     }
                     
-                    const updates: Record<string, any> = {};
+                    const updates: Record<string, unknown> = {};
                     newIngredients.forEach(ing => {
                         updates[`ingredients/${ing.id}`] = ing;
                     });
@@ -1667,7 +1667,7 @@ export const useInventoryStore = create<InventoryState>()(
                         });
                     }
 
-                    const updates: Record<string, any> = {};
+                    const updates: Record<string, unknown> = {};
                     newIngredients.forEach(ing => {
                         updates[`ingredients/${ing.id}`] = ing;
                     });
@@ -1683,9 +1683,9 @@ export const useInventoryStore = create<InventoryState>()(
             name: 'teh-raja-inventory-v1',
             storage: createJSONStorage(() => idbStorage),
             version: 2,
-            migrate: (persistedState: unknown, _version: number) => {
+            migrate: (persistedState: unknown) => {
                 const s = persistedState as { ingredients?: Ingredient[]; deletedIngredientIds?: string[] } | undefined;
-                if (!s || !Array.isArray(s.ingredients)) return persistedState as any;
+                if (!s || !Array.isArray(s.ingredients)) return persistedState as InventoryState;
                 const existingIds = new Set(s.ingredients.map(i => i.id));
                 const deletedSet = new Set(s.deletedIngredientIds || []);
                 const missingKresek = DEFAULT_INGREDIENTS.filter(
@@ -1695,9 +1695,9 @@ export const useInventoryStore = create<InventoryState>()(
                     return {
                         ...s,
                         ingredients: [...s.ingredients, ...missingKresek],
-                    };
+                    } as InventoryState;
                 }
-                return s;
+                return s as InventoryState;
             }
         }
     )

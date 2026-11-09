@@ -54,7 +54,10 @@ import {
   CalendarX2,
 } from "lucide-react";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import Image from "next/image";
+import { useState, useEffect, useSyncExternalStore } from "react";
+
+const emptySubscribe = () => () => {};
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => void;
@@ -94,11 +97,16 @@ export default function Home() {
   const addLog = useSalesStore((state) => state.addLog);
   const toast = useToast();
 
-  const [isClient, setIsClient] = useState(false);
+  const isClient = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [variantProduct, setVariantProduct] = useState<ExtendedProduct | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Tutup modal varian otomatis apabila Admin mengunci kedai secara real-time
+  if (!isOnlineOrderOpen && variantProduct) {
+    setVariantProduct(null);
+  }
 
   const activePromos = promos.filter(
     p => p.isActive && (isAdvancedUnlocked || p.type === 'bundle' || p.alwaysApplyInPkl)
@@ -124,19 +132,13 @@ export default function Home() {
     setVariantProduct(null);
   };
 
-  // Tutup modal varian otomatis apabila Admin mengunci kedai secara real-time
   useEffect(() => {
-    if (!isOnlineOrderOpen && variantProduct) {
-      setVariantProduct(null);
-    }
-  }, [isOnlineOrderOpen, variantProduct]);
-
-  useEffect(() => {
-    setIsClient(true);
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-    });
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
 
   const handleInstall = () => {
@@ -483,7 +485,13 @@ export default function Home() {
                       <div className="h-64 bg-black/20 relative overflow-hidden">
                         <div className="absolute inset-0 flex items-center justify-center text-gold/20 font-serif text-4xl opacity-30">
                           {product.image ? (
-                            <img src={product.image} alt={product.name} className={`w-full h-full object-cover transition duration-700 group-hover:scale-110 ${isOut ? 'grayscale' : ''}`} />
+                            <Image
+                              src={product.image}
+                              alt={product.name}
+                              fill
+                              sizes="(max-width: 768px) 100vw, 300px"
+                              className={`object-cover transition duration-700 group-hover:scale-110 ${isOut ? 'grayscale' : ''}`}
+                            />
                           ) : (
                             <span>{product.name[0]}</span>
                           )}

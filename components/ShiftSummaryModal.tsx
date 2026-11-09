@@ -15,9 +15,17 @@
  * ============================================================================
  */
 
+import { useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, TrendingUp, CreditCard, Banknote, QrCode, Building2, Clock, CheckCircle2, ShoppingBag } from "lucide-react";
+import { X, TrendingUp, Banknote, QrCode, Building2, Clock, CheckCircle2, ShoppingBag } from "lucide-react";
 import { StoreSession, Order, isOrderInSession, isExpenseInSession, getEnrichedSessions, useSalesStore, useExpenseStore } from "@/lib/store";
+
+const subscribeTime = (cb: () => void) => {
+    const timer = setInterval(cb, 60000);
+    return () => clearInterval(timer);
+};
+const getClientTime = () => Date.now();
+const getServerTime = () => 0;
 
 interface ShiftSummaryModalProps {
     isOpen: boolean;
@@ -58,9 +66,10 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
 
     const avgTransaction = displayTotalOrders > 0 ? Math.round(displayTotalSales / displayTotalOrders) : 0;
 
+    const currentTime = useSyncExternalStore(subscribeTime, getClientTime, getServerTime);
     const duration = session.endTime
         ? Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000)
-        : Math.max(0, Math.round((Date.now() - new Date(session.startTime).getTime()) / 60000));
+        : Math.max(0, Math.round(((currentTime || new Date(session.startTime).getTime()) - new Date(session.startTime).getTime()) / 60000));
 
     const allExpenses = useExpenseStore(s => s.expenses);
     const isSessionOpen = session.status === 'open';
@@ -74,7 +83,6 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
         : (session.expectedCash || 0);
 
     const diffCash = (session.actualCash || 0) - displayExpectedCash;
-    const diffColor = diffCash === 0 ? 'text-green-600' : diffCash > 0 ? 'text-blue-600' : 'text-red-600';
 
     return (
         <AnimatePresence>

@@ -48,6 +48,7 @@ import {
     User,
     Ingredient,
 } from "@/lib/store";
+import type { DailyRecord } from "@/lib/forecast/data";
 import { products as initialProducts } from "@/data/menu";
 import { Bell, BellOff } from "lucide-react";
 
@@ -66,16 +67,20 @@ export default function FirebaseSync() {
 
     const [isConnected, setIsConnected] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [notifPerm, setNotifPerm] = useState<NotifPerm>('default');
+    const [notifPerm, setNotifPerm] = useState<NotifPerm>(() => {
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+            return Notification.permission as NotifPerm;
+        }
+        return 'default';
+    });
     const [showNotifBanner, setShowNotifBanner] = useState(false);
 
     // ── 1. Check notification permission ─────────────────────
     useEffect(() => {
         if (typeof window === 'undefined' || !('Notification' in window)) return;
-        const perm = Notification.permission as NotifPerm;
-        setNotifPerm(perm);
-        if (perm === 'default') {
-            setTimeout(() => setShowNotifBanner(true), 3000);
+        if (Notification.permission === 'default') {
+            const timer = setTimeout(() => setShowNotifBanner(true), 3000);
+            return () => clearTimeout(timer);
         }
     }, []);
 
@@ -410,7 +415,7 @@ export default function FirebaseSync() {
         const unsubHistory = onValue(historyRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const loadedHistory = Object.values(data) as any[];
+                const loadedHistory = Object.values(data) as DailyRecord[];
                 loadedHistory.sort((a, b) => a.date.localeCompare(b.date));
                 useForecastHistoryStore.setState({ records: loadedHistory });
             }

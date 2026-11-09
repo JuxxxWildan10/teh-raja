@@ -33,7 +33,7 @@ import {
     getBundlePromoStatus,
 } from "@/lib/store";
 import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag, Tag, Gift, Phone, Lock, Sparkles } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { nanoid } from "nanoid";
 import NextImage from "next/image";
 import { useToast } from "./Toast";
@@ -58,32 +58,36 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
-    const [table, setTable] = useState("");
-    const [orderType, setOrderType] = useState<OrderType>('dine-in');
-    const [usePoints, setUsePoints] = useState(false);
-
-    // Auto-detect No. Meja from URL (?table= atau ?meja=)
-    useEffect(() => {
+    const [table, setTable] = useState(() => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
-            const tableParam = params.get('table') || params.get('meja');
-            if (tableParam) {
-                setTable(tableParam.trim());
-                setOrderType('dine-in');
-            }
+            return (params.get('table') || params.get('meja') || '').trim();
         }
-    }, [isOpen]);
+        return "";
+    });
+    const [orderType, setOrderType] = useState<OrderType>(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('table') || params.get('meja')) return 'dine-in';
+        }
+        return 'dine-in';
+    });
+    const [usePoints, setUsePoints] = useState(false);
 
     // Auto-fill member name if phone matches
     const member = phone.trim().length >= 8 ? findByPhone(phone.trim()) : undefined;
-    useEffect(() => {
-        if (member && !name.trim()) {
+    const [prevMemberId, setPrevMemberId] = useState<string | undefined>(undefined);
+    if (member && member.id !== prevMemberId) {
+        setPrevMemberId(member.id);
+        if (!name.trim()) {
             setName(member.name);
         }
-        if (!member) {
+    } else if (!member && prevMemberId !== undefined) {
+        setPrevMemberId(undefined);
+        if (usePoints) {
             setUsePoints(false);
         }
-    }, [member, name]);
+    }
 
     const nextCustomerLabel = useMemo(
         () => getNextCustomerLabel([...orders, ...heldOrders]),

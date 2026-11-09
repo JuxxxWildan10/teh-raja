@@ -18,7 +18,7 @@
  * ============================================================================
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { X, Plus, Minus, ShoppingCart, Thermometer, Droplets, Scale, Candy, Tag } from "lucide-react";
@@ -66,15 +66,15 @@ export default function VariantModal({ product, onConfirm, onClose }: VariantMod
 
     const [size, setSize] = useState<'M' | 'L'>('M');
     const [temperature, setTemperature] = useState<'panas' | 'es'>(beverage ? 'es' : 'es');
+    const [prevTemperature, setPrevTemperature] = useState<'panas' | 'es'>(temperature);
     const [sugar, setSugar] = useState<ProductVariants['sugar']>('50%');
     const [ice, setIce] = useState<ProductVariants['ice']>('normal');
     const [qty, setQty] = useState(1);
 
-    // Close ice selector when switching to panas
-    useEffect(() => {
-        if (temperature === 'panas') setIce('no-ice');
-        else setIce('normal');
-    }, [temperature]);
+    if (prevTemperature !== temperature) {
+        setPrevTemperature(temperature);
+        setIce(temperature === 'panas' ? 'no-ice' : 'normal');
+    }
 
     const sizeOptions = useMemo(() => ([
         {

@@ -18,18 +18,36 @@
 import { NextResponse } from 'next/server';
 import { generate, hasGeminiKey } from '@/lib/gemini';
 
+interface MenuItemCompat {
+    id: string;
+    name: string;
+    category?: string;
+}
+
+interface ParsedVoiceItem {
+    productId: string;
+    quantity: number;
+    variants: {
+        size: 'M' | 'L';
+        sugar?: '0%' | '25%' | '50%' | '75%' | '100%';
+        ice?: 'no-ice' | 'less' | 'normal' | 'extra';
+        temperature?: 'panas' | 'es';
+    };
+    note: string;
+}
+
 const WORD_TO_NUM: Record<string, number> = {
     satu: 1, se: 1, dua: 2, tiga: 3, empat: 4, lima: 5,
     enam: 6, tujuh: 7, delapan: 8, sembilan: 9, sepuluh: 10,
 };
 
-function parseVoiceTranscriptFallback(text: string, menu: any[]) {
+function parseVoiceTranscriptFallback(text: string, menu: MenuItemCompat[]) {
     const lower = text.toLowerCase();
     const segments = lower.split(/\b(?:dan|sama|tambah|plus|terus|lalu|,)\b/).map(s => s.trim()).filter(Boolean);
-    const results: any[] = [];
+    const results: ParsedVoiceItem[] = [];
 
-    const extractFromText = (chunk: string) => {
-        let bestProduct: any = null;
+    const extractFromText = (chunk: string): ParsedVoiceItem | null => {
+        let bestProduct: MenuItemCompat | null = null;
         let bestScore = 0;
 
         for (const item of menu) {
@@ -117,7 +135,7 @@ export async function POST(req: Request) {
 Tugas Anda: mengekstrak pesanan dari transkrip suara kasir menjadi format JSON murni.
 
 Daftar Menu Tersedia:
-${JSON.stringify(menu.map((m: any) => ({ id: m.id, name: m.name, category: m.category })), null, 2)}
+${JSON.stringify((menu as MenuItemCompat[]).map((m: MenuItemCompat) => ({ id: m.id, name: m.name, category: m.category })), null, 2)}
 
 Transkrip Suara Kasir: "${text}"
 
@@ -150,7 +168,7 @@ Format Output: HANYA JSON array tanpa pembuka markdown dan tanpa teks lain:
                 thinkingLevel: 'low',
             });
 
-            let parsed: any[] = [];
+            let parsed: ParsedVoiceItem[] = [];
             try {
                 parsed = JSON.parse(rawText);
             } catch {
@@ -168,8 +186,9 @@ Format Output: HANYA JSON array tanpa pembuka markdown dan tanpa teks lain:
         const fallbackItems = parseVoiceTranscriptFallback(text, menu);
         return NextResponse.json({ items: fallbackItems, source: 'rule-based' });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Voice POS AI Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({ error: msg }, { status: 500 });
     }
 }
