@@ -25,9 +25,9 @@ export default function PWAInstall() {
     const [showInstallBadge, setShowInstallBadge] = useState(false);
 
     useEffect(() => {
-        // Register Service Worker
-        if ("serviceWorker" in navigator) {
-            window.addEventListener("load", () => {
+        // Register Service Worker safely
+        if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+            const registerSW = () => {
                 navigator.serviceWorker
                     .register("/sw.js")
                     .then((registration) => {
@@ -36,7 +36,13 @@ export default function PWAInstall() {
                     .catch((error) => {
                         console.warn("Service Worker registration failed:", error);
                     });
-            });
+            };
+
+            if (document.readyState === "complete") {
+                registerSW();
+            } else {
+                window.addEventListener("load", registerSW);
+            }
         }
 
         // Handle Install Prompt

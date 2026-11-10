@@ -12,7 +12,7 @@
  * 3. File JS / CSS / Font                               : Stale-While-Revalidate.
  * ============================================================================
  */
-const CACHE_NAME = 'teh-raja-cache-v5';
+const CACHE_NAME = 'teh-raja-cache-v6';
 const STATIC_ASSETS = [
     '/',
     '/pos',
@@ -68,6 +68,10 @@ self.addEventListener('fetch', (event) => {
     if (event.request.url.includes('firebaseio.com') ||
         event.request.url.includes('googleapis.com') ||
         event.request.url.includes('mixkit.co')) return;
+    // Skip Next.js internal App Router RSC & dynamic API requests
+    if (event.request.url.includes('/api/') ||
+        event.request.url.includes('_rsc=') ||
+        event.request.url.includes('/_next/data/')) return;
 
     const isNavigation = event.request.mode === 'navigate';
     const isImage = event.request.destination === 'image';

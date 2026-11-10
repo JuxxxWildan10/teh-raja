@@ -21,11 +21,27 @@ import { Clock, CheckCircle2, UtensilsCrossed, ShoppingBag, LayoutDashboard, Ale
 import { motion, AnimatePresence } from "framer-motion";
 
 const emptySubscribe = () => () => {};
+let cachedKdsTime = typeof Date.now === 'function' ? Date.now() : 0;
+const kdsTimeListeners = new Set<() => void>();
+let kdsTimerInterval: ReturnType<typeof setInterval> | null = null;
+
 const subscribeTime = (cb: () => void) => {
-    const t = setInterval(cb, 10000);
-    return () => clearInterval(t);
+    kdsTimeListeners.add(cb);
+    if (!kdsTimerInterval) {
+        kdsTimerInterval = setInterval(() => {
+            cachedKdsTime = Date.now();
+            kdsTimeListeners.forEach(l => l());
+        }, 10000);
+    }
+    return () => {
+        kdsTimeListeners.delete(cb);
+        if (kdsTimeListeners.size === 0 && kdsTimerInterval) {
+            clearInterval(kdsTimerInterval);
+            kdsTimerInterval = null;
+        }
+    };
 };
-const getClientTime = () => Date.now();
+const getClientTime = () => cachedKdsTime;
 const getServerTime = () => 0;
 
 export default function KDSPage() {

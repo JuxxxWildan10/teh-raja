@@ -33,7 +33,7 @@ import {
     getBundlePromoStatus,
 } from "@/lib/store";
 import { X, Minus, Plus, Trash2, MessageCircle, Edit3, UtensilsCrossed, ShoppingBag, Tag, Gift, Phone, Lock, Sparkles } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { nanoid } from "nanoid";
 import NextImage from "next/image";
 import { useToast } from "./Toast";
@@ -58,36 +58,43 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
-    const [table, setTable] = useState(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            return (params.get('table') || params.get('meja') || '').trim();
-        }
-        return "";
-    });
-    const [orderType, setOrderType] = useState<OrderType>(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('table') || params.get('meja')) return 'dine-in';
-        }
-        return 'dine-in';
-    });
+    const [table, setTable] = useState("");
+    const [orderType, setOrderType] = useState<OrderType>('dine-in');
     const [usePoints, setUsePoints] = useState(false);
 
-    // Auto-fill member name if phone matches
+    // Auto-detect No. Meja from URL (?table= / ?meja=) safely when drawer opens
+    useEffect(() => {
+        if (!isOpen || typeof window === 'undefined') return;
+        const timer = setTimeout(() => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const tableParam = params.get('table') || params.get('meja');
+                if (tableParam) {
+                    setTable(prev => prev || tableParam.trim());
+                    setOrderType('dine-in');
+                }
+            } catch {
+                // Ignore URL parsing fallback
+            }
+        }, 0);
+        return () => clearTimeout(timer);
+    }, [isOpen]);
+
+    // Member helper
     const member = phone.trim().length >= 8 ? findByPhone(phone.trim()) : undefined;
-    const [prevMemberId, setPrevMemberId] = useState<string | undefined>(undefined);
-    if (member && member.id !== prevMemberId) {
-        setPrevMemberId(member.id);
-        if (!name.trim()) {
-            setName(member.name);
-        }
-    } else if (!member && prevMemberId !== undefined) {
-        setPrevMemberId(undefined);
-        if (usePoints) {
+
+    const handlePhoneChange = (val: string) => {
+        setPhone(val);
+        const trimmed = val.trim();
+        if (trimmed.length >= 8) {
+            const found = findByPhone(trimmed);
+            if (found && !name.trim()) {
+                setName(found.name);
+            }
+        } else {
             setUsePoints(false);
         }
-    }
+    };
 
     const nextCustomerLabel = useMemo(
         () => getNextCustomerLabel([...orders, ...heldOrders]),
@@ -404,7 +411,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                                 type="tel"
                                                 placeholder={isAdvancedUnlocked ? "No. WhatsApp / Member (Opsional - dapat poin)" : "No. WhatsApp (Opsional - struk & lacak order)"}
                                                 value={phone}
-                                                onChange={(e) => setPhone(e.target.value)}
+                                                onChange={(e) => handlePhoneChange(e.target.value)}
                                                 className="bg-transparent text-xs w-full focus:outline-none text-white placeholder:text-white/30"
                                             />
                                         </div>

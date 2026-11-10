@@ -57,6 +57,21 @@ const ALERT_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-previ
 
 type NotifPerm = 'default' | 'granted' | 'denied';
 
+function getSafeNotificationPermission(): NotifPerm {
+    try {
+        if (
+            typeof window !== 'undefined' &&
+            typeof window.Notification !== 'undefined' &&
+            typeof window.Notification.permission === 'string'
+        ) {
+            return window.Notification.permission as NotifPerm;
+        }
+    } catch {
+        // Fallback for Safari/iOS WebKit and restricted environments
+    }
+    return 'default';
+}
+
 export default function FirebaseSync() {
     const { orders } = useSalesStore();
     const { activeOrderId, items: cartItems } = useCartStore();
@@ -67,45 +82,71 @@ export default function FirebaseSync() {
 
     const [isConnected, setIsConnected] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [notifPerm, setNotifPerm] = useState<NotifPerm>(() => {
-        if (typeof window !== 'undefined' && 'Notification' in window) {
-            return Notification.permission as NotifPerm;
-        }
-        return 'default';
-    });
+    const [notifPerm, setNotifPerm] = useState<NotifPerm>('default');
     const [showNotifBanner, setShowNotifBanner] = useState(false);
 
-    // ── 1. Check notification permission ─────────────────────
+    // ── 1. Check notification permission safely ──────────────
     useEffect(() => {
-        if (typeof window === 'undefined' || !('Notification' in window)) return;
-        if (Notification.permission === 'default') {
-            const timer = setTimeout(() => setShowNotifBanner(true), 3000);
-            return () => clearTimeout(timer);
+        const safePerm = getSafeNotificationPermission();
+        if (safePerm !== 'default') {
+            setNotifPerm(safePerm);
+        } else {
+            try {
+                if (typeof window !== 'undefined' && typeof window.Notification !== 'undefined') {
+                    const timer = setTimeout(() => setShowNotifBanner(true), 3000);
+                    return () => clearTimeout(timer);
+                }
+            } catch {
+                // Ignore
+            }
         }
     }, []);
 
     const requestNotifPermission = useCallback(async () => {
-        if (!('Notification' in window)) return;
-        const perm = await Notification.requestPermission() as NotifPerm;
-        setNotifPerm(perm);
-        setShowNotifBanner(false);
+        try {
+            if (
+                typeof window !== 'undefined' &&
+                typeof window.Notification !== 'undefined' &&
+                typeof window.Notification.requestPermission === 'function'
+            ) {
+                const perm = await window.Notification.requestPermission() as NotifPerm;
+                setNotifPerm(perm);
+            }
+        } catch (e) {
+            console.warn('[Notification] requestPermission failed:', e);
+        } finally {
+            setShowNotifBanner(false);
+        }
     }, []);
 
-    // ── 2. Helper: show browser notification ─────────────────
+    // ── 2. Helper: show browser notification safely ──────────
     const showNotification = useCallback((title: string, body: string, tag?: string) => {
-        if (typeof window === 'undefined') return;
-        if (!('Notification' in window)) return;
-        if (Notification.permission !== 'granted') return;
         try {
-            const notif = new Notification(title, {
-                body,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
-                tag: tag || 'teh-raja',
-                requireInteraction: false,
-                silent: false,
-            });
-            notif.onclick = () => { window.focus(); notif.close(); };
+            if (typeof window === 'undefined' || typeof window.Notification === 'undefined') return;
+            if (getSafeNotificationPermission() !== 'granted') return;
+
+            // In mobile devices (Android/iOS PWA), new Notification() throws an error.
+            // Prefer Service Worker showNotification if active.
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.showNotification(title, {
+                        body,
+                        icon: '/icon-192.png',
+                        badge: '/icon-192.png',
+                        tag: tag || 'teh-raja',
+                    });
+                }).catch(() => {});
+            } else {
+                const notif = new window.Notification(title, {
+                    body,
+                    icon: '/icon-192.png',
+                    badge: '/icon-192.png',
+                    tag: tag || 'teh-raja',
+                    requireInteraction: false,
+                    silent: false,
+                });
+                notif.onclick = () => { window.focus(); notif.close(); };
+            }
         } catch (e) {
             console.warn('[Notification] Failed:', e);
         }

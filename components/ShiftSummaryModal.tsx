@@ -20,12 +20,28 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, TrendingUp, Banknote, QrCode, Building2, Clock, CheckCircle2, ShoppingBag } from "lucide-react";
 import { StoreSession, Order, isOrderInSession, isExpenseInSession, getEnrichedSessions, useSalesStore, useExpenseStore } from "@/lib/store";
 
-const subscribeTime = (cb: () => void) => {
-    const timer = setInterval(cb, 60000);
-    return () => clearInterval(timer);
+let cachedShiftTime = typeof Date.now === 'function' ? Date.now() : 0;
+const shiftTimeListeners = new Set<() => void>();
+let shiftTimerInterval: ReturnType<typeof setInterval> | null = null;
+
+const subscribeShiftTime = (cb: () => void) => {
+    shiftTimeListeners.add(cb);
+    if (!shiftTimerInterval) {
+        shiftTimerInterval = setInterval(() => {
+            cachedShiftTime = Date.now();
+            shiftTimeListeners.forEach(l => l());
+        }, 60000);
+    }
+    return () => {
+        shiftTimeListeners.delete(cb);
+        if (shiftTimeListeners.size === 0 && shiftTimerInterval) {
+            clearInterval(shiftTimerInterval);
+            shiftTimerInterval = null;
+        }
+    };
 };
-const getClientTime = () => Date.now();
-const getServerTime = () => 0;
+const getClientShiftTime = () => cachedShiftTime;
+const getServerShiftTime = () => 0;
 
 interface ShiftSummaryModalProps {
     isOpen: boolean;
@@ -66,7 +82,7 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
 
     const avgTransaction = displayTotalOrders > 0 ? Math.round(displayTotalSales / displayTotalOrders) : 0;
 
-    const currentTime = useSyncExternalStore(subscribeTime, getClientTime, getServerTime);
+    const currentTime = useSyncExternalStore(subscribeShiftTime, getClientShiftTime, getServerShiftTime);
     const duration = session.endTime
         ? Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000)
         : Math.max(0, Math.round(((currentTime || new Date(session.startTime).getTime()) - new Date(session.startTime).getTime()) / 60000));
