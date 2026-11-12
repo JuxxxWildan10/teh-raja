@@ -22,6 +22,7 @@ import Navbar from "@/components/Navbar";
 import RecommendationQuiz from "@/components/RecommendationQuiz";
 import OrderStatusOverlay from "@/components/OrderStatusOverlay";
 import VariantModal from "@/components/VariantModal";
+import Footer from "@/components/Footer";
 import { useSecretLogoTap } from "@/components/SecretStaffModal";
 import { useToast } from "@/components/Toast";
 import {
@@ -270,9 +271,7 @@ export default function Home() {
           </motion.div>
         </section>
 
-        <footer className="bg-black/40 py-6 border-t border-white/5 text-center text-xs opacity-40">
-          <p>TEH RAJA &copy; 2026 · Authentic Tea &amp; Blends</p>
-        </footer>
+        <Footer variant="dark" />
 
         {/* Overlay pelacakan pesanan sebelumnya tetap aktif jika pelanggan baru saja memesan sebelum tutup */}
         <OrderStatusOverlay />
@@ -570,9 +569,7 @@ export default function Home() {
       </section>
 
       {/* FOOTER */}
-      <footer className={`bg-black/40 pt-10 border-t border-white/5 text-center text-sm opacity-40 ${cartItems.length > 0 ? 'pb-28' : 'pb-10'}`}>
-        <p>TEH RAJA &copy; 2026 · Authentic Tea &amp; Blends</p>
-      </footer>
+      <Footer variant="dark" className={cartItems.length > 0 ? 'pb-32' : 'pb-10'} />
 
       {/* Mobile sticky cart bar */}
       <AnimatePresence>

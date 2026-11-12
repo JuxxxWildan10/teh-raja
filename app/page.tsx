@@ -56,6 +56,7 @@ import {
 } from "@/lib/store";
 import SecretStaffModal, { useSecretLogoTap } from "@/components/SecretStaffModal";
 import CustomerOrderTrackerModal from "@/components/CustomerOrderTrackerModal";
+import Footer from "@/components/Footer";
 import { useToast } from "@/components/Toast";
 
 const FEATURED_TEAS = [
@@ -701,9 +702,7 @@ export default function LandingPage() {
             </section>
 
             {/* ── FOOTER ────────────────────────────────── */}
-            <footer className="px-6 py-6 border-t border-white/10 text-center text-white/40 text-xs">
-                <p>TEH RAJA &copy; 2026 · Authentic Tea &amp; Blends</p>
-            </footer>
+            <Footer variant="dark" />
 
             {/* Modals */}
             <CustomerOrderTrackerModal

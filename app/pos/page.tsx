@@ -1002,13 +1002,20 @@ export default function POSPage() {
                     </div>
 
                     {/* Bottom Quick Stats */}
-                    <div className="bg-white border-t border-gray-200 px-4 py-1.5 flex items-center gap-4 text-xs text-gray-400 flex-shrink-0">
-                        <span>{filteredProducts.length} produk</span>
-                        <span>•</span>
-                        <span className="text-green-600 font-medium">{products.filter(p => p.stock > 0 && p.isAvailable).length} tersedia</span>
-                        <span>•</span>
-                        <span className="text-red-500">{products.filter(p => p.stock <= 0 || !p.isAvailable).length} habis</span>
-                        <span className="ml-auto text-gray-300 hidden sm:block">ESC: tutup · Ctrl+F: cari</span>
+                    <div className="bg-white border-t border-gray-200 px-4 py-1.5 flex items-center justify-between gap-3 text-xs text-gray-400 flex-shrink-0">
+                        <div className="flex items-center gap-3">
+                            <span>{filteredProducts.length} produk</span>
+                            <span>•</span>
+                            <span className="text-green-600 font-medium">{products.filter(p => p.stock > 0 && p.isAvailable).length} tersedia</span>
+                            <span>•</span>
+                            <span className="text-red-500">{products.filter(p => p.stock <= 0 || !p.isAvailable).length} habis</span>
+                        </div>
+                        <div className="text-[11px] text-gray-500 hidden md:flex items-center gap-1.5">
+                            <span>Dibuat oleh: <strong className="text-gray-700">M. Yarzuq Wildani</strong> (0402231058)</span>
+                            <span>·</span>
+                            <span className="text-gray-400">PKL Teknik Informatika 2026</span>
+                        </div>
+                        <span className="text-gray-300 hidden xl:block">ESC: tutup · Ctrl+F: cari</span>
                     </div>
                 </div>
 

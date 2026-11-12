@@ -34,6 +34,7 @@ import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import ShiftSummaryModal from "@/components/ShiftSummaryModal";
 import ReceiptModal from "@/components/ReceiptModal";
+import Footer from "@/components/Footer";
 import * as XLSX from "xlsx";
 import { Line, Bar, Doughnut } from "react-chartjs-2";
 import {
@@ -5377,6 +5378,9 @@ export default function AdminPage() {
                     </div>
                 </div>
             )}
+
+            {/* ── FOOTER ADMIN ──────────────────────────── */}
+            <Footer variant="light" className="mt-auto" />
 
             {/* Modal Detail & Cetak Struk Pesanan */}
             {viewReceiptOrder && (
