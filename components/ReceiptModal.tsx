@@ -17,14 +17,15 @@
 
 
 import { useRef } from "react";
-import { Order, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLabel } from "@/lib/store";
-import { X, Printer, Share2, Bluetooth } from "lucide-react";
+import { Order, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLabel, useProductStore } from "@/lib/store";
+import { X, Printer, Share2, Bluetooth, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { buildReceiptPayload, printViaBluetooth } from "@/lib/printer";
 
 interface ReceiptModalProps {
     order: Order;
     onClose: () => void;
+    onCompleteOrder?: () => void;
 }
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -37,14 +38,15 @@ function formatRp(n: number) {
     return 'Rp ' + n.toLocaleString('id-ID');
 }
 
-export default function ReceiptModal({ order, onClose }: ReceiptModalProps) {
+export default function ReceiptModal({ order, onClose, onCompleteOrder }: ReceiptModalProps) {
     const receiptRef = useRef<HTMLDivElement>(null);
-    const totalCups = countOrderCupQuantity(order.items, []);
+    const products = useProductStore(s => s.products);
+    const totalCups = countOrderCupQuantity(order.items, products);
     const kresekPackagingText = getKresekPackagingLabel(totalCups);
 
     const handleBluetoothPrint = async () => {
         try {
-            const payload = buildReceiptPayload(order);
+            const payload = buildReceiptPayload(order, products);
             await printViaBluetooth(payload);
         } catch (err: unknown) {
             alert(err instanceof Error ? err.message : 'Gagal menyambung ke Printer Bluetooth');
@@ -92,7 +94,10 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
             ? `https://wa.me/${waPhone}?text=${encodeURIComponent(textReceipt)}`
             : `https://wa.me/?text=${encodeURIComponent(textReceipt)}`;
 
-        window.open(waUrl, '_blank');
+        const win = window.open(waUrl, '_blank', 'noopener,noreferrer');
+        if (!win) {
+            window.location.href = waUrl;
+        }
     };
 
     const payLabel = order.paymentMethod ? PAYMENT_LABEL[order.paymentMethod] : '-';
@@ -257,6 +262,14 @@ _Simpan pesan ini sebagai bukti pembayaran resmi._`;
 
             {/* Footer Actions (Hidden in Print) */}
             <div className="bg-gray-50 p-3 border-t border-gray-100 space-y-2 print:hidden flex-shrink-0">
+                {order.status === 'processing' && onCompleteOrder && (
+                    <button
+                        onClick={onCompleteOrder}
+                        className="w-full py-2.5 sm:py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 flex items-center justify-center gap-2 text-xs sm:text-sm transition shadow-lg shadow-emerald-600/20"
+                    >
+                        <CheckCircle2 size={16} /> Selesai Diracik &amp; Tutup
+                    </button>
+                )}
                 {/* WhatsApp — prominent full-width */}
                 <button
                     onClick={handleWhatsApp}

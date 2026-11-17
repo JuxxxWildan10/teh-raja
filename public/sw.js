@@ -12,7 +12,7 @@
  * 3. File JS / CSS / Font                               : Stale-While-Revalidate.
  * ============================================================================
  */
-const CACHE_NAME = 'teh-raja-cache-v6';
+const CACHE_NAME = 'teh-raja-cache-v7';
 const STATIC_ASSETS = [
     '/',
     '/pos',
@@ -64,8 +64,9 @@ self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     // Skip non-http requests (e.g. chrome-extension://)
     if (!event.request.url.startsWith('http')) return;
-    // Skip Firebase / external analytics requests
+    // Skip Firebase / external analytics requests (termasuk asia-southeast1.firebasedatabase.app)
     if (event.request.url.includes('firebaseio.com') ||
+        event.request.url.includes('firebasedatabase.app') ||
         event.request.url.includes('googleapis.com') ||
         event.request.url.includes('mixkit.co')) return;
     // Skip Next.js internal App Router RSC & dynamic API requests
@@ -115,7 +116,7 @@ self.addEventListener('fetch', (event) => {
                         caches.open(CACHE_NAME).then(cache => cache.put(event.request, cloned));
                     }
                     return response;
-                });
+                }).catch(() => cachedResponse || new Response('', { status: 503 }));
                 return cachedResponse || networkFetch;
             })
         );

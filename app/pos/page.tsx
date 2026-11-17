@@ -101,6 +101,7 @@ export default function POSPage() {
     const [isCheckingQris, setIsCheckingQris] = useState(false);
     const [qrisSuccess, setQrisSuccess] = useState(false);
     const [qrisUrl, setQrisUrl] = useState<string | null>(null);
+    const [qrisAmount, setQrisAmount] = useState<number | null>(null);
 
     const [showReceipt, setShowReceipt] = useState(false);
     const [lastOrder, setLastOrder] = useState<Order | null>(null);
@@ -274,6 +275,7 @@ export default function POSPage() {
             if (e.key === 'Escape') {
                 setMobileCartOpen(false);
                 setShowReceipt(false);
+                setLastOrder(null);
                 setShowHeldOrders(false);
                 setShowIncomingOrders(false);
                 setVariantProduct(null);
@@ -331,15 +333,16 @@ export default function POSPage() {
 
     const customer = useMemo(() => findByPhone(customerPhone), [customerPhone, findByPhone]);
 
-    // Auto-fill customer name when phone matches a member
-    useEffect(() => {
-        if (customer && !customerName.trim()) {
-            setCustomerName(customer.name);
+    const handleCustomerPhoneChange = (val: string) => {
+        setCustomerPhone(val);
+        const found = findByPhone(val);
+        if (found && !customerName.trim()) {
+            setCustomerName(found.name);
         }
-        if (!customer) {
+        if (!found) {
             setUsePoints(false);
         }
-    }, [customer, customerName]);
+    };
 
     const maxPointsRpValue = customer ? customer.points * POINTS_REDEEM_VALUE : 0;
     const afterDiscountSubtotal = Math.max(0, subtotal - discountAmount);
@@ -378,6 +381,8 @@ export default function POSPage() {
     }, [customer, items, orders, products]);
 
     const orderTotal = Math.max(0, subtotal - discountAmount - pointsDiscount);
+    const isQrisGeneratedForTotal = qrisGenerated && qrisAmount === orderTotal;
+    const isQrisSuccessForTotal = qrisSuccess && qrisAmount === orderTotal;
     const cashIn = parseFloat(cashReceived.replace(/\D/g, '')) || 0;
     const change = paymentMethod === 'cash' ? Math.max(0, cashIn - orderTotal) : 0;
     const isInsufficientCash = paymentMethod === 'cash' && cashIn < orderTotal && cashIn > 0;
@@ -558,6 +563,8 @@ export default function POSPage() {
         recognition.start();
     }, [isListening, isProcessingVoice, products, addToCart, toast]);
 
+    const isCheckingOutRef = useRef(false);
+
     // ── FUNGSI UTAMA CHECKOUT TRANSAKSI KASIR & PEMOTONGAN RESEP BOM ──
     // 1. Memvalidasi status buka shift dan kecukupan uang tunai / konfirmasi QRIS.
     //    (Jika nama pelanggan kosong, otomatis memakai label Customer 1, 2, 3, ... harian).
@@ -565,6 +572,7 @@ export default function POSPage() {
     // 3. Memotong stok produk (`decrementStock`) dan memotong takaran bahan baku sesuai resep BOM (`decrementIngredientsForOrder`).
     // 4. Membuka modal struk (`ReceiptModal`) untuk cetak Bluetooth 58mm / Browser / WhatsApp.
     const handleCheckout = useCallback(() => {
+        if (isCheckingOutRef.current) return;
         if (!isStoreOpen) { toast.error('Toko harus dibuka terlebih dahulu!'); return; }
         if (items.length === 0) return;
         const resolvedCustomerName = customerName.trim() || getNextCustomerLabel([...orders, ...heldOrders]);
@@ -572,7 +580,7 @@ export default function POSPage() {
             toast.error(`Uang kurang! Perlu ${formatRp(orderTotal - cashIn)} lagi.`);
             return;
         }
-        if (paymentMethod === 'qris' && !qrisSuccess) {
+        if (paymentMethod === 'qris' && !isQrisSuccessForTotal) {
             toast.error(`Selesaikan pembayaran QRIS terlebih dahulu.`);
             return;
         }
@@ -585,6 +593,11 @@ export default function POSPage() {
             );
             return;
         }
+
+        isCheckingOutRef.current = true;
+        setTimeout(() => {
+            isCheckingOutRef.current = false;
+        }, 600);
 
         // Process Loyalty Points (hanya aktif pada Mode Pengembangan Lanjutan)
         const cleanPhone = customerPhone.trim();
@@ -657,14 +670,14 @@ export default function POSPage() {
         clearCart();
         setCustomerName(''); setCustomerPhone(''); setTableNumber(''); setCashReceived('');
         setDiscountMode('none'); setDiscountValue(''); setUsePoints(false);
-        setQrisGenerated(false); setQrisSuccess(false); setUpsellHint(null); setQrisUrl(null);
+        setQrisGenerated(false); setQrisSuccess(false); setQrisAmount(null); setUpsellHint(null); setQrisUrl(null);
         setMobileCartOpen(false);
         toast.success(
             isAdvancedUnlocked
                 ? `Order #${newOrder.id.slice(0, 6)} (${resolvedCustomerName}) berhasil! Dikirim ke KDS (${formatRp(orderTotal)})`
                 : `Order #${newOrder.id.slice(0, 6)} (${resolvedCustomerName}) berhasil! Stok bahan baku (BOM) otomatis dipotong (${formatRp(orderTotal)})`
         );
-    }, [isStoreOpen, items, customerName, orders, heldOrders, paymentMethod, cashIn, qrisSuccess, orderTotal, subtotal,
+    }, [isStoreOpen, items, customerName, orders, heldOrders, paymentMethod, cashIn, isQrisSuccessForTotal, orderTotal, subtotal,
         discountAmount, pointsDiscount, pointsToRedeem, discountMode, discountValue, applicablePromo, change, tableNumber, orderType, user, branchId, currentSessionId,
         usePoints, customer, customerPhone, redeemPoints, addCustomer, addPoints,
         addOrder, addLog, decrementStock, decrementIngredientsForOrder, products, ingredients, clearCart, toast, isAdvancedUnlocked]);
@@ -1137,7 +1150,7 @@ export default function POSPage() {
                                         <div className="relative flex-1">
                                             <Users size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                                             <input type="text" placeholder="No. HP Member (misal: 081234567890)" value={customerPhone}
-                                                onChange={e => setCustomerPhone(e.target.value)}
+                                                onChange={e => handleCustomerPhoneChange(e.target.value)}
                                                 className="w-full text-gray-900 pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-[#0D2B20] transition" />
                                         </div>
                                     </div>
@@ -1258,15 +1271,19 @@ export default function POSPage() {
                                 {paymentMethod === 'qris' && (
                                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                                         <div className="bg-white p-3 rounded-xl border border-gray-200 flex flex-col items-center text-center gap-2 mt-1">
-                                            {!qrisGenerated ? (
+                                            {!isQrisGeneratedForTotal ? (
                                                 <button
                                                     onClick={async () => {
+                                                        const targetTotal = orderTotal;
                                                         setQrisGenerated(true);
+                                                        setQrisSuccess(false);
+                                                        setQrisAmount(targetTotal);
+                                                        setQrisUrl(null);
                                                         try {
                                                             const res = await fetch('/api/payment/qris', {
                                                                 method: 'POST',
                                                                 headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ orderId: 'TRX-' + Date.now(), total: orderTotal, items })
+                                                                body: JSON.stringify({ orderId: 'TRX-' + Date.now(), total: targetTotal, items })
                                                             });
                                                             const data = await res.json();
                                                             if (data.qrCodeUrl) setQrisUrl(data.qrCodeUrl);
@@ -1276,7 +1293,7 @@ export default function POSPage() {
                                                     }}
                                                     className="w-full bg-[#0D2B20] text-amber-400 font-bold py-2 rounded-lg text-xs"
                                                 >
-                                                    Generate QRIS Dinamis
+                                                    Generate QRIS Dinamis ({formatRp(orderTotal)})
                                                 </button>
                                             ) : (
                                                 <>
@@ -1286,14 +1303,14 @@ export default function POSPage() {
                                                             <QrCode size={24} className="text-gray-300 mb-1" />
                                                         </div>
                                                         {qrisUrl ? (
-                                                            <Image src={qrisUrl} alt="QRIS" fill className={`object-contain relative z-10 bg-white transition ${qrisSuccess ? 'opacity-30' : 'opacity-100'}`} unoptimized />
+                                                            <Image src={qrisUrl} alt="QRIS" fill className={`object-contain relative z-10 bg-white transition ${isQrisSuccessForTotal ? 'opacity-30' : 'opacity-100'}`} unoptimized />
                                                         ) : (
                                                             <div className="relative z-10 flex flex-col items-center justify-center h-full w-full bg-white/80">
                                                                 <Loader2 size={24} className="animate-spin text-amber-500 mb-2" />
                                                                 <span className="text-[10px] text-gray-500 font-bold">Memuat...</span>
                                                             </div>
                                                         )}
-                                                        {qrisSuccess && (
+                                                        {isQrisSuccessForTotal && (
                                                             <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
                                                                 <div className="bg-green-500 rounded-full p-2 mb-1">
                                                                     <CheckCircle size={24} className="text-white" />
@@ -1306,7 +1323,7 @@ export default function POSPage() {
                                                         <span className="uppercase tracking-widest text-[9px] font-bold opacity-60">Total Tagihan</span>
                                                         <p className="text-base font-black text-[#0D2B20]">{formatRp(orderTotal)}</p>
                                                     </div>
-                                                    {!qrisSuccess && (
+                                                    {!isQrisSuccessForTotal && (
                                                         <button
                                                             onClick={() => {
                                                                 setIsCheckingQris(true);
@@ -1464,7 +1481,17 @@ export default function POSPage() {
             <AnimatePresence>
                 {showReceipt && lastOrder && (
                     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                        <ReceiptModal order={lastOrder} onClose={() => { setShowReceipt(false); setLastOrder(null); }} />
+                        <ReceiptModal
+                            order={lastOrder}
+                            onClose={() => { setShowReceipt(false); setLastOrder(null); }}
+                            onCompleteOrder={lastOrder.status === 'processing' ? () => {
+                                updateOrderStatus(lastOrder.id, 'completed');
+                                addLog("COMPLETE_ORDER", `Selesaikan order #${lastOrder.id.slice(0, 6)}`, user?.name || 'Kasir');
+                                toast.success(`Order #${lastOrder.id.slice(0, 6)} selesai & siap diambil!`);
+                                setShowReceipt(false);
+                                setLastOrder(null);
+                            } : undefined}
+                        />
                     </div>
                 )}
             </AnimatePresence>

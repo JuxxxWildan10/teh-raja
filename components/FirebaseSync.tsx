@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { rtdb } from "@/lib/firebase";
-import { ref, onValue, set as firebaseSet, update as firebaseUpdate, query, limitToLast } from "firebase/database";
+import { ref, onValue, set as firebaseSet, update as firebaseUpdate } from "firebase/database";
 import {
     useSalesStore,
     useInventoryStore,
@@ -34,6 +34,8 @@ import {
     DEFAULT_INGREDIENTS,
     DEFAULT_JASMINE_BUNDLE_PROMO,
     LEGACY_DEMO_EXPENSE_IDS,
+    isOrderInSession,
+    isExpenseInSession,
     Order,
     Expense,
     StoreAccountMovement,
@@ -73,17 +75,60 @@ function getSafeNotificationPermission(): NotifPerm {
 }
 
 export default function FirebaseSync() {
-    const { orders } = useSalesStore();
+    const orders = useSalesStore(s => s.orders);
+    const offlineOrdersCount = useSalesStore(s => s.offlineOrders?.length || 0);
+    const offlineSessionsCount = useSalesStore(s => s.offlineSessions?.length || 0);
+    const offlineExpensesCount = useExpenseStore(s => s.offlineExpenses?.length || 0);
+    const offlineMovementsCount = useStoreAccountStore(s => s.offlineMovements?.length || 0);
+    const pendingProductsCount = useProductStore(s => s.pendingProductIds?.length || 0);
+    const pendingIngredientsCount = useInventoryStore(s => s.pendingIngredientIds?.length || 0);
+    const pendingSyncCount = offlineOrdersCount + offlineSessionsCount + offlineExpensesCount + offlineMovementsCount + pendingProductsCount + pendingIngredientsCount;
+
     const { activeOrderId, items: cartItems } = useCartStore();
 
-    const prevOrdersLength = useRef(orders.length);
+    const seenOrderIdsRef = useRef<Set<string>>(new Set());
+    const hasSeededNotifIdsRef = useRef(false);
+    const remoteOrdersArrivedRef = useRef(false);
     const prevStatus = useRef<string | null>(null);
-    const isFirstLoad = useRef(true);
 
     const [isConnected, setIsConnected] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [notifPerm, setNotifPerm] = useState<NotifPerm>('default');
     const [showNotifBanner, setShowNotifBanner] = useState(false);
+    const [storesHydrated, setStoresHydrated] = useState(false);
+
+    // ── 0. Wait for IndexedDB Hydration before starting RTDB Listeners ──
+    // Mencegah race condition di mana IndexedDB selesai hidrasi setelah onValue Firebase
+    // dan menimpa data live dengan data lokal yang lama, atau .info/connected jalan sebelum offlineOrders terhidrasi.
+    useEffect(() => {
+        const persistStores = [
+            useSalesStore.persist,
+            useProductStore.persist,
+            useInventoryStore.persist,
+            useExpenseStore.persist,
+            useStoreAccountStore.persist,
+            usePromoStore.persist,
+            useCustomerStore.persist,
+            useSupplierStore.persist,
+            useAuthStore.persist,
+            useStoreConfigStore.persist,
+        ];
+        const checkAllHydrated = () => persistStores.every(p => p?.hasHydrated?.() ?? true);
+        if (checkAllHydrated()) {
+            setStoresHydrated(true);
+            return;
+        }
+        const unsubs = persistStores.map(p =>
+            p?.onFinishHydration?.(() => {
+                if (checkAllHydrated()) setStoresHydrated(true);
+            })
+        );
+        const fallbackTimer = setTimeout(() => setStoresHydrated(true), 350);
+        return () => {
+            unsubs.forEach(u => u && u());
+            clearTimeout(fallbackTimer);
+        };
+    }, []);
 
     // ── 1. Check notification permission safely ──────────────
     useEffect(() => {
@@ -154,27 +199,124 @@ export default function FirebaseSync() {
 
     // ── 3. Firebase Realtime DB Sync ──────────────────────────
     useEffect(() => {
-        // Paginasi: Hanya ambil 100 order terakhir
-        const ordersQuery = query(ref(rtdb, 'orders'), limitToLast(100));
-        const unsubscribe = onValue(ordersQuery, (snapshot) => {
+        if (!storesHydrated) return;
+
+        let remoteOrdersLoaded = false;
+        let remoteSessionsLoaded = false;
+        let remoteExpensesLoaded = false;
+
+        // Helper: Rekonsiliasi otomatis totalOrders, totalSales, dan expectedCash pada sesi shift yang sudah ditutup
+        // HANYA berjalan setelah data remote orders, sessions, & expenses seluruhnya termuat dan antrean offline kosong.
+        const tryReconcileClosedSessions = () => {
+            if (!remoteOrdersLoaded || !remoteSessionsLoaded || !remoteExpensesLoaded) return;
+            const salesState = useSalesStore.getState();
+            const expState = useExpenseStore.getState();
+            if (
+                (salesState.offlineOrders?.length || 0) > 0 ||
+                (salesState.offlineSessions?.length || 0) > 0 ||
+                (expState.offlineExpenses?.length || 0) > 0
+            ) {
+                return;
+            }
+            const allOrders = salesState.orders || [];
+            const allSessions = salesState.sessions || [];
+            const allExpenses = expState.expenses || [];
+            if (!allOrders.length || !allSessions.length) return;
+
+            let changed = false;
+            const reconciled = allSessions.map(sess => {
+                if (sess.status !== 'closed') return sess;
+                const sessOrders = allOrders.filter(o => o.status !== 'cancelled' && isOrderInSession(o, sess));
+                if (sessOrders.length === 0) return sess;
+                const calcSales = sessOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+                const calcCount = sessOrders.length;
+                const cashSales = sessOrders
+                    .filter(o => o.paymentMethod === 'cash' || !o.paymentMethod)
+                    .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+                const cashExp = allExpenses
+                    .filter(e => e.paidVia === 'kas_laci' && isExpenseInSession(e, sess))
+                    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+                const calcExpectedCash = Math.max(0, (sess.startingCash || 0) + cashSales - cashExp);
+                if (
+                    sess.totalOrders !== calcCount ||
+                    sess.totalSales !== calcSales ||
+                    sess.expectedCash !== calcExpectedCash ||
+                    sess.cashExpenses !== cashExp
+                ) {
+                    changed = true;
+                    const updatedSess: StoreSession = {
+                        ...sess,
+                        totalOrders: calcCount,
+                        totalSales: calcSales,
+                        expectedCash: calcExpectedCash,
+                        cashExpenses: cashExp,
+                    };
+                    firebaseUpdate(ref(rtdb, `sessions/${sess.id}`), JSON.parse(JSON.stringify(updatedSess))).catch(() => {});
+                    return updatedSess;
+                }
+                return sess;
+            });
+
+            if (changed) {
+                useSalesStore.setState({ sessions: reconciled });
+            }
+        };
+
+        // Ambil seluruh order secara utuh (tanpa limitToLast pada random nanoid key yang menyebabkan order terpotong alfabetis!)
+        const ordersRef = ref(rtdb, 'orders');
+        const unsubscribe = onValue(ordersRef, (snapshot) => {
             setIsConnected(true);
             setErrorMsg(null);
+            remoteOrdersLoaded = true;
+            remoteOrdersArrivedRef.current = true;
             const data = snapshot.val();
             if (data) {
-                const loadedOrders: Order[] = (Object.values(data) as Order[]).sort(
-                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-                );
+                const loadedOrders: Order[] = (Object.values(data) as Order[])
+                    .filter(o => o && o.id && o.date)
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
                 useSalesStore.setState((state) => {
-                    const offlineOnly = state.offlineOrders.filter(oo => !loadedOrders.find(lo => lo.id === oo.id));
-                    const combined = [...offlineOnly, ...loadedOrders].sort(
+                    const orderMap = new Map<string, Order>();
+                    loadedOrders.forEach(lo => orderMap.set(lo.id, lo));
+
+                    // Jaga order yang baru saja dibuat di memori lokal (< 2 menit) jika belum sempat masuk snapshot RTDB
+                    const nowMs = Date.now();
+                    state.orders.forEach(localOrd => {
+                        if (!orderMap.has(localOrd.id)) {
+                            const ageMs = nowMs - new Date(localOrd.date).getTime();
+                            if (ageMs >= 0 && ageMs < 120_000) {
+                                orderMap.set(localOrd.id, localOrd);
+                            }
+                        }
+                    });
+
+                    // Timpa dengan offlineOrders yang masih pending sinkronisasi agar perubahan lokal tidak tertimpa snapshot lama
+                    (state.offlineOrders || []).forEach(oo => {
+                        orderMap.set(oo.id, oo);
+                    });
+
+                    // Bersihkan offlineOrders hanya jika sudah benar-benar masuk ke RTDB dengan status yang sama
+                    const loadedById = new Map(loadedOrders.map(lo => [lo.id, lo]));
+                    const remainingOffline = (state.offlineOrders || []).filter(oo => {
+                        const remote = loadedById.get(oo.id);
+                        return !remote || remote.status !== oo.status;
+                    });
+
+                    const combined = Array.from(orderMap.values()).sort(
                         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
                     );
-                    return { ...state, orders: combined };
+
+                    return {
+                        ...state,
+                        orders: combined,
+                        offlineOrders: remainingOffline,
+                    };
                 });
+                tryReconcileClosedSessions();
             } else {
                 useSalesStore.setState((state) => ({
                     ...state,
-                    orders: [...state.offlineOrders].sort(
+                    orders: [...(state.offlineOrders || [])].sort(
                         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
                     )
                 }));
@@ -202,11 +344,18 @@ export default function FirebaseSync() {
         const productsRef = ref(rtdb, 'products');
         const unsubProducts = onValue(productsRef, (snapshot) => {
             const data = snapshot.val();
+            const prodState = useProductStore.getState();
+            const pendingSet = new Set(prodState.pendingProductIds || []);
+            const localMap = new Map(prodState.products.map(p => [p.id, p]));
+
             if (data) {
                 const rawProducts: ExtendedProduct[] = Object.values(data);
                 // Auto-hydrate missing BOM recipes hanya jika produk belum pernah diedit resepnya (hasCustomRecipe !== true)
                 // Sekaligus migrasi 1x harga Imperial Jasmine (M: Rp 3.500, L: Rp 5.000) bila masih data lama (Rp 3.000)
                 const hydratedProducts = rawProducts.map(p => {
+                    if (pendingSet.has(p.id) && localMap.has(p.id)) {
+                        return localMap.get(p.id)!;
+                    }
                     let nextProduct: ExtendedProduct = { ...p, recipe: p.recipe || [] };
                     const rtdbPatch: Record<string, unknown> = {};
 
@@ -242,9 +391,13 @@ export default function FirebaseSync() {
                     }
                     return nextProduct;
                 });
-                useProductStore.setState({ products: hydratedProducts });
+
+                // Pertahankan produk baru yang dibuat lokal saat offline jika belum masuk ke RTDB
+                const loadedIds = new Set(hydratedProducts.map(p => p.id));
+                const localPendingAdds = prodState.products.filter(lp => pendingSet.has(lp.id) && !loadedIds.has(lp.id));
+                useProductStore.setState({ products: [...hydratedProducts, ...localPendingAdds] });
             } else {
-                const localProducts = useProductStore.getState().products;
+                const localProducts = prodState.products;
                 if (localProducts.length > 0) {
                     localProducts.forEach(p => {
                         const defaultProd = initialProducts.find(ip => ip.id === p.id);
@@ -260,32 +413,38 @@ export default function FirebaseSync() {
         const ingredientsRef = ref(rtdb, 'ingredients');
         const unsubIngredients = onValue(ingredientsRef, (snapshot) => {
             const data = snapshot.val();
+            const invState = useInventoryStore.getState();
+            const pendingSet = new Set(invState.pendingIngredientIds || []);
+            const localIngMap = new Map(invState.ingredients.map(i => [i.id, i]));
             const currentDeleted = new Set([
                 ...remoteDeletedIds,
-                ...(useInventoryStore.getState().deletedIngredientIds || []),
+                ...(invState.deletedIngredientIds || []),
             ]);
 
             if (data) {
-                // Gunakan data dari Firebase apa adanya (tanpa memaksa memasukkan kembali bahan default yang sudah dihapus)
-                const loadedIngredients = (Object.values(data) as Ingredient[]).filter(
-                    i => i && i.id && !currentDeleted.has(i.id)
-                );
+                // Gunakan data dari Firebase apa adanya, namun lindungi stok lokal yang belum ter-flush
+                const loadedIngredients = (Object.values(data) as Ingredient[])
+                    .filter(i => i && i.id && !currentDeleted.has(i.id))
+                    .map(i => (pendingSet.has(i.id) && localIngMap.has(i.id) ? localIngMap.get(i.id)! : i));
 
                 // Auto-seed bahan kemasan kresek baru jika belum ada di Firebase dan belum pernah dihapus oleh admin
                 const defaultKresekIds = ['ing-kresek-1', 'ing-kresek-21', 'ing-kresek-28'];
                 const loadedIds = new Set(loadedIngredients.map(i => i.id));
+                const localPendingAdds = invState.ingredients.filter(
+                    li => pendingSet.has(li.id) && !loadedIds.has(li.id) && !currentDeleted.has(li.id)
+                );
                 const missingKresek = DEFAULT_INGREDIENTS.filter(
                     di => defaultKresekIds.includes(di.id) && !loadedIds.has(di.id) && !currentDeleted.has(di.id)
                 );
 
                 if (missingKresek.length > 0) {
-                    const merged = [...loadedIngredients, ...missingKresek];
+                    const merged = [...loadedIngredients, ...localPendingAdds, ...missingKresek];
                     useInventoryStore.setState({ ingredients: merged });
                     missingKresek.forEach((i) => {
                         firebaseSet(ref(rtdb, `ingredients/${i.id}`), i).catch(console.warn);
                     });
                 } else {
-                    useInventoryStore.setState({ ingredients: loadedIngredients });
+                    useInventoryStore.setState({ ingredients: [...loadedIngredients, ...localPendingAdds] });
                 }
             } else {
                 // Jika seluruh bahan sengaja dihapus oleh admin, biarkan kosong
@@ -294,7 +453,7 @@ export default function FirebaseSync() {
                     return;
                 }
                 // Hanya lakukan initial seed pada database baru yang benar-benar belum pernah diinisialisasi
-                const localIngredients = useInventoryStore.getState().ingredients;
+                const localIngredients = invState.ingredients;
                 const existingIds = new Set(localIngredients.map(i => i.id));
                 const merged = [...localIngredients, ...DEFAULT_INGREDIENTS.filter(di => !existingIds.has(di.id))];
                 useInventoryStore.setState({ ingredients: merged });
@@ -306,14 +465,18 @@ export default function FirebaseSync() {
             console.debug("[FirebaseSync] ingredients sync paused:", err.message);
         });
 
-        const opnameRef = query(ref(rtdb, 'opnameLogs'), limitToLast(50));
+        const opnameRef = ref(rtdb, 'opnameLogs');
         const unsubOpname = onValue(opnameRef, (snapshot) => {
             const data = snapshot.val();
+            const offlineLogs = useInventoryStore.getState().offlineOpnameLogs || [];
             if (data) {
-                const loadedOpname = (Object.values(data) as OpnameLog[]).sort(
-                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-                );
-                useInventoryStore.setState({ opnameLogs: loadedOpname });
+                const loadedOpname = (Object.values(data) as OpnameLog[])
+                    .filter(l => l && l.id && l.date);
+                const loadedIds = new Set(loadedOpname.map(l => l.id));
+                const remainingOffline = offlineLogs.filter(ol => !loadedIds.has(ol.id));
+                const combined = [...remainingOffline, ...loadedOpname]
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                useInventoryStore.setState({ opnameLogs: combined, offlineOpnameLogs: remainingOffline });
             }
         }, (err) => {
             console.debug("[FirebaseSync] opnameLogs sync paused:", err.message);
@@ -412,18 +575,20 @@ export default function FirebaseSync() {
             console.debug("[FirebaseSync] users sync paused:", err.message);
         });
 
-        // Paginasi: Hanya ambil 100 log terakhir
-        const logsQuery = query(ref(rtdb, 'logs'), limitToLast(100));
-        const unsubLogs = onValue(logsQuery, (snapshot) => {
+        // Ambil log aktivitas dan urutkan secara kronologis (tanpa limitToLast pada random nanoid key)
+        const logsRef = ref(rtdb, 'logs');
+        const unsubLogs = onValue(logsRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const loadedLogs: ActivityLog[] = Object.values(data);
+                const loadedLogs: ActivityLog[] = (Object.values(data) as ActivityLog[])
+                    .filter(l => l && l.id && l.timestamp);
                 loadedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
                 useSalesStore.setState((state) => {
-                    const offlineOnly = state.offlineLogs.filter(ol => !loadedLogs.find(ll => ll.id === ol.id));
+                    const loadedIds = new Set(loadedLogs.map(ll => ll.id));
+                    const offlineOnly = state.offlineLogs.filter(ol => !loadedIds.has(ol.id));
                     const combined = [...offlineOnly, ...loadedLogs];
                     combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-                    return { ...state, logs: combined };
+                    return { ...state, logs: combined.slice(0, 200), offlineLogs: offlineOnly };
                 });
             } else {
                 useSalesStore.setState((state) => ({ ...state, logs: [...state.offlineLogs] }));
@@ -434,9 +599,25 @@ export default function FirebaseSync() {
 
         const sessionsRef = ref(rtdb, 'sessions');
         const unsubSessions = onValue(sessionsRef, (snapshot) => {
+            remoteSessionsLoaded = true;
             const data = snapshot.val();
+            const offlineSess = useSalesStore.getState().offlineSessions || [];
             if (data) {
-                const loadedSessions: StoreSession[] = (Object.values(data) as StoreSession[]).sort(
+                const sessMap = new Map<string, StoreSession>();
+                (Object.values(data) as StoreSession[])
+                    .filter(s => s && s.id && s.startTime)
+                    .forEach(s => sessMap.set(s.id, s));
+
+                // Pertahankan sesi lokal yang masih menunggu sync (misal baru buka/tutup shift saat offline)
+                offlineSess.forEach(os => sessMap.set(os.id, os));
+
+                const loadedIds = new Map((Object.values(data) as StoreSession[]).map(s => [s.id, s]));
+                const remainingOfflineSess = offlineSess.filter(os => {
+                    const rem = loadedIds.get(os.id);
+                    return !rem || rem.status !== os.status || rem.endTime !== os.endTime;
+                });
+
+                const loadedSessions = Array.from(sessMap.values()).sort(
                     (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
                 );
                 // Ambil sesi terbaru yang masih berstatus open
@@ -444,8 +625,18 @@ export default function FirebaseSync() {
                 const activeSession = openSessions.length > 0 ? openSessions[openSessions.length - 1] : undefined;
                 useSalesStore.setState({
                     sessions: loadedSessions,
+                    offlineSessions: remainingOfflineSess,
                     isStoreOpen: !!activeSession,
                     currentSessionId: activeSession ? activeSession.id : null
+                });
+                tryReconcileClosedSessions();
+            } else if (offlineSess.length > 0) {
+                const openSessions = offlineSess.filter(s => s.status === 'open');
+                const activeSession = openSessions.length > 0 ? openSessions[openSessions.length - 1] : undefined;
+                useSalesStore.setState({
+                    sessions: [...offlineSess],
+                    isStoreOpen: !!activeSession,
+                    currentSessionId: activeSession ? activeSession.id : null,
                 });
             }
         }, (err) => {
@@ -483,23 +674,38 @@ export default function FirebaseSync() {
 
         const expensesRef = ref(rtdb, 'expenses');
         const unsubExpenses = onValue(expensesRef, (snapshot) => {
+            remoteExpensesLoaded = true;
             const data = snapshot.val();
+            const expState = useExpenseStore.getState();
+            const offlineExps = expState.offlineExpenses || [];
             const currentDeleted = new Set([
                 ...remoteDeletedExpenseIds,
-                ...(useExpenseStore.getState().deletedExpenseIds || []),
+                ...(expState.deletedExpenseIds || []),
                 ...Array.from(LEGACY_DEMO_EXPENSE_IDS),
             ]);
             if (data) {
-                const loaded = (Object.values(data) as Expense[]).filter(
-                    e => e && e.id && !currentDeleted.has(e.id)
+                const expMap = new Map<string, Expense>();
+                (Object.values(data) as Expense[])
+                    .filter(e => e && e.id && !currentDeleted.has(e.id))
+                    .forEach(e => expMap.set(e.id, e));
+
+                offlineExps.forEach(oe => {
+                    if (!currentDeleted.has(oe.id)) expMap.set(oe.id, oe);
+                });
+
+                const remoteIds = new Set(Object.keys(data));
+                const remainingOfflineExp = offlineExps.filter(oe => !remoteIds.has(oe.id) && !currentDeleted.has(oe.id));
+
+                const loaded = Array.from(expMap.values()).sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
                 );
-                loaded.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                useExpenseStore.setState({ expenses: loaded });
+                useExpenseStore.setState({ expenses: loaded, offlineExpenses: remainingOfflineExp });
             } else {
                 useExpenseStore.setState((s) => ({
                     expenses: s.expenses.filter(e => !currentDeleted.has(e.id)),
                 }));
             }
+            tryReconcileClosedSessions();
         }, (err) => {
             console.debug("[FirebaseSync] expenses sync paused:", err.message);
         });
@@ -521,16 +727,29 @@ export default function FirebaseSync() {
         const storeMovementsRef = ref(rtdb, 'storeAccountMovements');
         const unsubMovements = onValue(storeMovementsRef, (snapshot) => {
             const data = snapshot.val();
+            const movState = useStoreAccountStore.getState();
+            const offlineMovs = movState.offlineMovements || [];
             const currentDeleted = new Set([
                 ...remoteDeletedMovementIds,
-                ...(useStoreAccountStore.getState().deletedMovementIds || []),
+                ...(movState.deletedMovementIds || []),
             ]);
             if (data) {
-                const loaded = (Object.values(data) as StoreAccountMovement[]).filter(
-                    m => m && m.id && !currentDeleted.has(m.id)
+                const movMap = new Map<string, StoreAccountMovement>();
+                (Object.values(data) as StoreAccountMovement[])
+                    .filter(m => m && m.id && !currentDeleted.has(m.id))
+                    .forEach(m => movMap.set(m.id, m));
+
+                offlineMovs.forEach(om => {
+                    if (!currentDeleted.has(om.id)) movMap.set(om.id, om);
+                });
+
+                const remoteIds = new Set(Object.keys(data));
+                const remainingOfflineMov = offlineMovs.filter(om => !remoteIds.has(om.id) && !currentDeleted.has(om.id));
+
+                const loaded = Array.from(movMap.values()).sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
                 );
-                loaded.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                useStoreAccountStore.setState({ movements: loaded });
+                useStoreAccountStore.setState({ movements: loaded, offlineMovements: remainingOfflineMov });
             } else {
                 useStoreAccountStore.setState((s) => ({
                     movements: s.movements.filter(m => !currentDeleted.has(m.id)),
@@ -569,31 +788,167 @@ export default function FirebaseSync() {
             console.debug("[FirebaseSync] storeConfig sync paused:", err.message);
         });
 
-        const connectedRef = ref(rtdb, ".info/connected");
-        const unsubscribeStatus = onValue(connectedRef, (snap) => {
-            const connected = snap.val() === true;
-            setIsConnected(connected);
-            
-            if (connected) {
-                const state = useSalesStore.getState();
-                if (state.offlineOrders && state.offlineOrders.length > 0) {
-                    state.offlineOrders.forEach(order => {
+        const hasAnyOfflinePending = () => {
+            const s = useSalesStore.getState();
+            const p = useProductStore.getState();
+            const inv = useInventoryStore.getState();
+            const exp = useExpenseStore.getState();
+            const mov = useStoreAccountStore.getState();
+            return (
+                (s.offlineOrders?.length || 0) > 0 ||
+                (s.offlineLogs?.length || 0) > 0 ||
+                (s.offlineSessions?.length || 0) > 0 ||
+                (exp.offlineExpenses?.length || 0) > 0 ||
+                (mov.offlineMovements?.length || 0) > 0 ||
+                (inv.offlineOpnameLogs?.length || 0) > 0 ||
+                (p.pendingProductIds?.length || 0) > 0 ||
+                (inv.pendingIngredientIds?.length || 0) > 0
+            );
+        };
+
+        const flushOfflineQueue = () => {
+            const state = useSalesStore.getState();
+            if (state.offlineOrders && state.offlineOrders.length > 0) {
+                state.offlineOrders.forEach(order => {
+                    try {
                         const sanitizedOrder = JSON.parse(JSON.stringify(order));
                         firebaseSet(ref(rtdb, `orders/${order.id}`), sanitizedOrder)
                             .then(() => useSalesStore.getState().removeOfflineOrder(order.id))
                             .catch(err => console.warn("Flush Order Error:", err));
-                    });
-                }
-                if (state.offlineLogs && state.offlineLogs.length > 0) {
-                    state.offlineLogs.forEach(log => {
+                    } catch (err) {
+                        console.warn("Flush Order Sync Error:", err);
+                    }
+                });
+            }
+            if (state.offlineLogs && state.offlineLogs.length > 0) {
+                state.offlineLogs.forEach(log => {
+                    try {
                         const sanitizedLog = JSON.parse(JSON.stringify(log));
                         firebaseSet(ref(rtdb, `logs/${log.id}`), sanitizedLog)
                             .then(() => useSalesStore.getState().removeOfflineLog(log.id))
                             .catch(err => console.warn("Flush Log Error:", err));
-                    });
+                    } catch (err) {
+                        console.warn("Flush Log Sync Error:", err);
+                    }
+                });
+            }
+            if (state.offlineSessions && state.offlineSessions.length > 0) {
+                state.offlineSessions.forEach(sess => {
+                    try {
+                        const sanitizedSess = JSON.parse(JSON.stringify(sess));
+                        firebaseSet(ref(rtdb, `sessions/${sess.id}`), sanitizedSess)
+                            .then(() => useSalesStore.getState().removeOfflineSession(sess.id))
+                            .catch(err => console.warn("Flush Session Error:", err));
+                    } catch (err) {
+                        console.warn("Flush Session Sync Error:", err);
+                    }
+                });
+            }
+
+            const expState = useExpenseStore.getState();
+            if (expState.offlineExpenses && expState.offlineExpenses.length > 0) {
+                expState.offlineExpenses.forEach(exp => {
+                    try {
+                        firebaseSet(ref(rtdb, `expenses/${exp.id}`), JSON.parse(JSON.stringify(exp)))
+                            .then(() => useExpenseStore.getState().removeOfflineExpense(exp.id))
+                            .catch(err => console.warn("Flush Expense Error:", err));
+                    } catch (err) {
+                        console.warn("Flush Expense Sync Error:", err);
+                    }
+                });
+            }
+
+            const movState = useStoreAccountStore.getState();
+            if (movState.offlineMovements && movState.offlineMovements.length > 0) {
+                movState.offlineMovements.forEach(mov => {
+                    try {
+                        firebaseSet(ref(rtdb, `storeAccountMovements/${mov.id}`), JSON.parse(JSON.stringify(mov)))
+                            .then(() => useStoreAccountStore.getState().removeOfflineMovement(mov.id))
+                            .catch(err => console.warn("Flush Movement Error:", err));
+                    } catch (err) {
+                        console.warn("Flush Movement Sync Error:", err);
+                    }
+                });
+            }
+
+            const invState = useInventoryStore.getState();
+            if (invState.offlineOpnameLogs && invState.offlineOpnameLogs.length > 0) {
+                invState.offlineOpnameLogs.forEach(ol => {
+                    try {
+                        firebaseSet(ref(rtdb, `opnameLogs/${ol.id}`), JSON.parse(JSON.stringify(ol)))
+                            .then(() => useInventoryStore.getState().removeOfflineOpnameLog(ol.id))
+                            .catch(err => console.warn("Flush Opname Error:", err));
+                    } catch (err) {
+                        console.warn("Flush Opname Sync Error:", err);
+                    }
+                });
+            }
+            if (invState.pendingIngredientIds && invState.pendingIngredientIds.length > 0) {
+                const ingUpdates: Record<string, unknown> = {};
+                const syncedIds: string[] = [];
+                invState.pendingIngredientIds.forEach(ingId => {
+                    const ingObj = invState.ingredients.find(i => i.id === ingId);
+                    if (ingObj) {
+                        ingUpdates[`ingredients/${ingId}`] = ingObj;
+                        syncedIds.push(ingId);
+                    }
+                });
+                if (Object.keys(ingUpdates).length > 0) {
+                    try {
+                        firebaseUpdate(ref(rtdb), JSON.parse(JSON.stringify(ingUpdates)))
+                            .then(() => useInventoryStore.getState().clearPendingIngredientIds(syncedIds))
+                            .catch(err => console.warn("Flush Ingredient Error:", err));
+                    } catch (err) {
+                        console.warn("Flush Ingredient Sync Error:", err);
+                    }
                 }
             }
+
+            const prodState = useProductStore.getState();
+            if (prodState.pendingProductIds && prodState.pendingProductIds.length > 0) {
+                const prodUpdates: Record<string, unknown> = {};
+                const syncedProdIds: string[] = [];
+                prodState.pendingProductIds.forEach(prodId => {
+                    const prodObj = prodState.products.find(p => p.id === prodId);
+                    if (prodObj) {
+                        prodUpdates[`products/${prodId}`] = prodObj;
+                        syncedProdIds.push(prodId);
+                    }
+                });
+                if (Object.keys(prodUpdates).length > 0) {
+                    try {
+                        firebaseUpdate(ref(rtdb), JSON.parse(JSON.stringify(prodUpdates)))
+                            .then(() => useProductStore.getState().clearPendingProductIds(syncedProdIds))
+                            .catch(err => console.warn("Flush Product Error:", err));
+                    } catch (err) {
+                        console.warn("Flush Product Sync Error:", err);
+                    }
+                }
+            }
+        };
+
+        const connectedRef = ref(rtdb, ".info/connected");
+        const unsubscribeStatus = onValue(connectedRef, (snap) => {
+            const connected = snap.val() === true;
+            setIsConnected(connected);
+            if (connected) {
+                flushOfflineQueue();
+            }
         });
+
+        const handleBrowserOnline = () => {
+            flushOfflineQueue();
+        };
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', handleBrowserOnline);
+        }
+
+        // Heartbeat retry setiap 15 detik apabila masih ada antrean offline yang belum terkirim
+        const retryInterval = setInterval(() => {
+            if (hasAnyOfflinePending()) {
+                flushOfflineQueue();
+            }
+        }, 15_000);
 
         return () => {
             unsubscribe();
@@ -615,26 +970,44 @@ export default function FirebaseSync() {
             unsubMovements();
             unsubStoreConfig();
             unsubscribeStatus();
+            clearInterval(retryInterval);
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('online', handleBrowserOnline);
+            }
         };
-    }, []);
+    }, [storesHydrated]);
 
     // ── 4. Audio + Push Notification: New Order ───────────────
     useEffect(() => {
-        if (isFirstLoad.current) {
-            isFirstLoad.current = false;
-            prevOrdersLength.current = orders.length;
+        if (!storesHydrated) return;
+
+        // Tunggu snapshot awal dari Firebase (atau jadikan snapshot pertama yang non-kosong sebagai baseline)
+        // agar saat refresh / memuat ulang 148+ order historis tidak memicu spam notifikasi & bel lama.
+        if (!hasSeededNotifIdsRef.current) {
+            if (!remoteOrdersArrivedRef.current && orders.length === 0) return;
+            if (!remoteOrdersArrivedRef.current) {
+                // Seed ID lokal sementara, tunggu remote selesai sebelum mulai alert
+                orders.forEach(o => seenOrderIdsRef.current.add(o.id));
+                return;
+            }
+            orders.forEach(o => seenOrderIdsRef.current.add(o.id));
+            hasSeededNotifIdsRef.current = true;
             return;
         }
 
-        if (orders.length > prevOrdersLength.current) {
+        const nowMs = Date.now();
+        const unseenRecentOrders = orders.filter(order => {
+            if (seenOrderIdsRef.current.has(order.id)) return false;
+            seenOrderIdsRef.current.add(order.id);
+            const ageMs = nowMs - new Date(order.date).getTime();
+            return ageMs >= -30_000 && ageMs < 120_000;
+        });
+
+        if (unseenRecentOrders.length > 0) {
             new Audio(ALERT_SOUND).play().catch(() => {});
 
-            const newOrders = orders.slice().sort((a, b) =>
-                new Date(b.date).getTime() - new Date(a.date).getTime()
-            ).slice(0, orders.length - prevOrdersLength.current);
-
-            newOrders.forEach(order => {
-                if (order.status === 'pending' || order.status === 'awaiting_payment' || order.status === 'completed') {
+            unseenRecentOrders.forEach(order => {
+                if (order.status === 'pending' || order.status === 'awaiting_payment' || order.status === 'processing' || order.status === 'completed') {
                     const itemList = order.items.slice(0, 2).map(i => `${i.quantity}x ${i.name}`).join(', ');
                     const suffix = order.items.length > 2 ? ` +${order.items.length - 2} lagi` : '';
                     showNotification(
@@ -645,8 +1018,7 @@ export default function FirebaseSync() {
                 }
             });
         }
-        prevOrdersLength.current = orders.length;
-    }, [orders, showNotification]);
+    }, [orders, storesHydrated, showNotification]);
 
     // ── 5. Audio: Status Change (Customer View) ───────────────
     useEffect(() => {
@@ -695,12 +1067,20 @@ export default function FirebaseSync() {
             <div className={`fixed left-3 sm:left-4 z-10 pointer-events-none flex flex-col gap-1.5 transition-all duration-200 ${cartItems.length > 0 ? 'bottom-24 lg:bottom-4' : 'bottom-9 lg:bottom-4'}`}>
                 <div className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold border shadow-md ${errorMsg
                     ? 'bg-red-900/85 text-white border-red-500'
-                    : isConnected
-                        ? 'bg-green-900/80 text-green-100 border-green-500/70'
-                        : 'bg-yellow-900/85 text-yellow-100 border-yellow-500'
+                    : pendingSyncCount > 0
+                        ? 'bg-amber-900/90 text-amber-100 border-amber-400/80'
+                        : isConnected
+                            ? 'bg-green-900/80 text-green-100 border-green-500/70'
+                            : 'bg-yellow-900/85 text-yellow-100 border-yellow-500'
                     }`}>
-                    <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${errorMsg ? 'bg-red-500 animate-pulse' : isConnected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
-                    {errorMsg ? "Sync Error" : isConnected ? "Realtime On" : "Connecting..."}
+                    <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${errorMsg ? 'bg-red-500 animate-pulse' : pendingSyncCount > 0 ? 'bg-amber-400 animate-pulse' : isConnected ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
+                    {errorMsg
+                        ? "Sync Error"
+                        : pendingSyncCount > 0
+                            ? (isConnected ? `Syncing (${pendingSyncCount})` : `Offline (${pendingSyncCount} antre)`)
+                            : isConnected
+                                ? "Realtime On"
+                                : "Connecting..."}
 
                     {/* Notification status icon */}
                     <div className="w-[1px] h-3 bg-current opacity-30 mx-0.5" />

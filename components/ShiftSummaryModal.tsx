@@ -70,7 +70,7 @@ export default function ShiftSummaryModal({ isOpen, session, orders, onClose }: 
 
     // Breakdown per payment method
     const paymentSummary = {
-        cash: sessionOrders.filter(o => o.paymentMethod === 'cash' || (!o.paymentMethod && o.cashReceived)).reduce((s, o) => s + o.total, 0),
+        cash: sessionOrders.filter(o => o.paymentMethod === 'cash' || !o.paymentMethod).reduce((s, o) => s + o.total, 0),
         qris: sessionOrders.filter(o => o.paymentMethod === 'qris').reduce((s, o) => s + o.total, 0),
         transfer: sessionOrders.filter(o => o.paymentMethod === 'transfer').reduce((s, o) => s + o.total, 0),
     };

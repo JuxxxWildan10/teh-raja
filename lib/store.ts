@@ -515,6 +515,8 @@ interface CartState {
 
 interface ProductState {
     products: ExtendedProduct[];
+    pendingProductIds: string[];
+    clearPendingProductIds: (ids: string[]) => void;
     addProduct: (product: ExtendedProduct) => void;
     updateProduct: (id: string, updated: Partial<ExtendedProduct>) => void;
     deleteProduct: (id: string) => void;
@@ -535,8 +537,10 @@ interface SalesState {
     isStoreOpen: boolean;
     currentSessionId: string | null;
     sessions: StoreSession[];
+    offlineSessions: StoreSession[]; // Offline Queue untuk Buka/Tutup Shift
     openStore: (cashierName: string, startingCash: number) => void;
     closeStore: (actualCash?: number, notes?: string) => StoreSession | null;
+    removeOfflineSession: (id: string) => void;
 
     addOrder: (order: Order) => void;
     updateOrder: (orderId: string, updated: Partial<Order>) => void;
@@ -688,7 +692,7 @@ export const useCartStore = create<CartState>()(
 
 export const useProductStore = create<ProductState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             products: initialProducts.map(p => ({
                 ...p,
                 isAvailable: true,
@@ -696,45 +700,71 @@ export const useProductStore = create<ProductState>()(
                 minStockThreshold: 10,
                 recipe: p.recipe || [],
             })),
+            pendingProductIds: [],
+            clearPendingProductIds: (ids) => {
+                const drop = new Set(ids);
+                set((state) => ({
+                    pendingProductIds: (state.pendingProductIds || []).filter(id => !drop.has(id)),
+                }));
+            },
             addProduct: (product) => {
-                set((state) => ({ products: [...state.products, product] }));
-                firebaseSet(ref(rtdb, `products/${product.id}`), JSON.parse(JSON.stringify(product))).catch(err => console.warn(err));
+                set((state) => ({
+                    products: [...state.products, product],
+                    pendingProductIds: Array.from(new Set([...(state.pendingProductIds || []), product.id])),
+                }));
+                firebaseSet(ref(rtdb, `products/${product.id}`), JSON.parse(JSON.stringify(product)))
+                    .then(() => get().clearPendingProductIds([product.id]))
+                    .catch(err => console.warn(err));
             },
             updateProduct: (id, updated) => {
                 const payload: Partial<ExtendedProduct> = { ...updated };
                 if (updated.recipe !== undefined) payload.hasCustomRecipe = true;
                 if (updated.price !== undefined || 'largePrice' in updated) payload.hasCustomPrice = true;
                 set((state) => ({
-                    products: state.products.map((p) => (p.id === id ? { ...p, ...payload } : p))
+                    products: state.products.map((p) => (p.id === id ? { ...p, ...payload } : p)),
+                    pendingProductIds: Array.from(new Set([...(state.pendingProductIds || []), id])),
                 }));
                 const rtdbPayload = JSON.parse(JSON.stringify(payload));
                 if ('largePrice' in updated && updated.largePrice === undefined) {
                     rtdbPayload.largePrice = null;
                 }
-                firebaseUpdate(ref(rtdb, `products/${id}`), rtdbPayload).catch(err => console.warn(err));
+                firebaseUpdate(ref(rtdb, `products/${id}`), rtdbPayload)
+                    .then(() => get().clearPendingProductIds([id]))
+                    .catch(err => console.warn(err));
             },
             deleteProduct: (id) => {
                 set((state) => ({
-                    products: state.products.filter((p) => p.id !== id)
+                    products: state.products.filter((p) => p.id !== id),
+                    pendingProductIds: (state.pendingProductIds || []).filter(pid => pid !== id),
                 }));
                 firebaseSet(ref(rtdb, `products/${id}`), null).catch(err => console.warn(err));
             },
             toggleAvailability: (id) => {
+                let nextAvail: boolean | undefined;
                 set((state) => {
                     const newProducts = state.products.map((p) => {
                         if (p.id === id) {
                             const updated = { ...p, isAvailable: !p.isAvailable };
-                            firebaseUpdate(ref(rtdb, `products/${id}`), { isAvailable: updated.isAvailable }).catch(err => console.warn(err));
+                            nextAvail = updated.isAvailable;
                             return updated;
                         }
                         return p;
                     });
-                    return { products: newProducts };
+                    return {
+                        products: newProducts,
+                        pendingProductIds: Array.from(new Set([...(state.pendingProductIds || []), id])),
+                    };
                 });
+                if (nextAvail !== undefined) {
+                    firebaseUpdate(ref(rtdb, `products/${id}`), { isAvailable: nextAvail })
+                        .then(() => get().clearPendingProductIds([id]))
+                        .catch(err => console.warn(err));
+                }
             },
             decrementStock: (items) => {
+                const updates: Record<string, unknown> = {};
+                const changedIds: string[] = [];
                 set((state) => {
-                    const updates: Record<string, unknown> = {};
                     // Aggregate total quantity per product ID across variants
                     const qtyByProductId = new Map<string, number>();
                     items.forEach(i => {
@@ -747,20 +777,27 @@ export const useProductStore = create<ProductState>()(
                             const updated = { ...p, stock: newStock, isAvailable: newStock > 0 };
                             updates[`products/${p.id}/stock`] = newStock;
                             updates[`products/${p.id}/isAvailable`] = newStock > 0;
+                            changedIds.push(p.id);
                             return updated;
                         }
                         return p;
                     });
-                    if (Object.keys(updates).length > 0) {
-                        firebaseUpdate(ref(rtdb), updates).catch(err => console.warn("Firebase Stock Update Error:", err));
-                    }
-                    return { products: newProducts };
-                })
+                    return {
+                        products: newProducts,
+                        pendingProductIds: Array.from(new Set([...(state.pendingProductIds || []), ...changedIds])),
+                    };
+                });
+                if (Object.keys(updates).length > 0) {
+                    firebaseUpdate(ref(rtdb), updates)
+                        .then(() => get().clearPendingProductIds(changedIds))
+                        .catch(err => console.warn("Firebase Stock Update Error:", err));
+                }
             },
 
             restoreStock: (items) => {
+                const updates: Record<string, unknown> = {};
+                const changedIds: string[] = [];
                 set((state) => {
-                    const updates: Record<string, unknown> = {};
                     const qtyByProductId = new Map<string, number>();
                     items.forEach(i => {
                         qtyByProductId.set(i.id, (qtyByProductId.get(i.id) || 0) + i.quantity);
@@ -772,15 +809,21 @@ export const useProductStore = create<ProductState>()(
                             const updated = { ...p, stock: newStock, isAvailable: newStock > 0 };
                             updates[`products/${p.id}/stock`] = newStock;
                             updates[`products/${p.id}/isAvailable`] = true;
+                            changedIds.push(p.id);
                             return updated;
                         }
                         return p;
                     });
-                    if (Object.keys(updates).length > 0) {
-                        firebaseUpdate(ref(rtdb), updates).catch(err => console.warn("Firebase Stock Restore Error:", err));
-                    }
-                    return { products: newProducts };
-                })
+                    return {
+                        products: newProducts,
+                        pendingProductIds: Array.from(new Set([...(state.pendingProductIds || []), ...changedIds])),
+                    };
+                });
+                if (Object.keys(updates).length > 0) {
+                    firebaseUpdate(ref(rtdb), updates)
+                        .then(() => get().clearPendingProductIds(changedIds))
+                        .catch(err => console.warn("Firebase Stock Restore Error:", err));
+                }
             }
         }),
         {
@@ -828,26 +871,44 @@ export const useSalesStore = create<SalesState>()(
             isStoreOpen: false,
             currentSessionId: null,
             sessions: [],
+            offlineSessions: [],
 
             setBranch: (id: string, name: string) => set({ branchId: id, branchName: name }),
+            removeOfflineSession: (id: string) => {
+                set((state) => ({
+                    offlineSessions: (state.offlineSessions || []).filter(s => s.id !== id),
+                }));
+            },
             openStore: (cashierName, startingCash) => {
+                const state = get();
+                const existingOpen = state.sessions.find(s => s.status === 'open');
+                if (state.isStoreOpen && existingOpen) {
+                    set({ isStoreOpen: true, currentSessionId: existingOpen.id });
+                    return;
+                }
                 const newSession: StoreSession = {
                     id: nanoid(),
                     startTime: new Date().toISOString(),
                     cashierName,
-                    branchId: get().branchId,
+                    branchId: state.branchId,
                     totalSales: 0,
                     totalOrders: 0,
                     startingCash,
                     status: 'open'
                 };
-                set((state) => ({
+                set((s) => ({
                     isStoreOpen: true,
                     currentSessionId: newSession.id,
-                    sessions: [...state.sessions, newSession]
+                    sessions: [...s.sessions, newSession],
+                    offlineSessions: [
+                        ...(s.offlineSessions || []).filter(os => os.id !== newSession.id),
+                        newSession,
+                    ],
                 }));
                 const sessionRef = ref(rtdb, `sessions/${newSession.id}`);
-                firebaseSet(sessionRef, newSession).catch(err => console.warn(err));
+                firebaseSet(sessionRef, JSON.parse(JSON.stringify(newSession)))
+                    .then(() => get().removeOfflineSession(newSession.id))
+                    .catch(err => console.warn(err));
             },
 
             closeStore: (actualCash, notes) => {
@@ -891,14 +952,20 @@ export const useSalesStore = create<SalesState>()(
                 const updatedSessions = [...state.sessions];
                 updatedSessions[sessionIndex] = closedSession;
 
-                set({
+                set((s) => ({
                     isStoreOpen: false,
                     currentSessionId: null,
-                    sessions: updatedSessions
-                });
+                    sessions: updatedSessions,
+                    offlineSessions: [
+                        ...(s.offlineSessions || []).filter(os => os.id !== closedSession.id),
+                        closedSession,
+                    ],
+                }));
 
                 const sessionRef = ref(rtdb, `sessions/${closedSession.id}`);
-                firebaseUpdate(sessionRef, JSON.parse(JSON.stringify(closedSession))).catch(err => console.warn(err));
+                firebaseSet(sessionRef, JSON.parse(JSON.stringify(closedSession)))
+                    .then(() => get().removeOfflineSession(closedSession.id))
+                    .catch(err => console.warn(err));
 
                 return closedSession;
             },
@@ -920,19 +987,34 @@ export const useSalesStore = create<SalesState>()(
                     orders: [orderWithBranch, ...state.orders.filter(o => o.id !== orderWithBranch.id)],
                     offlineOrders: [orderWithBranch, ...state.offlineOrders.filter(o => o.id !== orderWithBranch.id)]
                 }));
-                const sanitizedOrder = JSON.parse(JSON.stringify(orderWithBranch));
-                const orderRef = ref(rtdb, `orders/${orderWithBranch.id}`);
-                firebaseSet(orderRef, sanitizedOrder)
-                    .then(() => get().removeOfflineOrder(orderWithBranch.id))
-                    .catch(err => console.warn("Firebase Add Error:", err));
+                try {
+                    const sanitizedOrder = JSON.parse(JSON.stringify(orderWithBranch));
+                    const orderRef = ref(rtdb, `orders/${orderWithBranch.id}`);
+                    firebaseSet(orderRef, sanitizedOrder)
+                        .then(() => get().removeOfflineOrder(orderWithBranch.id))
+                        .catch(err => console.warn("Firebase Add Error:", err));
+                } catch (err) {
+                    console.warn("Firebase Add Sync Error:", err);
+                }
             },
             updateOrder: (orderId, updated) => {
+                const currentOrder = get().orders.find(o => o.id === orderId);
+                const mergedOrder = currentOrder ? { ...currentOrder, ...updated } : null;
                 set((state) => ({
-                    orders: state.orders.map(o => o.id === orderId ? { ...o, ...updated } : o)
+                    orders: state.orders.map(o => o.id === orderId ? { ...o, ...updated } : o),
+                    offlineOrders: mergedOrder
+                        ? [mergedOrder, ...state.offlineOrders.filter(o => o.id !== orderId)]
+                        : state.offlineOrders,
                 }));
-                const sanitized = JSON.parse(JSON.stringify(updated));
-                const orderRef = ref(rtdb, `orders/${orderId}`);
-                firebaseUpdate(orderRef, sanitized).catch(err => console.warn("Firebase Update Order Error:", err));
+                try {
+                    const orderRef = ref(rtdb, `orders/${orderId}`);
+                    const payload = JSON.parse(JSON.stringify(mergedOrder || updated));
+                    (mergedOrder ? firebaseSet(orderRef, payload) : firebaseUpdate(orderRef, payload))
+                        .then(() => get().removeOfflineOrder(orderId))
+                        .catch(err => console.warn("Firebase Update Order Error:", err));
+                } catch (err) {
+                    console.warn("Firebase Update Order Sync Error:", err);
+                }
             },
             removeOfflineOrder: (id) => {
                 set((state) => ({ offlineOrders: state.offlineOrders.filter(o => o.id !== id) }));
@@ -948,11 +1030,24 @@ export const useSalesStore = create<SalesState>()(
                         useProductStore.getState().products
                     );
                 }
+                const updatedOrder = order ? { ...order, status } : null;
                 set((s) => ({
-                    orders: s.orders.map(o => o.id === orderId ? { ...o, status } : o)
+                    orders: s.orders.map(o => o.id === orderId ? { ...o, status } : o),
+                    offlineOrders: updatedOrder
+                        ? [updatedOrder, ...s.offlineOrders.filter(o => o.id !== orderId)]
+                        : s.offlineOrders,
                 }));
-                const orderRef = ref(rtdb, `orders/${orderId}`);
-                firebaseUpdate(orderRef, { status }).catch(err => console.warn("Firebase Update Error:", err));
+                try {
+                    const orderRef = ref(rtdb, `orders/${orderId}`);
+                    const writePromise = updatedOrder
+                        ? firebaseSet(orderRef, JSON.parse(JSON.stringify(updatedOrder)))
+                        : firebaseUpdate(orderRef, { status });
+                    writePromise
+                        .then(() => get().removeOfflineOrder(orderId))
+                        .catch(err => console.warn("Firebase Update Error:", err));
+                } catch (err) {
+                    console.warn("Firebase Update Status Sync Error:", err);
+                }
             },
 
             holdOrder: (order) => {
@@ -1046,6 +1141,7 @@ export const useSalesStore = create<SalesState>()(
                     logs: [],
                     offlineLogs: [],
                     sessions: [],
+                    offlineSessions: [],
                     isStoreOpen: false,
                     currentSessionId: null,
                 });
@@ -1322,7 +1418,11 @@ export interface OpnameLog {
 interface InventoryState {
     ingredients: Ingredient[];
     deletedIngredientIds: string[];
+    pendingIngredientIds: string[];
     opnameLogs: OpnameLog[];
+    offlineOpnameLogs: OpnameLog[];
+    clearPendingIngredientIds: (ids: string[]) => void;
+    removeOfflineOpnameLog: (id: string) => void;
     addIngredient: (ingredient: Ingredient) => void;
     updateIngredient: (id: string, updated: Partial<Ingredient>) => void;
     deleteIngredient: (id: string) => void;
@@ -1370,7 +1470,8 @@ export function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: C
 export function isCupDrink(cartItem: CartItem, product?: ExtendedProduct): boolean {
     if (product?.recipe && product.recipe.some(r => r.ingredientId === 'ing-cup')) return true;
     if (cartItem.recipe && cartItem.recipe.some(r => r.ingredientId === 'ing-cup')) return true;
-    if (product?.category && product.category !== 'snack' && product.category !== 'food') return true;
+    const category = product?.category || cartItem.category;
+    if (category && category !== 'snack' && category !== 'food') return true;
     return false;
 }
 
@@ -1497,10 +1598,23 @@ export function getInsufficientBomIngredients(
 
 export const useInventoryStore = create<InventoryState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             ingredients: DEFAULT_INGREDIENTS,
             deletedIngredientIds: [],
+            pendingIngredientIds: [],
             opnameLogs: [],
+            offlineOpnameLogs: [],
+            clearPendingIngredientIds: (ids) => {
+                const drop = new Set(ids);
+                set((state) => ({
+                    pendingIngredientIds: (state.pendingIngredientIds || []).filter(id => !drop.has(id)),
+                }));
+            },
+            removeOfflineOpnameLog: (id) => {
+                set((state) => ({
+                    offlineOpnameLogs: (state.offlineOpnameLogs || []).filter(l => l.id !== id),
+                }));
+            },
             recordOpname: (data) => {
                 const newLog: OpnameLog = {
                     ...data,
@@ -1509,24 +1623,38 @@ export const useInventoryStore = create<InventoryState>()(
                 };
                 set((state) => ({
                     ingredients: state.ingredients.map(i => i.id === data.ingredientId ? { ...i, stock: data.actualStock } : i),
-                    opnameLogs: [newLog, ...(state.opnameLogs || [])]
+                    pendingIngredientIds: Array.from(new Set([...(state.pendingIngredientIds || []), data.ingredientId])),
+                    opnameLogs: [newLog, ...(state.opnameLogs || [])],
+                    offlineOpnameLogs: [newLog, ...(state.offlineOpnameLogs || [])],
                 }));
-                firebaseUpdate(ref(rtdb, `ingredients/${data.ingredientId}`), { stock: data.actualStock }).catch(console.warn);
-                firebaseSet(ref(rtdb, `opnameLogs/${newLog.id}`), JSON.parse(JSON.stringify(newLog))).catch(console.warn);
+                firebaseUpdate(ref(rtdb, `ingredients/${data.ingredientId}`), { stock: data.actualStock })
+                    .then(() => get().clearPendingIngredientIds([data.ingredientId]))
+                    .catch(console.warn);
+                firebaseSet(ref(rtdb, `opnameLogs/${newLog.id}`), JSON.parse(JSON.stringify(newLog)))
+                    .then(() => get().removeOfflineOpnameLog(newLog.id))
+                    .catch(console.warn);
             },
             addIngredient: (ingredient) => {
                 set((s) => ({
                     ingredients: [...s.ingredients.filter(i => i.id !== ingredient.id), ingredient],
                     deletedIngredientIds: (s.deletedIngredientIds || []).filter(delId => delId !== ingredient.id),
+                    pendingIngredientIds: Array.from(new Set([...(s.pendingIngredientIds || []), ingredient.id])),
                 }));
                 firebaseUpdate(ref(rtdb), {
                     [`ingredients/${ingredient.id}`]: ingredient,
                     [`deletedIngredients/${ingredient.id}`]: null,
-                }).catch(err => console.warn(err));
+                })
+                    .then(() => get().clearPendingIngredientIds([ingredient.id]))
+                    .catch(err => console.warn(err));
             },
             updateIngredient: (id, updated) => {
-                set((s) => ({ ingredients: s.ingredients.map(i => i.id === id ? { ...i, ...updated } : i) }));
-                firebaseUpdate(ref(rtdb, `ingredients/${id}`), updated).catch(err => console.warn(err));
+                set((s) => ({
+                    ingredients: s.ingredients.map(i => i.id === id ? { ...i, ...updated } : i),
+                    pendingIngredientIds: Array.from(new Set([...(s.pendingIngredientIds || []), id])),
+                }));
+                firebaseUpdate(ref(rtdb, `ingredients/${id}`), JSON.parse(JSON.stringify(updated)))
+                    .then(() => get().clearPendingIngredientIds([id]))
+                    .catch(err => console.warn(err));
             },
             // Menghapus bahan baku secara permanen (termasuk bahan default seperti Susu Segar / Kentang Beku)
             // dan membersihkan referensinya dari resep BOM produk serta daftar suplier agar tidak muncul kembali
@@ -1536,6 +1664,7 @@ export const useInventoryStore = create<InventoryState>()(
                     return {
                         ingredients: s.ingredients.filter(i => i.id !== id),
                         deletedIngredientIds: prevDeleted.includes(id) ? prevDeleted : [...prevDeleted, id],
+                        pendingIngredientIds: (s.pendingIngredientIds || []).filter(pid => pid !== id),
                     };
                 });
 
@@ -1580,6 +1709,8 @@ export const useInventoryStore = create<InventoryState>()(
                 firebaseUpdate(ref(rtdb), rtdbUpdates).catch(err => console.warn(err));
             },
             decrementIngredientsForOrder: (items, products) => {
+                const changedIds = new Set<string>();
+                const updates: Record<string, unknown> = {};
                 set((state) => {
                     const newIngredients = [...state.ingredients];
                     
@@ -1593,10 +1724,13 @@ export const useInventoryStore = create<InventoryState>()(
                             const ingIndex = newIngredients.findIndex(i => i.id === recipeItem.ingredientId);
                             if (ingIndex !== -1) {
                                 const qtyToDeduct = calculateRecipeIngredientQty(recipeItem, cartItem);
-                                newIngredients[ingIndex] = {
-                                    ...newIngredients[ingIndex],
-                                    stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - qtyToDeduct) * 100) / 100)
-                                };
+                                if (qtyToDeduct > 0) {
+                                    newIngredients[ingIndex] = {
+                                        ...newIngredients[ingIndex],
+                                        stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - qtyToDeduct) * 100) / 100)
+                                    };
+                                    changedIds.add(newIngredients[ingIndex].id);
+                                }
                             }
                         });
                     });
@@ -1615,22 +1749,37 @@ export const useInventoryStore = create<InventoryState>()(
                                     ...newIngredients[ingIndex],
                                     stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - quantity) * 100) / 100)
                                 };
+                                changedIds.add(newIngredients[ingIndex].id);
                             }
                         });
                     }
                     
-                    const updates: Record<string, unknown> = {};
                     newIngredients.forEach(ing => {
-                        updates[`ingredients/${ing.id}`] = ing;
+                        if (changedIds.has(ing.id)) {
+                            updates[`ingredients/${ing.id}`] = ing;
+                        }
                     });
-                    if (Object.keys(updates).length > 0) {
-                        firebaseUpdate(ref(rtdb), updates).catch(err => console.warn("Firebase BOM Update Error:", err));
-                    }
                     
-                    return { ingredients: newIngredients };
+                    return {
+                        ingredients: newIngredients,
+                        pendingIngredientIds: Array.from(new Set([...(state.pendingIngredientIds || []), ...Array.from(changedIds)])),
+                    };
                 });
+
+                const idList = Array.from(changedIds);
+                if (Object.keys(updates).length > 0) {
+                    try {
+                        firebaseUpdate(ref(rtdb), JSON.parse(JSON.stringify(updates)))
+                            .then(() => get().clearPendingIngredientIds(idList))
+                            .catch(err => console.warn("Firebase BOM Update Error:", err));
+                    } catch (err) {
+                        console.warn("Firebase BOM Sync Update Error:", err);
+                    }
+                }
             },
             restoreIngredientsForOrder: (items, products) => {
+                const changedIds = new Set<string>();
+                const updates: Record<string, unknown> = {};
                 set((state) => {
                     const newIngredients = [...state.ingredients];
 
@@ -1644,10 +1793,13 @@ export const useInventoryStore = create<InventoryState>()(
                             const ingIndex = newIngredients.findIndex(i => i.id === recipeItem.ingredientId);
                             if (ingIndex !== -1) {
                                 const qtyToRestore = calculateRecipeIngredientQty(recipeItem, cartItem);
-                                newIngredients[ingIndex] = {
-                                    ...newIngredients[ingIndex],
-                                    stock: Math.round((newIngredients[ingIndex].stock + qtyToRestore) * 100) / 100
-                                };
+                                if (qtyToRestore > 0) {
+                                    newIngredients[ingIndex] = {
+                                        ...newIngredients[ingIndex],
+                                        stock: Math.round((newIngredients[ingIndex].stock + qtyToRestore) * 100) / 100
+                                    };
+                                    changedIds.add(newIngredients[ingIndex].id);
+                                }
                             }
                         });
                     });
@@ -1663,20 +1815,33 @@ export const useInventoryStore = create<InventoryState>()(
                                     ...newIngredients[ingIndex],
                                     stock: Math.round((newIngredients[ingIndex].stock + quantity) * 100) / 100
                                 };
+                                changedIds.add(newIngredients[ingIndex].id);
                             }
                         });
                     }
 
-                    const updates: Record<string, unknown> = {};
                     newIngredients.forEach(ing => {
-                        updates[`ingredients/${ing.id}`] = ing;
+                        if (changedIds.has(ing.id)) {
+                            updates[`ingredients/${ing.id}`] = ing;
+                        }
                     });
-                    if (Object.keys(updates).length > 0) {
-                        firebaseUpdate(ref(rtdb), updates).catch(err => console.warn("Firebase BOM Restore Error:", err));
-                    }
 
-                    return { ingredients: newIngredients };
+                    return {
+                        ingredients: newIngredients,
+                        pendingIngredientIds: Array.from(new Set([...(state.pendingIngredientIds || []), ...Array.from(changedIds)])),
+                    };
                 });
+
+                const idList = Array.from(changedIds);
+                if (Object.keys(updates).length > 0) {
+                    try {
+                        firebaseUpdate(ref(rtdb), JSON.parse(JSON.stringify(updates)))
+                            .then(() => get().clearPendingIngredientIds(idList))
+                            .catch(err => console.warn("Firebase BOM Restore Error:", err));
+                    } catch (err) {
+                        console.warn("Firebase BOM Sync Restore Error:", err);
+                    }
+                }
             }
         }),
         {
@@ -1822,18 +1987,26 @@ export const LEGACY_DEMO_EXPENSE_IDS = new Set(['exp-demo-1', 'exp-demo-2']);
 
 interface ExpenseState {
     expenses: Expense[];
+    offlineExpenses: Expense[];
     deletedExpenseIds: string[];
     addExpense: (expense: Omit<Expense, 'id' | 'date'>) => Expense;
     deleteExpense: (id: string) => void;
+    removeOfflineExpense: (id: string) => void;
     setExpenses: (expenses: Expense[]) => void;
 }
 
 export const useExpenseStore = create<ExpenseState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             expenses: [],
+            offlineExpenses: [],
             deletedExpenseIds: [],
             setExpenses: (expenses) => set({ expenses }),
+            removeOfflineExpense: (id) => {
+                set((s) => ({
+                    offlineExpenses: (s.offlineExpenses || []).filter(e => e.id !== id),
+                }));
+            },
             addExpense: (expenseData) => {
                 const salesState = useSalesStore.getState();
                 const activeSessionId = salesState.isStoreOpen ? (salesState.currentSessionId || undefined) : undefined;
@@ -1845,15 +2018,19 @@ export const useExpenseStore = create<ExpenseState>()(
                 };
                 set((s) => ({
                     expenses: [newExp, ...s.expenses],
+                    offlineExpenses: [newExp, ...(s.offlineExpenses || [])],
                     deletedExpenseIds: s.deletedExpenseIds.filter(did => did !== newExp.id),
                 }));
-                firebaseSet(ref(rtdb, `expenses/${newExp.id}`), JSON.parse(JSON.stringify(newExp))).catch(logRtdbWarn);
+                firebaseSet(ref(rtdb, `expenses/${newExp.id}`), JSON.parse(JSON.stringify(newExp)))
+                    .then(() => get().removeOfflineExpense(newExp.id))
+                    .catch(logRtdbWarn);
                 firebaseSet(ref(rtdb, `deletedExpenses/${newExp.id}`), null).catch(logRtdbWarn);
                 return newExp;
             },
             deleteExpense: (id) => {
                 set((s) => ({
                     expenses: s.expenses.filter(e => e.id !== id),
+                    offlineExpenses: (s.offlineExpenses || []).filter(e => e.id !== id),
                     deletedExpenseIds: Array.from(new Set([...s.deletedExpenseIds, id])),
                 }));
                 firebaseSet(ref(rtdb, `expenses/${id}`), null).catch(logRtdbWarn);
@@ -2025,18 +2202,26 @@ export interface StoreAccountMovement {
 
 interface StoreAccountState {
     movements: StoreAccountMovement[];
+    offlineMovements: StoreAccountMovement[];
     deletedMovementIds: string[];
     addMovement: (movement: Omit<StoreAccountMovement, 'id' | 'date'>) => StoreAccountMovement;
     deleteMovement: (id: string) => void;
+    removeOfflineMovement: (id: string) => void;
     setMovements: (movements: StoreAccountMovement[]) => void;
 }
 
 export const useStoreAccountStore = create<StoreAccountState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             movements: [],
+            offlineMovements: [],
             deletedMovementIds: [],
             setMovements: (movements) => set({ movements }),
+            removeOfflineMovement: (id) => {
+                set((s) => ({
+                    offlineMovements: (s.offlineMovements || []).filter(m => m.id !== id),
+                }));
+            },
             addMovement: (movementData) => {
                 const newMov: StoreAccountMovement = {
                     ...movementData,
@@ -2045,18 +2230,22 @@ export const useStoreAccountStore = create<StoreAccountState>()(
                 };
                 set((s) => ({
                     movements: [newMov, ...s.movements],
+                    offlineMovements: [newMov, ...(s.offlineMovements || [])],
                     deletedMovementIds: s.deletedMovementIds.filter(did => did !== newMov.id),
                 }));
                 firebaseSet(
                     ref(rtdb, `storeAccountMovements/${newMov.id}`),
                     JSON.parse(JSON.stringify(newMov))
-                ).catch(logRtdbWarn);
+                )
+                    .then(() => get().removeOfflineMovement(newMov.id))
+                    .catch(logRtdbWarn);
                 firebaseSet(ref(rtdb, `deletedStoreAccountMovements/${newMov.id}`), null).catch(logRtdbWarn);
                 return newMov;
             },
             deleteMovement: (id) => {
                 set((s) => ({
                     movements: s.movements.filter(m => m.id !== id),
+                    offlineMovements: (s.offlineMovements || []).filter(m => m.id !== id),
                     deletedMovementIds: Array.from(new Set([...s.deletedMovementIds, id])),
                 }));
                 firebaseSet(ref(rtdb, `storeAccountMovements/${id}`), null).catch(logRtdbWarn);

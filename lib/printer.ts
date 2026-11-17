@@ -14,7 +14,7 @@
  * - Digunakan oleh `components/ReceiptModal.tsx` ketika kasir menekan tombol cetak struk Bluetooth.
  * ============================================================================
  */
-import { Order, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLabel } from './store';
+import { Order, ExtendedProduct, formatVariantLabel, countOrderCupQuantity, getKresekPackagingLabel } from './store';
 
 // Default printer configs (80mm)
 const CPL = 48; // Characters Per Line for 80mm ESC/POS printer default font
@@ -96,7 +96,7 @@ export class ThermalPrinter {
     }
 }
 
-export function buildReceiptPayload(order: Order): Uint8Array {
+export function buildReceiptPayload(order: Order, products: ExtendedProduct[] = []): Uint8Array {
     const p = new ThermalPrinter();
     p.init();
 
@@ -121,7 +121,7 @@ export function buildReceiptPayload(order: Order): Uint8Array {
     p.printRow('Kasir  :', order.cashierName || 'Staff');
     p.printRow('Nama   :', order.customerName || 'Pelanggan');
     if (order.tableNumber) p.printRow('Meja   :', order.tableNumber.toString());
-    const totalCups = countOrderCupQuantity(order.items, []);
+    const totalCups = countOrderCupQuantity(order.items, products);
     const kresekLabel = getKresekPackagingLabel(totalCups);
     if (kresekLabel) p.printRow('Kemasan:', kresekLabel);
     p.printDivider();

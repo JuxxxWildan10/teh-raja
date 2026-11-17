@@ -94,22 +94,62 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ===== PRINT STYLES — Only show receipt ===== */
 @media print {
-  /* Hide everything */
-  body > * {
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Sembunyikan elemen halaman di luar modal struk */
+  body:has(#print-receipt) * {
+    visibility: hidden !important;
+  }
+
+  body:has(#print-receipt) div:not(:has(#print-receipt)):not(#print-receipt):not(#print-receipt *),
+  body:has(#print-receipt) nav,
+  body:has(#print-receipt) header,
+  body:has(#print-receipt) footer,
+  body:has(#print-receipt) section,
+  body:has(#print-receipt) aside {
     display: none !important;
   }
-  /* Show only #print-receipt */
+
+  body:has(#print-receipt) div:has(> #print-receipt),
+  body:has(#print-receipt) div:has(> div > #print-receipt),
+  body:has(#print-receipt) div:has(#print-receipt) {
+    position: static !important;
+    inset: auto !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   #print-receipt,
   #print-receipt * {
-    display: revert !important;
     visibility: visible !important;
+    color: #000 !important;
   }
+
   #print-receipt {
     position: static !important;
     inset: auto !important;
     z-index: 9999 !important;
     background: white !important;
-    padding: 16px !important;
+    padding: 12px !important;
+    width: 100% !important;
     max-width: 320px !important;
     max-height: none !important;
     height: auto !important;
