@@ -1435,23 +1435,38 @@ interface InventoryState {
  * FUNGSI INTI PERHITUNGAN RESEP BOM DINAMIS (`calculateRecipeIngredientQty`):
  * Menghitung berapa gram/ml/pcs bahan baku yang harus dipotong untuk setiap item pesanan,
  * dengan menyesuaikan varian:
- * - Ukuran Cup Large (L) = 1.5x takaran bahan cair/bubuk (cup kemasan `ing-cup` tetap 1 pcs per gelas!)
- * - Gula Cair (`ing-sugar`) = proporsional sesuai pilihan % gula (0%, 25%, 50%, 75%, 100%)
- * - Es Batu (`ing-ice`) = 0 jika minuman Panas atau No-Ice, 0.5x jika Less Ice, 1.5x jika Extra Ice
+ * - Kemasan sekali pakai (`ing-cup`, `ing-kresek-*`, atau nama bahan cup/sedotan/kresek/tutup/lid/plastik/kemasan) tetap 1x per item meski ukuran Large (L)
+ * - Bahan cair/bubuk lain pada ukuran Cup Large (L) = 1.5x takaran
+ * - Gula (`ing-sugar` atau nama bahan mengandung "gula") = proporsional sesuai pilihan % gula (0%, 25%, 50%, 75%, 100%)
+ * - Es Batu (`ing-ice` atau nama bahan mengandung "es batu") = 0 jika Panas/No-Ice, 0.5x jika Less Ice, 1.5x jika Extra Ice
  */
-export function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: CartItem): number {
-    // Kemasan cup plastik tetap dihitung 1 pcs per gelas meskipun ukuran Large (L)
-    const isPackagingCup = recipeItem.ingredientId === 'ing-cup';
-    const sizeMultiplier = !isPackagingCup && cartItem.variants?.size === 'L' ? 1.5 : 1;
+export function calculateRecipeIngredientQty(
+    recipeItem: RecipeItem,
+    cartItem: CartItem,
+    ingredients: Ingredient[] = []
+): number {
+    const matchedIng = ingredients.find(i => i.id === recipeItem.ingredientId);
+    const ingName = matchedIng?.name || '';
+
+    // Kemasan cup, sedotan, tutup, dan kresek tidak ikut dikali 1.5x saat ukuran Large (L)
+    const isDisposablePackaging =
+        recipeItem.ingredientId === 'ing-cup' ||
+        recipeItem.ingredientId.startsWith('ing-kresek') ||
+        /\b(cup|sedotan|kresek|tutup|lid|botol|kemasan|plastik)\b/i.test(ingName);
+    const sizeMultiplier = !isDisposablePackaging && cartItem.variants?.size === 'L' ? 1.5 : 1;
 
     let qty = recipeItem.quantity * sizeMultiplier * cartItem.quantity;
 
-    if (recipeItem.ingredientId === 'ing-sugar' && cartItem.variants?.sugar) {
+    const isSugarIngredient =
+        recipeItem.ingredientId === 'ing-sugar' || /\bgula\b/i.test(ingName);
+    if (isSugarIngredient && cartItem.variants?.sugar) {
         const sugarLvl = parseInt(cartItem.variants.sugar.replace('%', ''));
         if (!isNaN(sugarLvl)) qty = qty * (sugarLvl / 100);
     }
 
-    if (recipeItem.ingredientId === 'ing-ice') {
+    const isIceIngredient =
+        recipeItem.ingredientId === 'ing-ice' || /\bes\s*batu\b/i.test(ingName);
+    if (isIceIngredient) {
         if (cartItem.variants?.temperature === 'panas' || cartItem.variants?.ice === 'no-ice') {
             qty = 0;
         } else if (cartItem.variants?.ice === 'less') {
@@ -1465,11 +1480,26 @@ export function calculateRecipeIngredientQty(recipeItem: RecipeItem, cartItem: C
 }
 
 /**
- * Memeriksa apakah suatu item pesanan merupakan minuman dalam kemasan cup
+ * Memeriksa apakah suatu item pesanan merupakan minuman dalam kemasan cup.
+ * Jika produk memiliki resep BOM eksplisit, wajib memuat komponen cup (mencegah snack salah kategori ikut terhitung cup).
  */
-export function isCupDrink(cartItem: CartItem, product?: ExtendedProduct): boolean {
-    if (product?.recipe && product.recipe.some(r => r.ingredientId === 'ing-cup')) return true;
-    if (cartItem.recipe && cartItem.recipe.some(r => r.ingredientId === 'ing-cup')) return true;
+export function isCupDrink(
+    cartItem: CartItem,
+    product?: ExtendedProduct,
+    ingredients: Ingredient[] = []
+): boolean {
+    const recipe = product?.recipe && product.recipe.length > 0
+        ? product.recipe
+        : (cartItem.recipe && cartItem.recipe.length > 0 ? cartItem.recipe : undefined);
+
+    if (recipe) {
+        return recipe.some(r => {
+            if (r.ingredientId === 'ing-cup') return true;
+            const ingName = ingredients.find(i => i.id === r.ingredientId)?.name || '';
+            return /\bcup\b/i.test(ingName);
+        });
+    }
+
     const category = product?.category || cartItem.category;
     if (category && category !== 'snack' && category !== 'food') return true;
     return false;
@@ -1478,10 +1508,14 @@ export function isCupDrink(cartItem: CartItem, product?: ExtendedProduct): boole
 /**
  * Menghitung total cup minuman dalam sebuah daftar item pesanan
  */
-export function countOrderCupQuantity(items: CartItem[], products: ExtendedProduct[]): number {
+export function countOrderCupQuantity(
+    items: CartItem[],
+    products: ExtendedProduct[],
+    ingredients: Ingredient[] = []
+): number {
     return items.reduce((total, item) => {
         const product = products.find(p => p.id === item.id);
-        if (isCupDrink(item, product)) {
+        if (isCupDrink(item, product, ingredients)) {
             return total + (item.quantity || 1);
         }
         return total;
@@ -1557,7 +1591,7 @@ export function getInsufficientBomIngredients(
         if (!recipe || recipe.length === 0) return;
 
         recipe.forEach(recipeItem => {
-            const qty = calculateRecipeIngredientQty(recipeItem, cartItem);
+            const qty = calculateRecipeIngredientQty(recipeItem, cartItem, ingredients);
             if (qty > 0) {
                 totalNeededMap.set(
                     recipeItem.ingredientId,
@@ -1568,7 +1602,7 @@ export function getInsufficientBomIngredients(
     });
 
     // Perhitungkan kebutuhan kemasan plastik kresek berdasarkan total cup
-    const totalCups = countOrderCupQuantity(items, products);
+    const totalCups = countOrderCupQuantity(items, products, ingredients);
     if (totalCups > 0) {
         const kresekNeeded = calculateKresekForCupCount(totalCups);
         kresekNeeded.forEach(({ ingredientId, quantity }) => {
@@ -1723,7 +1757,7 @@ export const useInventoryStore = create<InventoryState>()(
                         recipe.forEach(recipeItem => {
                             const ingIndex = newIngredients.findIndex(i => i.id === recipeItem.ingredientId);
                             if (ingIndex !== -1) {
-                                const qtyToDeduct = calculateRecipeIngredientQty(recipeItem, cartItem);
+                                const qtyToDeduct = calculateRecipeIngredientQty(recipeItem, cartItem, state.ingredients);
                                 if (qtyToDeduct > 0) {
                                     newIngredients[ingIndex] = {
                                         ...newIngredients[ingIndex],
@@ -1739,7 +1773,7 @@ export const useInventoryStore = create<InventoryState>()(
                     //    - 1 cup       -> Plastik Kresek 1 Cup (-1 pcs)
                     //    - 2 s/d 4 cup -> Plastik Kresek 21 (-1 pcs)
                     //    - 5 s/d 7 cup -> Plastik Kresek 28 (-1 pcs)
-                    const totalCups = countOrderCupQuantity(items, products);
+                    const totalCups = countOrderCupQuantity(items, products, state.ingredients);
                     if (totalCups > 0) {
                         const kresekDeductions = calculateKresekForCupCount(totalCups);
                         kresekDeductions.forEach(({ ingredientId, quantity }) => {
@@ -1792,7 +1826,7 @@ export const useInventoryStore = create<InventoryState>()(
                         recipe.forEach(recipeItem => {
                             const ingIndex = newIngredients.findIndex(i => i.id === recipeItem.ingredientId);
                             if (ingIndex !== -1) {
-                                const qtyToRestore = calculateRecipeIngredientQty(recipeItem, cartItem);
+                                const qtyToRestore = calculateRecipeIngredientQty(recipeItem, cartItem, state.ingredients);
                                 if (qtyToRestore > 0) {
                                     newIngredients[ingIndex] = {
                                         ...newIngredients[ingIndex],
@@ -1805,7 +1839,7 @@ export const useInventoryStore = create<InventoryState>()(
                     });
 
                     // 2. Kembalikan stok plastik kresek otomatis saat pesanan dibatalkan
-                    const totalCups = countOrderCupQuantity(items, products);
+                    const totalCups = countOrderCupQuantity(items, products, state.ingredients);
                     if (totalCups > 0) {
                         const kresekRestorations = calculateKresekForCupCount(totalCups);
                         kresekRestorations.forEach(({ ingredientId, quantity }) => {

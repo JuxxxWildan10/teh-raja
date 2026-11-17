@@ -108,7 +108,7 @@ NIM. 0402231058
 
 **RANCANG BANGUN SISTEM POINT OF SALE (POS) DAN MANAJEMEN INVENTORI BAHAN BAKU BERBASIS BILL OF MATERIALS (BOM) DENGAN ARSITEKTUR PROGRESSIVE WEB APP PADA KEDAI TEH RAJA**
 
-Operasional gerai minuman skala usaha mikro, kecil, dan menengah (UMKM) seperti Kedai Teh Raja memiliki karakteristik unik, di mana satu orang staf operasional bertugas ganda sebagai kasir penerima pembayaran sekaligus peracik minuman (*barista*). Kondisi peran ganda tersebut menimbulkan kendala nyata di lapangan, yaitu lambatnya pencatatan pesanan beserta kustomisasi varian saat jam ramai, tidak sempatnya staf mencatat pemakaian bahan baku per gelas (*daun teh, gula cair, susu, bubuk perasa, dan cup*), serta terhentinya pencatatan apabila jaringan internet mengalami gangguan. Praktik Kerja Lapangan (PKL) berbasis project ini bertujuan merancang, mengimplementasikan, dan menguji aplikasi *Point of Sale* (POS) yang terintegrasi dengan manajemen inventori bahan baku berbasis *Bill of Materials* (BOM) pada Kedai Teh Raja. Metode pelaksanaan project mencakup tahapan identifikasi masalah lapangan, analisis kebutuhan fungsional dan non-fungsional, perancangan skema data dan antarmuka, implementasi menggunakan *framework* Next.js 16 dan TypeScript, hingga pengujian fungsional *Black-Box*. Sistem dirancang dengan arsitektur *Offline-First Progressive Web App* (PWA) yang memadukan penyimpanan lokal IndexedDB dan sinkronisasi *real-time* Firebase Realtime Database. Tiga modul inti yang dibangun meliputi: (1) Katalog Menu Digital dan Pelacakan Pesanan/Struk bagi Pelanggan (`/menu`), (2) Terminal Kasir Terpadu (`/pos`) yang memudahkan kasir merangkap *barista* dalam memproses transaksi, mengelola antrean racikan dalam satu layar, mencatat kas keluar, serta mencetak struk via printer termal Bluetooth ESC/POS, dan (3) Panel Admin & Inventori BOM (`/admin`) yang memotong saldo bahan baku secara otomatis sesuai takaran resep setiap kali transaksi terjadi. Untuk menjaga keamanan pada perangkat operasional, akses menuju halaman Kasir dan Admin disembunyikan dari layar pembeli dan hanya dapat dibuka oleh staf melalui ketukan rahasia lima kali pada logo utama (*5x Tap Secret Trigger*). Hasil pengujian membuktikan seluruh skenario fungsional berjalan 100% valid, transaksi tetap tersimpan utuh saat luring (*offline*), dan pemotongan bahan baku berlangsung akurat sesuai komposisi resep.
+Operasional gerai minuman skala usaha mikro, kecil, dan menengah (UMKM) seperti Kedai Teh Raja memiliki karakteristik unik, di mana satu orang staf operasional bertugas ganda sebagai kasir penerima pembayaran sekaligus peracik minuman (*barista*). Kondisi peran ganda tersebut menimbulkan kendala nyata di lapangan, yaitu lambatnya pencatatan pesanan beserta kustomisasi varian saat jam ramai, tidak sempatnya staf mencatat pemakaian bahan baku dan kemasan per gelas (*teh, gula, susu, bubuk perasa, es, cup, sedotan, dan plastik kresek*), tercampurnya kas kecil maupun modal belanja bahan, serta terhentinya pencatatan apabila jaringan internet mengalami gangguan. Praktik Kerja Lapangan (PKL) berbasis project ini bertujuan merancang, mengimplementasikan, dan menguji aplikasi *Point of Sale* (POS) yang terintegrasi dengan manajemen inventori bahan baku berbasis *Bill of Materials* (BOM) pada Kedai Teh Raja. Metode pelaksanaan project mencakup tahapan identifikasi masalah lapangan, analisis kebutuhan fungsional dan non-fungsional, perancangan skema data dan antarmuka, implementasi menggunakan *framework* Next.js 16 dan TypeScript, hingga pengujian fungsional *Black-Box*. Sistem dirancang dengan arsitektur *Offline-First Progressive Web App* (PWA) yang memadukan penyimpanan lokal IndexedDB dan sinkronisasi penuh Firebase Realtime Database. Tiga modul inti yang dibangun meliputi: (1) Katalog Menu Digital, Kontrol Kunci Buka/Tutup Toko *Online*, dan Pelacakan Pesanan/Struk bagi Pelanggan (`/menu`), (2) Terminal Kasir Terpadu (`/pos`) yang memudahkan kasir merangkap *barista* dalam memproses transaksi (beserta penomoran harian `Customer 1, 2, 3...` dan promo paket otomatis), mengelola antrean racikan dan panduan kemasan kresek dalam satu layar, membukukan multi-*shift* serta kas keluar, dan mencetak struk via printer termal Bluetooth ESC/POS (`lib/printer.ts`), serta (3) Panel Admin, Inventori BOM & Keuangan (`/admin`) yang memotong saldo bahan baku dan plastik kresek secara otomatis sesuai takaran resep dinamis, mengelola **Rekening Toko Real-Time (Putaran Modal Restok)**, serta mengekspor laporan ke PDF dan Excel (`.xlsx`). Untuk menjaga keamanan pada perangkat operasional, akses menuju halaman Kasir dan Admin disembunyikan dari layar pembeli dan hanya dapat dibuka oleh staf melalui ketukan rahasia lima kali pada logo utama (*5x Tap Secret Trigger*). Hasil sepuluh skenario pengujian *Black-Box* membuktikan seluruh fitur berjalan 100% valid, transaksi tetap tersimpan utuh saat luring (*offline*) tanpa kehilangan pesanan ber-ID `nanoid`, dan pemotongan bahan baku berlangsung akurat sesuai komposisi resep.
 
 **Kata Kunci:** *Point of Sale, Bill of Materials, Manajemen Bahan Baku, Progressive Web App, Offline-First, Kedai Teh Raja.*
 
@@ -187,7 +187,7 @@ NIM. 0402231058
 ## 1.1 Latar Belakang
 Pertumbuhan usaha mikro, kecil, dan menengah (UMKM) pada subsektor minuman olahan teh menuntut kecepatan layanan transaksi sekaligus ketertiban pengendalian stok bahan baku harian [1]. **Kedai Teh Raja** merupakan salah satu unit usaha kuliner minuman yang menyajikan aneka racikan teh melati autentik, *milk tea*, *matcha*, teh buah segar, serta camilan pendamping dengan harga terjangkau dan frekuensi transaksi harian yang padat. Dalam operasional kesehariannya, gerai Kedai Teh Raja dikelola dengan struktur sumber daya manusia yang ramping, di mana **staf kasir merangkap tugas secara langsung sebagai peracik minuman (*barista*)**.
 
-Berdasarkan observasi lapangan pada minggu orientasi PKL di Kedai Teh Raja, peran ganda antara fungsi kasir dan fungsi *barista* pada satu orang staf menimbulkan empat kendala operasional yang nyata. **Pertama**, ketika antrean pembeli sedang ramai, staf yang sedang sibuk meracik minuman di area belakang *booth* harus bolak-balik melayani pencatatan pesanan baru, menghitung uang kembalian, dan mencatat detail kustomisasi per gelas (ukuran *cup*, takaran gula, level es, dan tambahan *topping*). **Kedua**, karena staf yang sama harus langsung meracik minuman sesaat setelah menerima pembayaran, pencatatan pemakaian bahan baku seperti konsentrat teh (ml), gula cair (ml), susu kental/cair, bubuk perasa (gram), dan kemasan *cup* (pcs) tidak mungkin dilakukan secara manual per transaksi. Akibatnya, pemilik kedai sering mengalami selisih stok bahan baku (*inventory discrepancy*) dan baru menyadari bahan baku habis saat jam operasional sedang berlangsung. **Ketiga**, pembukuan uang kas keluar untuk kebutuhan mendadak di gerai (seperti pembelian es batu tambahan atau air galon) sering tercampur dengan uang hasil penjualan harian di laci kasir. **Keempat**, aplikasi kasir berbasis web konvensional umumnya berhenti berfungsi ketika jaringan internet atau Wi-Fi di lokasi gerai mengalami gangguan [2].
+Berdasarkan observasi lapangan pada minggu orientasi PKL di Kedai Teh Raja, peran ganda antara fungsi kasir dan fungsi *barista* pada satu orang staf menimbulkan empat kendala operasional yang nyata. **Pertama**, ketika antrean pembeli sedang ramai, staf yang sedang sibuk meracik minuman di area belakang *booth* harus bolak-balik melayani pencatatan pesanan baru, menghitung uang kembalian, dan mencatat detail kustomisasi per gelas (ukuran *cup* `M`/`L`, suhu `Es`/`Panas`, takaran gula `0%`–`100%`, dan level es batu). **Kedua**, karena staf yang sama harus langsung meracik minuman sesaat setelah menerima pembayaran, pencatatan pemakaian bahan baku seperti konsentrat teh (ml), gula cair (ml), susu kental/cair, bubuk perasa (gram), dan kemasan *cup* (pcs) tidak mungkin dilakukan secara manual per transaksi. Akibatnya, pemilik kedai sering mengalami selisih stok bahan baku (*inventory discrepancy*) dan baru menyadari bahan baku habis saat jam operasional sedang berlangsung. **Ketiga**, pembukuan uang kas keluar untuk kebutuhan mendadak di gerai (seperti pembelian es batu tambahan atau air galon) sering tercampur dengan uang hasil penjualan harian di laci kasir. **Keempat**, aplikasi kasir berbasis web konvensional umumnya berhenti berfungsi ketika jaringan internet atau Wi-Fi di lokasi gerai mengalami gangguan [2].
 
 Menjawab kebutuhan riil tersebut, dilaksanakan project Praktik Kerja Lapangan berupa pengembangan **Sistem Point of Sale (POS) dan Manajemen Inventori Bahan Baku Berbasis Bill of Materials (BOM)** dengan arsitektur *Progressive Web App* (PWA) pada Kedai Teh Raja. Berbeda dari sistem restoran besar yang memisahkan layar kasir dan layar dapur pada banyak perangkat, sistem POS Teh Raja dirancang secara spesifik dan ergonomis untuk mendukung alur kerja **kasir merangkap barista dalam satu layar terpadu (`/pos`)**, yang juga terhubung dengan katalog pemesanan mandiri serta pelacakan struk bagi pelanggan (`/menu`) dan panel manajemen inventori bahan baku bagi pemilik (`/admin`) [3].
 
@@ -208,7 +208,7 @@ Tujuan yang hendak dicapai melalui pelaksanaan project PKL di Kedai Teh Raja mel
 ## 1.4 Manfaat Project PKL
 Pelaksanaan project ini memberikan manfaat bagi tiga pihak utama:
 1. **Bagi Mitra (Kedai Teh Raja):**
-   - Meringankan beban kerja staf kasir yang merangkap *barista* karena pesanan pelanggan dari meja maupun konter langsung tercatat rapi beserta detail takaran gula, es, dan *topping* dalam satu layar kasir.
+   - Meringankan beban kerja staf kasir yang merangkap *barista* karena pesanan pelanggan dari meja maupun konter langsung tercatat rapi beserta detail ukuran *cup*, suhu, takaran gula, dan level es batu dalam satu layar kasir.
    - Menghilangkan selisih perhitungan stok bahan baku harian berkat pemotongan otomatis berbasis resep *Bill of Materials* (BOM) setiap kali minuman terjual.
    - Menjamin kelancaran pencatatan transaksi tanpa takut kehilangan data saat jaringan internet kedai terputus berkat teknologi penyimpanan luring IndexedDB.
 2. **Bagi Mahasiswa Pelaksana:**
@@ -219,16 +219,16 @@ Pelaksanaan project ini memberikan manfaat bagi tiga pihak utama:
 
 ## 1.5 Ruang Lingkup Project
 Agar pelaksanaan project fokus pada kebutuhan utama mitra (kasir merangkap *barista* dan pengelolaan bahan baku) serta selesai tepat waktu dalam 38 hari kerja PKL (9 November – 31 Desember 2026), ruang lingkup sistem dibatasi pada modul-modul inti berikut:
-1. **Modul Katalog Menu & Pelacakan Struk Pelanggan (`/` dan `/menu`):** Mencakup tampilan katalog menu interaktif dengan indikator ketersediaan stok bahan baku BOM secara *real-time*, pemilihan kustomisasi varian (ukuran *cup*, level gula, es batu, dan *topping*), keranjang pesanan, pemilihan pembayaran (QRIS atau Tunai di Kasir), serta fitur **Lacak Pesanan & Struk Digital**.
+1. **Modul Katalog Menu & Pelacakan Struk Pelanggan (`/` dan `/menu`):** Mencakup tampilan katalog menu interaktif dengan indikator ketersediaan stok bahan baku BOM secara *real-time*, pemilihan kustomisasi varian (ukuran *cup* `M`/`L`, suhu `Es`/`Panas`, level gula `0%`–`100%`, dan takaran es batu), keranjang pesanan, pemilihan pembayaran (QRIS atau Tunai di Kasir), serta fitur **Lacak Pesanan & Struk Digital**.
 2. **Modul Proteksi Akses Rahasia Staf (`SecretStaffModal`):** Penyembunyian seluruh tautan menuju halaman Kasir POS (`/pos`), Admin (`/admin`), dan dokumen presentasi dari layar pembeli. Dialog login staf hanya terbuka apabila logo **TEH RAJA** diketuk sebanyak 5 kali berturut-turut dalam waktu $< 2,5$ detik, dilengkapi penjaga rute (*route guard*) yang mengalihkan akses URL tanpa izin kembali ke `/menu`.
 3. **Modul Kasir POS Terpadu untuk Kasir Merangkap Barista (`/pos`):** Mencakup pembukaan dan penutupan *shift* kasir (rekonsiliasi kas laci), input transaksi cepat, panel laci **Antrean Pesanan & Racikan** dalam satu layar yang sama, fitur tunda pesanan (*Hold/Resume Order*), pencatatan pengeluaran kas laci (*Petty Cash*), pembayaran Tunai/QRIS/Transfer, serta pencetakan struk termal 58mm/80mm melalui peramban, WhatsApp, atau *Web Bluetooth API*.
-4. **Modul Admin & Manajemen Bahan Baku BOM (`/admin`):** Mencakup 6 tab manajemen inti untuk PKL:
-   - *Dashboard* Ringkasan Penjualan & Ekspor Laporan (PDF/CSV),
+4. **Modul Admin, Manajemen Bahan Baku BOM & Keuangan (`/admin`):** Mencakup 6 tab manajemen inti untuk PKL:
+   - *Dashboard* Ringkasan Penjualan (dengan filter per hari & multi-*shift*) serta Ekspor Laporan (PDF/Excel `.xlsx`/CSV),
    - Manajemen *Menu & Resep BOM* (pengaturan takaran bahan baku per produk),
-   - Manajemen *Bahan Baku & Suplier* (pemantauan stok bahan, *Restock Purchase Order*, dan *Stock Opname*),
-   - Manajemen *Pesanan POS* (riwayat transaksi & pengembalian stok otomatis saat pembatalan),
-   - Laporan *Laba Rugi & Kas* (*Profit & Loss*), serta
-   - Manajemen *Karyawan* (akun kasir dan admin).
+   - Manajemen *Bahan Baku & Suplier* (pemantauan stok bahan & plastik kresek otomatis, pencarian/urut *A–Z*, *Restock Purchase Order*, dan *Stock Opname*),
+   - Manajemen *Pesanan POS* (riwayat transaksi multi-*shift* & pengembalian stok otomatis saat pembatalan),
+   - Laporan *Laba Rugi & Kas* (*Profit & Loss*, **Rekening Toko Real-Time / Putaran Modal Restok**, & Backup/Restore JSON), serta
+   - Manajemen *Karyawan* (akun kasir dan admin) beserta **Kunci Buka/Tutup Toko Online (`storeConfig`)**.
 5. **Arsitektur Modular Siap Pengembangan (*Extensible Architecture*):** Sistem juga dilengkapi mekanisme penguncian fitur lanjutan (*feature lock*) sehingga modul-modul skala lanjut untuk pengembangan penelitian berikutnya (seperti peramalan stok *Time-Series Forecasting*, layar dapur terpisah, dan manajemen multi-cabang) dikunci pada mode operasional PKL dan dapat dibuka kapan saja ketika dibutuhkan untuk pengembangan tahap lanjut.
 
 ## 1.6 Metode Pelaksanaan Project
@@ -254,7 +254,7 @@ Sesuai pedoman penulisan Laporan PKL Berbasis Project Fakultas Ilmu Komputer UNU
 # GAMBARAN MITRA DAN LANDASAN KONSEPTUAL
 
 ## 2.1 Profil Mitra Kedai Teh Raja
-**Kedai Teh Raja** adalah pelaku usaha mikro, kecil, dan menengah (UMKM) di bidang kuliner minuman (*Food and Beverage*) yang berfokus pada penyajian minuman teh melati racikan khusus, *milk tea*, *matcha*, teh buah tropis, dan camilan pendamping. Dengan rentang harga jual yang terjangkau bagi kalangan pelajar, mahasiswa, dan masyarakat umum (Rp5.000 hingga Rp15.000 per porsi), Kedai Teh Raja mengandalkan kecepatan penyajian serta konsistensi takaran rasa pada setiap gelas yang disajikan.
+**Kedai Teh Raja** adalah pelaku usaha mikro, kecil, dan menengah (UMKM) di bidang kuliner minuman (*Food and Beverage*) yang berlokasi di Siandong, Kec. Larangan, Kab. Brebes, Jawa Tengah 52262, dengan fokus pada penyajian minuman teh melati racikan khusus (*signature* & *classic*), *milk tea*, *matcha*, aneka minuman serbuk/buah segar, serta camilan pendamping. Dengan rentang harga jual yang sangat terjangkau bagi kalangan pelajar dan masyarakat umum (Rp500 hingga Rp3.000 untuk aneka camilan serta Rp3.500 hingga Rp7.000 per *cup* untuk varian minuman, dilengkapi paket hemat *Imperial Jasmine* Size M 3 *cup* Rp10.000 / 6 *cup* Rp20.000), Kedai Teh Raja mengandalkan kecepatan penyajian serta konsistensi takaran rasa pada setiap gelas yang disajikan.
 
 ### 2.1.1 Visi dan Misi Mitra
 - **Visi:** Menjadi gerai minuman teh lokal pilihan utama yang unggul dalam cita rasa autentik, kecepatan pelayanan, dan ketertiban pengelolaan bahan baku berbasis teknologi tepat guna.
@@ -272,7 +272,7 @@ Berbeda dengan restoran skala besar yang memiliki banyak divisi terpisah, pengel
 | :---: | :--- | :--- |
 | 1 | **Pemilik / Administrator (*Owner*)** | Menetapkan daftar menu dan harga jual, menentukan takaran resep bahan baku (*Bill of Materials*) per porsi, memeriksa laporan laba rugi dan sisa stok bahan baku, serta melakukan pembelian bahan ke suplier. |
 | 2 | **Pengelola Operasional (Pembimbing Lapangan)** | Mengawasi jalannya operasional gerai, memeriksa kecocokan uang kas tiap penutupan *shift*, serta melakukan pemeriksaan fisik stok bahan baku (*stock opname*) secara berkala. |
-| 3 | **Staf Kasir Merangkap Barista (*Single-Operator Booth*)** | Melayani pemesanan pembeli di konter, menerima pembayaran tunai maupun QRIS, langsung meracik minuman sesuai kustomisasi (ukuran, gula, es, *topping*), menyerahkan pesanan ke pelanggan, serta mencatat pengeluaran kas kecil gerai. |
+| 3 | **Staf Kasir Merangkap Barista (*Single-Operator Booth*)** | Melayani pemesanan pembeli di konter, menerima pembayaran tunai maupun QRIS, langsung meracik minuman sesuai kustomisasi (ukuran `M`/`L`, suhu, kadar gula, dan level es), menyerahkan pesanan ke pelanggan, serta mencatat pengeluaran kas kecil gerai. |
 
 ## 2.2 Proses Bisnis Berjalan (*As-Is Process*) dan Identifikasi Masalah
 Hasil pengamatan langsung terhadap alur kerja staf kasir yang merangkap *barista* di Kedai Teh Raja sebelum adanya sistem menunjukkan empat permasalahan utama:
@@ -290,12 +290,17 @@ Hasil pengamatan langsung terhadap alur kerja staf kasir yang merangkap *barista
 ### 2.3.1 Sistem *Point of Sale* (POS) Terpadu untuk Operasional Gerai Ramping
 Sistem *Point of Sale* (POS) merupakan perangkat lunak terminal kasir yang memfasilitasi perhitungan transaksi penjualan, pencatatan metode pembayaran, pencetakan bukti pembayaran, serta perekaman data penjualan secara terstruktur [1], [3]. Pada gerai kuliner UMKM di mana kasir merangkap sebagai *barista*, desain antarmuka POS harus menggabungkan fungsi **katalog transaksi kasir** dan fungsi **manajemen antrean racikan** di dalam satu layar yang sama (`/pos`). Dengan demikian, staf tidak perlu berpindah perangkat untuk melihat daftar pesanan yang masuk dari pelanggan maupun mengubah status pesanan yang sudah selesai diracik.
 
-### 2.3.2 Manajemen Inventori Berbasis *Bill of Materials* (BOM)
-*Bill of Materials* (BOM) adalah daftar terstruktur yang mendefinisikan komponen bahan baku beserta kuantitas takaran yang diperlukan untuk memproduksi satu unit produk akhir [5]. Penerapan konsep BOM pada sistem POS minuman memungkinkan pengendalian persediaan tingkat bahan baku (*ingredient-level inventory control*). Setiap produk minuman $i$ memiliki himpunan resep yang menghubungkannya dengan bahan baku $k$ sebesar takaran $R_{i,k}$ (dalam satuan `ml`, `gram`, atau `pcs`). Ketika terjadi transaksi penjualan sejumlah $Q_i$ porsi, sistem secara otomatis memperbarui stok bahan baku menurut persamaan:
+### 2.3.2 Manajemen Inventori Berbasis *Bill of Materials* (BOM) Dinamis
+*Bill of Materials* (BOM) adalah daftar terstruktur yang mendefinisikan komponen bahan baku beserta kuantitas takaran yang diperlukan untuk memproduksi satu unit produk akhir [5]. Penerapan konsep BOM pada sistem POS minuman memungkinkan pengendalian persediaan tingkat bahan baku (*ingredient-level inventory control*). Setiap produk minuman $i$ memiliki himpunan resep yang menghubungkannya dengan bahan baku $k$ sebesar takaran dasar $R_{i,k}$ (dalam satuan `ml`, `gram`, atau `pcs`), yang dikalikan secara dinamis terhadap faktor varian $f_{i,k}(v)$ (`calculateRecipeIngredientQty`):
+- **Faktor Ukuran (*Size*):** Bahan cair maupun bubuk perasa pada varian *Large* (`L`) dikalikan $1{,}5\times$, sedangkan bahan kemasan sekali pakai (seperti *Cup Plastik*, *Sedotan*, *Tutup/Lid*, dan *Kresek*) tetap bernilai $1\times$ per *item*.
+- **Faktor Gula & Es Batu:** Bahan pemanis (*Gula Cair* / *gula pasir*) menyesuaikan proporsi persentase pilihan pembeli ($0\%$ s.d. $100\%$), sementara *Es Batu* bernilai $0$ untuk varian panas/*no-ice*, $0{,}5\times$ untuk *less ice*, $1\times$ untuk *normal ice*, dan $1{,}5\times$ untuk *extra ice*.
+- **Alokasi Kemasan Kresek Bertingkat:** Untuk setiap pesanan yang memuat kemasan *cup* minuman ($C_{\text{total}}$), sistem otomatis mengurangi stok kantong plastik pengantaran (`calculateKresekForCupCount`: 1 *cup* $\rightarrow$ *Plastik Kresek 1 Cup*; 2–4 *cup* $\rightarrow$ *Plastik Kresek 21*; 5–7 *cup* $\rightarrow$ *Plastik Kresek 28*, atau kombinasinya), sekaligus mengecualikan produk camilan non-*cup*.
 
-$$\text{Stok Akhir Bahan } k = \text{Stok Awal Bahan } k - \sum_{i=1}^{n} \left( Q_i \times R_{i,k} \right)$$
+Ketika terjadi transaksi penjualan sejumlah $Q_i$ porsi, sistem secara otomatis memperbarui stok bahan baku menurut persamaan:
 
-Sebaliknya, apabila suatu pesanan dibatalkan (*cancelled*) sebelum diracik, sistem menjalankan fungsi restorasi stok sebesar $\sum (Q_i \times R_{i,k})$ sehingga saldo bahan baku di dalam basis data selalu mencerminkan keadaan fisik yang sebenarnya [5].
+$$\text{Stok Akhir Bahan } k = \text{Stok Awal Bahan } k - \sum_{i=1}^{n} \left( Q_i \times R_{i,k} \times f_{i,k}(v) \right)$$
+
+Sebaliknya, apabila suatu pesanan dibatalkan (*cancelled*), sistem menjalankan fungsi restorasi stok (`restoreIngredientsForOrder`) secara utuh termasuk mengembalikan alokasi kemasan kresek sehingga saldo bahan baku di dalam basis data selalu mencerminkan keadaan fisik yang sebenarnya [5].
 
 ### 2.3.3 *Progressive Web App* (PWA) dan Arsitektur *Offline-First*
 *Progressive Web App* (PWA) adalah teknologi aplikasi web modern yang memanfaatkan *Service Worker* (`sw.js`) dan berkas manifes (`manifest.json`) agar aplikasi web dapat diinstal pada layar utama perangkat tablet atau ponsel Android maupun komputer Windows layaknya aplikasi *native* [2]. Agar operasional kasir tidak terhenti saat jaringan internet mengalami gangguan, sistem menerapkan arsitektur *Offline-First* dengan memadukan pustaka manajemen *state* **Zustand** dan penyimpanan lokal asinkron **IndexedDB** (`idb-keyval`) [4]. Setiap transaksi yang diinput kasir disimpan seketika ke dalam IndexedDB di perangkat lokal, kemudian disinkronkan secara otomatis ke **Firebase Realtime Database** ketika perangkat terhubung ke internet.
@@ -310,11 +315,11 @@ Kerangka pemecahan masalah dalam project PKL ini dirangkum pada **Tabel 2.2**, y
 
 | No | Kondisi Masalah di Lokasi Mitra (*As-Is*) | Solusi Sistem yang Dikembangkan (*To-Be*) | Modul Sistem | Indikator Keberhasilan Terukur |
 | :---: | :--- | :--- | :--- | :--- |
-| 1 | Kasir merangkap *barista* kewalahan melayani antrean pesanan sekaligus meracik minuman. | Katalog *Self-Order* pelanggan (`/menu`) yang terhubung langsung ke laci **Antrean & Racikan** di dalam satu layar Kasir POS (`/pos`). | `/menu`, `/pos`, `OrderStatusOverlay` | Pelanggan dapat memesan dari meja dan kasir/barista dapat memproses pembayaran serta status racikan dari 1 layar POS. |
-| 2 | Pemakaian bahan baku (teh, gula, susu, *cup*) tidak tercatat saat penjualan berlangsung. | Pemotongan bahan baku otomatis berbasis resep **Bill of Materials (BOM)** pada setiap transaksi POS, dilengkapi fitur *Stock Opname* dan *Restock PO*. | `/admin` (Tab Menu BOM & Bahan Baku), `lib/store.ts` | Setiap penjualan 1 *cup* minuman otomatis mengurangi saldo ml/gram/pcs bahan baku penyusunnya secara presisi. |
-| 3 | Pengeluaran uang laci untuk beli es batu/galon tidak tercatat rapi sehingga kas akhir *shift* selisih. | Fitur **Buka/Tutup Shift Kasir** dan pencatatan **Kas Keluar (Petty Cash)** terintegrasi laporan Laba Rugi. | `/pos`, `ShiftSummaryModal`, `/admin` | Sistem menghitung *Expected Cash* (Modal + Tunai $-$ Kas Keluar) dan mencocokkannya dengan uang fisik akhir *shift*. |
-| 4 | Pencatatan transaksi kasir terancam berhenti saat koneksi Wi-Fi kedai terputus. | Arsitektur **Offline-First PWA** berbasis IndexedDB dengan antrean sinkronisasi otomatis ke Firebase RTDB. | `lib/store.ts`, `FirebaseSync.tsx` | Kasir tetap dapat bertransaksi dan mencetak struk saat *offline*; data otomatis tersinkronisasi saat *online*. |
-| 5 | Pembeli tidak boleh melihat atau masuk ke halaman internal Kasir POS dan Admin. | Isolasi antarmuka pembeli serta **Autentikasi Rahasia 5x Tap Logo (`SecretStaffModal`)** beserta proteksi rute URL. | `SecretStaffModal.tsx`, `Navbar.tsx`, `/pos`, `/admin` | Pembeli hanya dapat mengakses menu & pelacakan struk; halaman POS dan Admin terkunci di balik 5x ketukan logo. |
+| 1 | Kasir merangkap *barista* kewalahan melayani antrean pesanan sekaligus meracik minuman. | Katalog *Self-Order* pelanggan (`/menu`) dengan *promo bundling* otomatis yang terhubung langsung ke laci **Antrean & Racikan** di dalam satu layar Kasir POS (`/pos`) serta penomoran harian `Customer 1, 2, 3...`. | `/menu`, `/pos`, `OrderStatusOverlay` | Pelanggan dapat memesan dari meja dan kasir/barista dapat memproses pembayaran, panduan kresek kemasan, serta status racikan dari 1 layar POS. |
+| 2 | Pemakaian bahan baku (teh, gula, susu, es, *cup*, sedotan, kresek) tidak tercatat saat penjualan berlangsung. | Pemotongan bahan baku dinamis otomatis berbasis resep **Bill of Materials (BOM)** dan alokasi plastik kresek per total *cup*, dilengkapi *Stock Opname* dan *Restock PO*. | `/admin` (Tab Menu BOM & Bahan Baku), `lib/store.ts` | Setiap penjualan minuman otomatis mengurangi saldo ml/gram/pcs bahan penyusun dan plastik kresek sesuai takaran resep & variannya secara presisi. |
+| 3 | Pengeluaran uang laci dan belanja bahan baku sering tercampur serta memicu selisih kas akhir *shift*. | Fitur **Buka/Tutup Multi-Shift Kasir**, pencatatan **Kas Keluar (Petty Cash)**, serta **Rekening Toko Real-Time (Putaran Modal Restok)** terintegrasi laporan Laba Rugi. | `/pos`, `ShiftSummaryModal`, `/admin` (`keuangan`) | Sistem menghitung *Expected Cash* per sesi *shift*, memvalidasi kecukupan saldo Rekening Toko saat restok/beban, dan menyusun Laba Rugi P&L akurat. |
+| 4 | Pencatatan transaksi kasir terancam berhenti saat koneksi internet kedai terputus atau terganggu sinkronisasi *cloud*. | Arsitektur **Offline-First PWA** berbasis IndexedDB dengan antrean sinkronisasi penuh ke Firebase RTDB, rekonsiliasi sesi otomatis, dan *Error Boundary*. | `lib/store.ts`, `FirebaseSync.tsx`, `app/error.tsx` | Kasir tetap dapat bertransaksi dan mencetak struk saat *offline*; pesanan dengan ID acak tersinkron penuh tanpa terpotong saat kembali *online*. |
+| 5 | Pembeli tidak boleh melihat atau masuk ke halaman internal Kasir POS dan Admin, serta kedai perlu kontrol jam buka. | Isolasi antarmuka pembeli, **Autentikasi Rahasia 5x Tap Logo (`SecretStaffModal`)**, proteksi rute URL, serta **Kunci Buka/Tutup Kedai Online** *real-time*. | `SecretStaffModal.tsx`, `Navbar.tsx`, `useStoreConfigStore` | Pembeli hanya dapat mengakses menu (saat buka) & pelacakan struk; halaman POS dan Admin terkunci di balik 5x ketukan logo. |
 
 ---
 
@@ -341,26 +346,28 @@ Kegiatan Praktik Kerja Lapangan ini dilaksanakan melalui **Jalur A (Reguler Berb
 Sesuai kondisi operasional Kedai Teh Raja, sistem membagi hak akses pengguna ke dalam tiga peran:
 1. **Aktor Pelanggan / Pembeli (Akses Publik Terbatas pada `/` dan `/menu`):**
    - Melihat katalog menu minuman dan camilan yang menampilkan status ketersediaan secara *real-time* (otomatis bertuliskan **"BAHAN HABIS"** apabila salah satu bahan baku resep BOM di gudang tidak mencukupi).
-   - Memilih kustomisasi varian minuman (Ukuran *Regular/Large/Jumbo*, Tingkat Gula, Level Es Batu, dan ekstra *Topping*) serta memasukkannya ke keranjang pesanan (*Tray*).
+   - Memilih kustomisasi varian minuman (Ukuran *Medium (`M`)* / *Large (`L`)*, Suhu `Es`/`Panas`, Kadar Gula `0%`–`100%`, dan Level Es Batu `Tanpa Es`–`Banyak`) serta memasukkannya ke keranjang pesanan (*Tray*).
    - Memilih metode pembayaran (QRIS atau Tunai di Kasir) dan memantau status peracikan minuman secara langsung melalui *Live Order Tracker* (`OrderStatusOverlay`).
    - Mencari pesanan berdasarkan ID Pesanan, Nama, atau Nomor WhatsApp serta melihat/mengunduh **Struk Digital** melalui fitur **Lacak Pesanan & Struk** (`CustomerOrderTrackerModal`).
    - *Isolasi Keamanan & Proteksi Jam Tutup/Libur:* Pelanggan sama sekali tidak melihat tombol menuju halaman Kasir POS, Admin, maupun berkas presentasi. Selain itu, ketika kedai sedang libur atau ditutup oleh Administrator, akses katalog menu (`/menu`) otomatis terkunci dan menampilkan informasi resmi jadwal libur/operasional kedai.
 2. **Aktor Kasir Merangkap Barista (Akses via 5x Tap Logo $\rightarrow$ `/pos`):**
    - Membuka akses login staf dengan mengetuk logo **TEH RAJA** sebanyak 5 kali berturut-turut, lalu masuk menggunakan akun kasir.
    - Membuka *shift* kasir dengan menginput modal uang kembalian awal (*starting cash*) dan menutup *shift* dengan menginput uang tunai fisik di laci (*actual cash*).
-   - Menginput pesanan langsung di konter kasir, memilih metode pembayaran (Tunai dengan hitung kembalian otomatis, QRIS, atau Transfer), serta mencetak struk termal Bluetooth 58mm/80mm atau mengirim struk via WhatsApp.
+   - Menginput pesanan langsung di konter kasir (dengan penomoran otomatis harian `Customer 1, 2, 3...` bila nama dikosongkan, kalkulasi promo paket otomatis *Imperial Jasmine Size M*, serta panduan ukuran plastik kresek), memilih metode pembayaran (Tunai dengan hitung kembalian otomatis, QRIS, atau Transfer), serta mencetak struk termal Bluetooth 80mm/dialog cetak 58mm atau mengirim struk via WhatsApp.
    - Mengelola pesanan yang masuk dari ponsel pelanggan sekaligus memperbarui status peracikan (*Terima & Racik* $\rightarrow$ *Tandai Selesai*) langsung dari laci **Antrean & Struk** di halaman `/pos` tanpa perlu berpindah ke layar lain.
    - Menunda pesanan sementara (*Hold Order*) dan mencatat pengambilan uang laci untuk belanja mendadak pada fitur **Kas Keluar (Petty Cash)**.
 3. **Aktor Administrator / Pemilik Kedai (Akses via 5x Tap Logo $\rightarrow$ `/admin`):**
    - Mengelola data master produk beserta pengaturan komposisi resep **Bill of Materials (BOM)** per gelas (jenis bahan baku dan kuantitas ml/gram/pcs yang dibutuhkan).
-   - Memantau stok bahan baku gudang secara *real-time*, menerima peringatan bahan baku menipis (*low-stock alert*), mencatat pembelian bahan baku baru (*Restock PO* & kirim pesan PO ke WhatsApp suplier), serta melakukan penyesuaian stok fisik (*Stock Opname*).
+   - Memantau stok bahan baku gudang & kemasan kresek secara *real-time* (dengan pencarian & urut abjad *A–Z*), menerima peringatan bahan baku menipis (*low-stock alert*), mencatat pembelian bahan baku baru (*Restock PO* & kirim pesan PO ke WhatsApp suplier), serta melakukan penyesuaian stok fisik (*Stock Opname*).
+   - Mengelola **Rekening Toko Real-Time & Putaran Modal Restok (`useStoreAccountStore`)** untuk memantau saldo modal kerja yang tersedia dari pemasukan penjualan/setoran modal serta memvalidasi kecukupan saldo sebelum mencatat belanja *Restock PO* atau pengeluaran operasional dari rekening toko.
    - Mengatur **Kunci Buka/Tutup Kedai & Pemesanan Online Pelanggan (*Lock/Unlock Online Store*)** secara *real-time* kapan saja (misalnya saat hari libur operasional, tanggal merah, atau di luar jam buka) beserta pesan pengumuman kustom sehingga pelanggan tidak dapat mengakses katalog menu saat kedai sedang tutup.
-   - Memantau ringkasan omzet penjualan di *Dashboard* (dilengkapi filter per hari dan multi-*shift*), mengelola daftar transaksi di tab *Pesanan POS*, mengelola akun staf di tab *Karyawan*, serta melihat laporan keuangan di tab *Laba Rugi & Kas* (Pendapatan Kotor, estimasi HPP Bahan Baku, Kas Keluar, dan Laba Bersih) beserta ekspor laporan ke PDF/Excel CSV.
+   - Memantau ringkasan omzet penjualan di *Dashboard* (dilengkapi filter per hari dan multi-*shift*), mengelola daftar transaksi di tab *Pesanan POS*, mengelola akun staf di tab *Karyawan*, serta melihat laporan keuangan di tab *Laba Rugi & Kas* (Pendapatan Kotor, estimasi HPP Bahan Baku, Kas Keluar, Mutasi Rekening Toko, dan Laba Bersih) beserta ekspor laporan ke **PDF, Excel (`.xlsx`), CSV, dan Backup/Restore JSON**.
 
 ### 3.2.2 Kebutuhan Non-Fungsional
-1. **Keandalan Luring (*Offline-First Reliability*):** Seluruh proses transaksi di `/pos` dan pemotongan stok BOM tetap berjalan lancar tanpa koneksi internet berkat penyimpanan lokal IndexedDB dan disinkronkan otomatis saat kembali daring.
+1. **Keandalan Luring (*Offline-First Reliability*):** Seluruh proses transaksi di `/pos` dan pemotongan stok BOM tetap berjalan lancar tanpa koneksi internet berkat penyimpanan lokal IndexedDB serta antrean tunda (*offline queue*), dan disinkronkan secara penuh tanpa pemotongan ID `nanoid` saat kembali daring.
 2. **Proteksi Akses dan Rute (*Route Guard*):** Akses manual melalui URL browser ke `/pos` atau `/admin` oleh pengguna yang belum login melalui mekanisme *5x Tap Logo* akan langsung dialihkan (*redirect*) ke `/menu`.
-3. **Kemudahan Penggunaan (*Single-Screen Ergonomics*):** Antarmuka `/pos` dirancang agar kasir yang merangkap *barista* dapat menyelesaikan transaksi dan memantau antrean racikan dengan minimal ketukan di layar tablet maupun ponsel.
+3. **Kemudahan Penggunaan (*Single-Screen Ergonomics*):** Antarmuka `/pos` dirancang *responsive* anti-*overflow* agar kasir yang merangkap *barista* dapat menyelesaikan transaksi, memilih varian, memberi label kemasan kresek, dan memantau antrean racikan dengan minimal ketukan di layar tablet maupun ponsel.
+4. **Ketahanan Runtime PWA & Pemulihan Galat (*Error Recovery*):** Dilengkapi penjagaan API browser (seperti pemeriksaan `typeof Notification !== "undefined"`) serta komponen *Error Boundary* (`app/error.tsx` dan `app/global-error.tsx`) yang membersihkan *cache* *Service Worker* usang otomatis jika terjadi *mismatch* versi saat pembaruan *deployment* di ponsel mode PWA.
 
 ## 3.3 Rencana Kerja dan Jadwal Pelaksanaan
 Pelaksanaan project berlangsung selama 38 hari kerja efektif mulai tanggal 9 November hingga 31 Desember 2026 sebagaimana dirinci pada **Tabel 3.2**.
@@ -398,32 +405,36 @@ Arsitektur aplikasi Web POS Teh Raja menggunakan pendekatan *Dual-Layer Persiste
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │           PUSAT LOGIKA BISNIS & STATE MANAGEMENT (lib/store.ts)              │
 │   useAuthStore · useCartStore · useProductStore · useSalesStore              │
-│   useInventoryStore (Mesin Pemotongan Bahan Baku BOM) · useExpenseStore      │
+│   useInventoryStore (BOM + Kresek) · useExpenseStore                         │
+│   useStoreAccountStore (Rekening Toko) · useStoreConfigStore (Buka/Tutup)    │
 └───────────────┬─────────────────────────────────────────┬────────────────────┘
                 │ (Tulis/Baca Lokal Instan)               │ (Sinkronisasi WebSocket)
                 ▼                                         ▼
 ┌───────────────────────────────────┐     ┌────────────────────────────────────┐
 │   PENYIMPANAN LOKAL (OFFLINE)     │     │   CLOUD REALTIME DATABASE          │
 │   • IndexedDB (idb-keyval)        │◄───►│   • Firebase RTDB (JSON Tree)      │
-│   • Offline Order & Log Queue     │     │   • Sinkronisasi Real-Time         │
+│   • Offline & Pending Sync Queue  │     │   • Sinkronisasi Penuh Real-Time   │
 └───────────────────────────────────┘     └────────────────────────────────────┘
 ```
 **Gambar 3.1** Diagram Arsitektur *Offline-First* pada Sistem POS dan Manajemen Bahan Baku BOM Kedai Teh Raja
 
 ### 3.4.2 Perancangan Skema Basis Data NoSQL dan Relasi BOM
-Basis data disusun menggunakan struktur pohon JSON pada Firebase Realtime Database yang disinkronkan secara dua arah oleh komponen [`components/FirebaseSync.tsx`](file:///d:/TEHRAJA/teh-raja/components/FirebaseSync.tsx). Spesifikasi koleksi data (*node*) utama disajikan pada **Tabel 3.3**.
+Basis data disusun menggunakan struktur pohon JSON pada Firebase Realtime Database yang disinkronkan secara dua arah oleh komponen [`components/FirebaseSync.tsx`](file:///d:/TEHRAJA/teh-raja/components/FirebaseSync.tsx) (termasuk rekonsiliasi otomatis *shift* tertutup via `tryReconcileClosedSessions`). Spesifikasi koleksi data (*node*) utama disajikan pada **Tabel 3.3**.
 
 **Tabel 3.3** Spesifikasi Struktur *Node* pada Firebase Realtime Database dan IndexedDB
 
 | Nama *Node* | Kunci Utama (*Primary Key*) | Atribut Penting di Dalam Entitas | Fungsi Data dalam Sistem POS & BOM |
 | :--- | :--- | :--- | :--- |
-| `products` | `id` (`string`) | `name`, `price`, `category`, `stock`, `minStockThreshold`, `isAvailable`, `recipe[]` (`ingredientId`, `quantity`) | Menyimpan daftar menu penjualan beserta daftar komposisi bahan baku (`recipe` BOM) untuk 1 porsi produk. |
-| `ingredients` | `id` (`string`) | `name`, `stock`, `unit` (`ml`, `gram`, `pcs`), `minStockThreshold` | Menyimpan saldo persediaan bahan baku gudang (teh, gula, susu, bubuk rasa, *cup*) yang terpotong otomatis saat transaksi. |
+| `products` | `id` (`string`) | `name`, `price`, `largePrice`, `category`, `stock`, `minStockThreshold`, `isAvailable`, `recipe[]` (`ingredientId`, `quantity`) | Menyimpan daftar menu penjualan beserta harga ukuran M/L dan daftar komposisi bahan baku (`recipe` BOM) untuk 1 porsi produk. |
+| `ingredients` | `id` (`string`) | `name`, `stock`, `unit` (`ml`, `gram`, `pcs`), `minStockThreshold` | Menyimpan saldo persediaan bahan baku gudang dan kemasan (teh, gula, susu, bubuk rasa, *cup*, sedotan, dan plastik kresek `ing-kresek-1/21/28`) yang terpotong otomatis saat transaksi. |
 | `opnameLogs` | `id` (`string`) | `date`, `ingredientId`, `ingredientName`, `systemStock`, `actualStock`, `difference`, `notes` | Menyimpan riwayat penyesuaian stok fisik bahan baku (*stock opname*) di gudang. |
 | `suppliers` | `id` (`string`) | `name`, `contactPerson`, `phone`, `address`, `itemsSupplied[]` | Menyimpan informasi pemasok bahan baku untuk pengiriman pesan *Purchase Order* (PO) via WhatsApp. |
-| `orders` | `id` (`nanoid`) | `date`, `sessionId`, `items[]`, `subtotal`, `discount`, `total`, `customerName`, `cashierName`, `status` (`pending`, `awaiting_payment`, `processing`, `completed`, `cancelled`), `paymentMethod`, `orderType`, `tableNumber` | Menyimpan seluruh rekaman transaksi penjualan beserta relasi sesi *shift* kasir (`sessionId`) dan status racikannya. |
-| `sessions` | `id` (`string`) | `cashierName`, `startTime`, `endTime`, `startingCash`, `totalSales`, `expectedCash`, `actualCash`, `cashExpenses`, `status` | Menyimpan rekaman pembukaan dan penutupan *shift* kasir (mendukung multi-sesi seperti **Shift 1** & **Shift 2** dalam satu hari) untuk rekonsiliasi uang fisik di laci. |
+| `orders` | `id` (`nanoid`) | `date`, `sessionId`, `items[]`, `subtotal`, `discount`, `promoName`, `total`, `customerName`, `cashierName`, `status` (`pending`, `awaiting_payment`, `processing`, `completed`, `cancelled`), `paymentMethod`, `orderType`, `tableNumber` | Menyimpan seluruh rekaman transaksi penjualan beserta relasi sesi *shift* kasir (`sessionId`), label `Customer N`, rincian promo paket, dan status racikannya. |
+| `sessions` | `id` (`string`) | `cashierName`, `startTime`, `endTime`, `startingCash`, `totalSales`, `cashSales`, `nonCashSales`, `expectedCash`, `actualCash`, `cashExpenses`, `status` | Menyimpan rekaman pembukaan dan penutupan *shift* kasir (mendukung multi-sesi seperti **Shift 1** & **Shift 2** dalam satu hari) untuk rekonsiliasi uang fisik di laci. |
 | `expenses` | `id` (`string`) | `date`, `sessionId`, `amount`, `description`, `category`, `paidVia`, `cashierName` | Menyimpan catatan pengeluaran kas kecil (*petty cash*) dari laci kasir per sesi *shift* maupun rekening toko. |
+| `storeAccountMovements` | `id` (`string`) | `date`, `type` (`deposit`, `restock`, `expense`, `adjustment`), `amount`, `description`, `referenceId`, `actor` | Menyimpan catatan arus mutasi modal kerja **Rekening Toko Real-Time** (setoran modal awal, potongan otomatis saat *Restock PO*, atau pengeluaran non-laci). |
+| `storeConfig` | Tunggal (*Singleton*) | `isStoreOpen`, `closedMessage`, `closedScheduleNote`, `updatedAt`, `updatedBy` | Menyimpan status buka/tutup toko online secara *real-time* agar halaman `/menu` otomatis terkunci saat hari libur atau di luar jam operasional. |
+| `deletedIngredients` / `deletedExpenses` / `deletedStoreAccountMovements` | `id` (`string`) | Boolean *tombstone* (`true`) | Mekanisme penanda hapus (*tombstone*) lintas perangkat agar bahan bawaan, pengeluaran, atau mutasi rekening yang sudah dihapus tidak muncul kembali saat sinkronisasi. |
 | `users` | `id` (`string`) | `username`, `password`, `role` (`admin` / `cashier`), `name` | Menyimpan kredensial staf kasir dan administrator untuk autentikasi *5x Tap Logo*. |
 
 ## 3.5 Implementasi Sistem Project
@@ -464,21 +475,25 @@ Setelah staf mengetuk logo 5 kali dan memasukkan *username* serta *password* yan
 
 ### 3.5.3 Implementasi Terminal Kasir POS Terpadu untuk Kasir Merangkap Barista (`/pos`)
 Halaman Kasir POS pada [`app/pos/page.tsx`](file:///d:/TEHRAJA/teh-raja/app/pos/page.tsx) dirancang khusus agar satu orang staf (kasir merangkap *barista*) dapat menangani seluruh operasional gerai dari satu layar:
-1. **Buka & Tutup Multi-Shift Kasir Harian (`Shift 1` & `Shift 2`):** Saat mulai bertugas, kasir menginput modal uang kembalian di laci (*Starting Cash*). Apabila dalam satu hari gerai beroperasi dalam dua sesi pergantian staf (misalnya *Shift 1 Pagi* dan *Shift 2 Sore*), sistem secara otomatis menomori setiap sesi dan mengisolasi transaksi serta pengeluaran kas laci per sesi (`sessionId`). Saat tutup *shift*, [`components/ShiftSummaryModal.tsx`](file:///d:/TEHRAJA/teh-raja/components/ShiftSummaryModal.tsx) menyajikan rekapitulasi penjualan tunai, non-tunai, kas keluar, serta selisih kas secara terpisah untuk masing-masing *shift*.
-2. **Transaksi Cepat & Kustomisasi Varian:** Kasir memilih produk, menentukan varian ukuran/gula/es/topping pada [`components/VariantModal.tsx`](file:///d:/TEHRAJA/teh-raja/components/VariantModal.tsx), memilih pembayaran (Tunai dengan nominal cepat, QRIS dinamis, atau Transfer), dan menyelesaikan pesanan dalam hitungan detik.
-3. **Laci Antrean & Racikan dalam Satu Layar:** Pesanan mandiri dari ponsel pelanggan muncul pada tombol lonceng **Antrean & Struk** di bilah atas `/pos`. Kasir cukup membuka laci tersebut di layar yang sama, menekan **"Terima & Racik"** saat mulai membuat minuman, lalu menekan **"Tandai Selesai"** ketika minuman siap diserahkan.
-4. **Pencatatan Kas Keluar (*Petty Cash*) & Cetak Struk Bluetooth:** Pengambilan uang laci untuk membeli es batu atau galon dicatat langsung melalui modal **Kas Keluar**, sedangkan pencetakan struk dilakukan melalui dialog cetak peramban, pengiriman ke WhatsApp pelanggan, atau printer termal Bluetooth via [`lib/bluetoothPrint.ts`](file:///d:/TEHRAJA/teh-raja/lib/bluetoothPrint.ts).
+1. **Buka & Tutup Multi-Shift Kasir Harian (`Shift 1` & `Shift 2`):** Saat mulai bertugas, kasir menginput modal uang kembalian di laci (*Starting Cash*). Apabila dalam satu hari gerai beroperasi dalam dua sesi pergantian staf (misalnya *Shift 1 Pagi* dan *Shift 2 Sore*), sistem secara otomatis menomori setiap sesi dan mengisolasi transaksi serta pengeluaran kas laci per sesi (`sessionId`). Saat tutup *shift*, [`components/ShiftSummaryModal.tsx`](file:///d:/TEHRAJA/teh-raja/components/ShiftSummaryModal.tsx) menyajikan rekapitulasi penjualan tunai, non-tunai, kas keluar, serta selisih kas secara terpisah untuk masing-masing *shift*, sekaligus didukung fungsi rekonsiliasi ulang otomatis (`tryReconcileClosedSessions`) jika ada transaksi *offline* yang menyusul masuk.
+2. **Transaksi Cepat, Penomoran Pelanggan Harian & Promo Paket:** Kasir memilih produk, menentukan varian ukuran/suhu/gula/es pada [`components/VariantModal.tsx`](file:///d:/TEHRAJA/teh-raja/components/VariantModal.tsx), dan memproses pembayaran (Tunai dengan nominal cepat, QRIS dinamis melalui [`app/api/payment/qris/route.ts`](file:///d:/TEHRAJA/teh-raja/app/api/payment/qris/route.ts), atau Transfer). Jika nama pembeli dikosongkan, sistem otomatis memberi label berurut per hari (`Customer 1`, `Customer 2`, dst. via `getNextCustomerLabel`), menghitung otomatis **Promo Paket *Imperial Jasmine* Size M** (`calculateBundlePromoDiscount`: 3 *cup* Rp10.000 / 6 *cup* Rp20.000), serta menampilkan rekomendasi ukuran kantong plastik kresek (`getKresekPackagingLabel`) tepat di keranjang.
+3. **Laci Antrean & Racikan dalam Satu Layar:** Pesanan mandiri dari ponsel pelanggan muncul pada tombol lonceng **Antrean & Struk** di bilah atas `/pos`. Kasir cukup membuka laci tersebut di layar yang sama, menekan **"Terima & Racik"** saat mulai membuat minuman, lalu menekan **"Tandai Selesai"** (atau **"Selesai Diracik & Tutup"** pada [`components/ReceiptModal.tsx`](file:///d:/TEHRAJA/teh-raja/components/ReceiptModal.tsx)) ketika minuman siap diserahkan.
+4. **Pencatatan Kas Keluar (*Petty Cash*) & Cetak Struk Thermal:** Pengambilan uang laci untuk membeli es batu atau galon dicatat langsung melalui modal **Kas Keluar**, sedangkan pencetakan struk dilakukan melalui dialog cetak peramban dengan layout CSS 58mm ([`app/globals.css`](file:///d:/TEHRAJA/teh-raja/app/globals.css)), pengiriman ke WhatsApp pelanggan, atau printer termal Bluetooth ESC/POS melalui [`lib/printer.ts`](file:///d:/TEHRAJA/teh-raja/lib/printer.ts) (`ThermalPrinter`, `buildReceiptPayload`, dan `printViaBluetooth`) yang juga mencantumkan jenis kemasan kresek pesanan.
 
-### 3.5.4 Implementasi Manajemen Bahan Baku Berbasis *Bill of Materials* (`/admin` & `lib/store.ts`)
-Pengelolaan bahan baku dan resep minuman berpusat pada [`app/admin/page.tsx`](file:///d:/TEHRAJA/teh-raja/app/admin/page.tsx) dan `useInventoryStore` di [`lib/store.ts`](file:///d:/TEHRAJA/teh-raja/lib/store.ts). Pada tab **Menu & Resep BOM**, admin dapat mengatur komposisi bahan baku untuk setiap produk (misalnya menambahkan 15 ml Konsentrat Teh, 25 ml Gula Cair, 1 takar Es Batu, dan 1 pcs Cup Plastik).
+### 3.5.4 Implementasi Manajemen Bahan Baku Berbasis *Bill of Materials* & Rekening Toko (`/admin` & `lib/store.ts`)
+Pengelolaan bahan baku, resep minuman, dan pembukuan modal berpusat pada [`app/admin/page.tsx`](file:///d:/TEHRAJA/teh-raja/app/admin/page.tsx) dan `lib/store.ts`. Pada tab **Menu & Resep BOM**, admin dapat mengatur komposisi bahan baku untuk setiap produk (misalnya menambahkan 15 ml Konsentrat Teh, 25 ml Gula Cair, 1 takar Es Batu, dan 1 pcs Cup Plastik), lengkap dengan pengurutan daftar abjad *A–Z*.
 
-Setiap kali terjadi checkout pesanan di `/pos` maupun `/menu`, fungsi `decrementIngredientsForOrder` secara otomatis memotong stok bahan baku di gudang:
+Setiap kali terjadi checkout pesanan di `/pos` maupun `/menu`, fungsi `decrementIngredientsForOrder` pada `useInventoryStore` di [`lib/store.ts`](file:///d:/TEHRAJA/teh-raja/lib/store.ts) secara otomatis menghitung penyesuaian varian resep BOM melalui `calculateRecipeIngredientQty`, memotong alokasi kantong plastik kresek otomatis berdasarkan total *cup* (`countOrderCupQuantity` & `calculateKresekForCupCount`), menandai ID yang berubah pada `pendingIngredientIds`, serta menyinkronkannya ke Firebase:
 
 ```typescript
-// Potongan kode asli: lib/store.ts (Pemotongan Bahan Baku Dinamis Sesuai Resep BOM & Varian)
+// Potongan kode asli: lib/store.ts (Pemotongan Bahan Baku BOM Dinamis & Plastik Kresek)
 decrementIngredientsForOrder: (items, products) => {
+    const changedIds = new Set<string>();
+    const updates: Record<string, unknown> = {};
     set((state) => {
         const newIngredients = [...state.ingredients];
+        
+        // 1. Potong bahan baku sesuai resep BOM produk (teh, bubuk, susu, sirup, gula, es, cup kemasan)
         items.forEach(cartItem => {
             const product = products.find(p => p.id === cartItem.id);
             const recipe = product?.recipe || cartItem.recipe;
@@ -487,31 +502,69 @@ decrementIngredientsForOrder: (items, products) => {
             recipe.forEach(recipeItem => {
                 const ingIndex = newIngredients.findIndex(i => i.id === recipeItem.ingredientId);
                 if (ingIndex !== -1) {
-                    const qtyToDeduct = calculateRecipeIngredientQty(recipeItem, cartItem);
-                    newIngredients[ingIndex] = {
-                        ...newIngredients[ingIndex],
-                        stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - qtyToDeduct) * 100) / 100)
-                    };
+                    const qtyToDeduct = calculateRecipeIngredientQty(recipeItem, cartItem, state.ingredients);
+                    if (qtyToDeduct > 0) {
+                        newIngredients[ingIndex] = {
+                            ...newIngredients[ingIndex],
+                            stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - qtyToDeduct) * 100) / 100)
+                        };
+                        changedIds.add(newIngredients[ingIndex].id);
+                    }
                 }
             });
         });
 
-        const updates: Record<string, any> = {};
-        newIngredients.forEach(ing => { updates[`ingredients/${ing.id}`] = ing; });
-        if (Object.keys(updates).length > 0) {
-            firebaseUpdate(ref(rtdb), updates).catch(err => console.warn(err));
+        // 2. Potong bahan baku plastik kresek otomatis berdasarkan akumulasi cup dalam pesanan:
+        //    - 1 cup       -> Plastik Kresek 1 Cup (-1 pcs)
+        //    - 2 s/d 4 cup -> Plastik Kresek 21 (-1 pcs)
+        //    - 5 s/d 7 cup -> Plastik Kresek 28 (-1 pcs)
+        const totalCups = countOrderCupQuantity(items, products, state.ingredients);
+        if (totalCups > 0) {
+            const kresekDeductions = calculateKresekForCupCount(totalCups);
+            kresekDeductions.forEach(({ ingredientId, quantity }) => {
+                const ingIndex = newIngredients.findIndex(i => i.id === ingredientId);
+                if (ingIndex !== -1) {
+                    newIngredients[ingIndex] = {
+                        ...newIngredients[ingIndex],
+                        stock: Math.max(0, Math.round((newIngredients[ingIndex].stock - quantity) * 100) / 100)
+                    };
+                    changedIds.add(newIngredients[ingIndex].id);
+                }
+            });
         }
-        return { ingredients: newIngredients };
+        
+        newIngredients.forEach(ing => {
+            if (changedIds.has(ing.id)) {
+                updates[`ingredients/${ing.id}`] = ing;
+            }
+        });
+        
+        return {
+            ingredients: newIngredients,
+            pendingIngredientIds: Array.from(new Set([...(state.pendingIngredientIds || []), ...Array.from(changedIds)])),
+        };
     });
+
+    const idList = Array.from(changedIds);
+    if (Object.keys(updates).length > 0) {
+        try {
+            firebaseUpdate(ref(rtdb), JSON.parse(JSON.stringify(updates)))
+                .then(() => get().clearPendingIngredientIds(idList))
+                .catch(err => console.warn("Firebase BOM Update Error:", err));
+        } catch (err) {
+            console.warn("Firebase BOM Sync Update Error:", err);
+        }
+    }
 }
 ```
 
-Selain itu, halaman Admin dilengkapi komponen **Filter Per Hari & Per Sesi Shift (`DayShiftFilterBar`)** pada tab *Dashboard*, *Pesanan POS*, serta *Laba Rugi & Kas*, sehingga pemilik kedai dapat memfilter dan mengekspor laporan (PDF, CSV, Excel) berdasarkan tanggal tertentu maupun sesi *shift* spesifik (`Shift 1` atau `Shift 2`).
+Selain itu, halaman Admin dilengkapi komponen **Filter Per Hari & Per Sesi Shift (`DayShiftFilterBar`)** pada tab *Dashboard*, *Pesanan POS*, serta *Laba Rugi & Kas*, sehingga pemilik kedai dapat memfilter dan mengekspor laporan (**PDF** melalui [`components/ReportGenerator.tsx`](file:///d:/TEHRAJA/teh-raja/components/ReportGenerator.tsx), **Excel `.xlsx`** via pustaka `xlsx`, **CSV**, maupun **Backup JSON**) berdasarkan tanggal tertentu maupun sesi *shift* spesifik (`Shift 1` atau `Shift 2`).
 
-Selanjutnya, pada tab **Bahan Baku & Suplier** di halaman Admin, pemilik dapat:
-1. Memantau bar persentase sisa stok setiap bahan baku beserta lencana peringatan **Stok Menipis** apabila saldo berada di bawah batas aman (`minStockThreshold`).
-2. Mencatat penambahan stok bahan baku baru melalui modal **Restock / Belanja Bahan (PO)** yang otomatis menambah saldo gudang, mencatat biaya belanja ke jurnal pengeluaran, dan menyediakan tombol kirim pesan pesanan (*Purchase Order*) langsung ke WhatsApp suplier.
+Selanjutnya, pada tab **Bahan Baku & Suplier** dan **Laba Rugi & Kas** di halaman Admin, pemilik dapat:
+1. Memantau bar persentase sisa stok setiap bahan baku (dengan pencarian & urutan *A–Z*) beserta lencana peringatan **Stok Menipis** apabila saldo berada di bawah batas aman (`minStockThreshold`).
+2. Mencatat penambahan stok bahan baku baru melalui modal **Restock / Belanja Bahan (PO)** yang otomatis menambah saldo gudang, memvalidasi saldo **Rekening Toko Real-Time (`useStoreAccountStore`)** apabila dibayar menggunakan kas rekening toko agar modal kerja putaran restok tetap seimbang, mencatat mutasi keuangan, dan menyediakan tombol kirim pesan pesanan (*Purchase Order*) langsung ke WhatsApp suplier.
 3. Melakukan pencocokan stok fisik gudang melalui modal **Stock Opname** yang menghitung selisih antara stok sistem dan stok fisik aktual beserta riwayat audit opname.
+4. Menampilkan identitas kredit akademik resmi mahasiswa PKL pada bagian kaki halaman melalui [`components/Footer.tsx`](file:///d:/TEHRAJA/teh-raja/components/Footer.tsx).
 
 ## 3.6 Pengujian Sistem
 Pengujian dilakukan menggunakan metode *Black-Box Testing* terhadap seluruh skenario utama sistem. Ringkasan hasil pengujian disajikan pada **Tabel 3.4**.
@@ -524,19 +577,25 @@ Pengujian dilakukan menggunakan metode *Black-Box Testing* terhadap seluruh sken
 | **TC-02** | **Autentikasi Rahasia 5x Tap Logo** | Mengetuk logo **TEH RAJA** 5 kali berturut-turut dalam $< 2,5$ detik, lalu login dengan akun staf (`admin` / `123`). | Muncul modal login rahasia; setelah login sukses, terbuka Portal Akses menuju Kasir POS, Admin BOM, dan Slide Presentasi. | Modal terbuka tepat pada ketukan ke-5 dan memberikan akses penuh setelah verifikasi password. | **Valid (Lulus)** |
 | **TC-03** | **Pemesanan Pelanggan & Lacak Struk Digital** | Memilih minuman + varian di `/menu`, mengirim pesanan, memilih bayar QRIS, lalu membuka tombol **Lacak Pesanan & Struk**. | Pesanan masuk ke sistem, progres racikan tampil *real-time*, dan pembeli dapat membuka serta mencetak struk digital. | Alur pemesanan mandiri, pelacakan status, dan tampilan struk berjalan akurat. | **Valid (Lulus)** |
 | **TC-04** | **Transaksi Kasir Merangkap Barista (`/pos`)** | Membuka *shift* kasir, memproses transaksi tunai/QRIS, serta memperbarui status pesanan masuk (*Terima & Racik* $\rightarrow$ *Selesai*) dari laci antrean `/pos`. | Transaksi terekam, kembalian dihitung tepat, struk tercetak, dan status pesanan pelanggan berubah menjadi *Siap Diambil* dari 1 layar POS. | Seluruh fungsi transaksi dan manajemen antrean racikan berjalan lancar dalam 1 layar `/pos`. | **Valid (Lulus)** |
-| **TC-05** | **Pemotongan & Pengembalian Stok Resep BOM** | Membeli 2 *cup Royale Milk Tea* di POS, memeriksa saldo bahan baku di `/admin`, lalu membatalkan pesanan tersebut. | Saldo Konsentrat Teh berkurang $30\text{ ml}$, Gula Cair berkurang $50\text{ ml}$, Es & Cup berkurang $2\text{ unit}$; saldo kembali utuh saat dibatalkan. | Pemotongan dan pengembalian stok bahan baku bekerja 100% presisi sesuai rasio resep BOM. | **Valid (Lulus)** |
+| **TC-05** | **Pemotongan & Pengembalian Stok Resep BOM + Varian** | Membeli 2 *cup Royale Milk Tea* ukuran Medium gula 100% di POS (komposisi standar $10\text{ ml}$ teh, $100\text{ ml}$ susu, $30\text{ ml}$ gula, $1$ es, $1$ *cup*), memeriksa saldo bahan di `/admin`, lalu membatalkan pesanan tersebut. | Saldo Konsentrat Teh berkurang $20\text{ ml}$, Susu $200\text{ ml}$, Gula Cair $60\text{ ml}$, Es & Cup berkurang $2\text{ pcs}$, serta Plastik Kresek 21 berkurang $1\text{ pcs}$; seluruh saldo kembali utuh saat pesanan dibatalkan. | Pemotongan dan pengembalian stok bahan baku beserta kresek bekerja 100% presisi sesuai rasio resep BOM. | **Valid (Lulus)** |
 | **TC-06** | **Deteksi Otomatis "Bahan Habis" pada Menu** | Mengubah stok salah satu bahan baku penyusun di bawah takaran 1 porsi, lalu membuka halaman `/menu` dan `/pos`. | Produk yang menggunakan bahan baku tersebut otomatis berstatus **BAHAN HABIS** dan tidak dapat dipesan. | Kartu produk langsung menampilkan lencana *HABIS* dan tombol tambah dinonaktifkan. | **Valid (Lulus)** |
-| **TC-07** | **Multi-Shift Harian (`Shift 1` & `Shift 2`), Opname & Filter Laporan** | Membuka & menutup 2 sesi *shift* dalam 1 hari, mencatat *Kas Keluar* dan *Stock Opname*, lalu memfilter laporan Admin per hari & per sesi *shift*. | Setiap transaksi & kas laci terisolasi akurat antara *Shift 1* dan *Shift 2*; filter per hari & per *shift* menampilkan serta mengekspor data yang sesuai. | Rekonsiliasi uang kas antar *shift* terpisah presisi dan filter laporan berjalan akurat. | **Valid (Lulus)** |
-| **TC-08** | **Ketahanan Mode Luring (*Offline-First*)** | Mematikan koneksi Wi-Fi pada perangkat kasir, memproses 3 transaksi di `/pos`, lalu menyalakan kembali Wi-Fi. | Transaksi tetap tersimpan di IndexedDB saat *offline* dan otomatis disinkronkan ke Firebase saat kembali *online*. | Tidak ada transaksi yang hilang; antrean luring berhasil tersinkronisasi penuh. | **Valid (Lulus)** |
+| **TC-07** | **Multi-Shift Harian (`Shift 1` & `Shift 2`), Opname & Filter Laporan** | Membuka & menutup 2 sesi *shift* dalam 1 hari, mencatat *Kas Keluar* dan *Stock Opname*, lalu memfilter laporan Admin per hari & per sesi *shift*. | Setiap transaksi & kas laci terisolasi akurat antara *Shift 1* dan *Shift 2*; filter per hari & per *shift* menampilkan serta mengekspor data yang sesuai (PDF/`.xlsx`). | Rekonsiliasi uang kas antar *shift* terpisah presisi dan filter laporan berjalan akurat. | **Valid (Lulus)** |
+| **TC-08** | **Ketahanan Mode Luring (*Offline-First*) & Sinkronisasi RTDB** | Mematikan koneksi Wi-Fi pada perangkat kasir, memproses 3 transaksi di `/pos`, lalu menyalakan kembali Wi-Fi pada basis data dengan $>100$ histori pesanan. | Transaksi tetap tersimpan di IndexedDB saat *offline*, antrean *pending* terkirim tanpa menimpa status lokal, dan seluruh ID acak `nanoid` masuk ke RTDB serta rekap *shift*. | Tidak ada transaksi yang hilang; seluruh pesanan ID `nanoid` dan saldo *shift* tersinkronisasi penuh. | **Valid (Lulus)** |
+| **TC-09** | **Kemasan Kresek Otomatis, Pengecualian Snack & Bahan Kustom** | Memproses pesanan campuran 2 *cup* minuman (1 ukuran *Large* + sedotan) dan 1 *snack* non-*cup*, lalu memeriksa pengurangan kemasan. | Minuman *Large* memotong bahan cair $1{,}5\times$ namun *Cup* dan *Sedotan* tetap $1\times$; item *snack* tidak terhitung *cup*; sistem memotong tepat $1\text{ pcs}$ Plastik Kresek 21 sesuai $2$ *cup* minuman. | Hitungan *cup*, sedotan, bahan cair $1{,}5\times$, dan alokasi Plastik Kresek berjalan akurat tanpa salah hitung *snack*. | **Valid (Lulus)** |
+| **TC-10** | **Rekening Toko, Kunci Toko Online & Keandalan PWA Ponsel** | Menguji input belanja *Restock PO* melebihi saldo Rekening Toko, mengunci status buka toko online, serta membuka aplikasi via PWA di ponsel Android. | Restok ditolak otomatis saat saldo kurang; `/menu` terkunci menampilkan pengumuman libur; tampilan seluler bebas *horizontal overflow* dan tanpa galat *client-side exception*. | Proteksi saldo modal, kunci toko *real-time*, dan eksekusi mode PWA di peramban ponsel berjalan stabil. | **Valid (Lulus)** |
 
 ## 3.7 Kendala Pelaksanaan dan Solusi Teknis
-Selama pelaksanaan project di lokasi mitra, ditemukan tiga kendala teknis yang berhasil diatasi:
+Selama pelaksanaan hingga tahap finalisasi sistem di lokasi mitra Kedai Teh Raja, ditemukan lima kendala teknis yang berhasil dianalisis dan diselesaikan tuntas:
 1. **Penyesuaian Antarmuka untuk Peran Ganda Kasir Merangkap Barista:**
    Pada rancangan awal, pemantauan antrean racikan diletakkan pada halaman terpisah. Namun karena di Kedai Teh Raja staf kasir merangkap sebagai *barista*, berpindah-pindah halaman justru memperlambat kerja. Solusi yang diterapkan adalah mengintegrasikan laci **Antrean & Struk** secara langsung di dalam halaman Kasir POS (`/pos`) sehingga kasir dapat menerima pembayaran sekaligus memperbarui status racikan dari satu layar yang sama.
 2. **Sinkronisasi Status Ketersediaan Menu terhadap Stok Bahan Baku BOM:**
    Sebelumnya status ketersediaan menu hanya memeriksa atribut stok produk jadi (`product.stock`), sehingga ketika bahan baku seperti susu atau *cup* habis di gudang, menu masih tampak tersedia di layar pembeli. Solusi yang diterapkan adalah menambahkan pengecekan silang (`isBomDepleted`) terhadap seluruh item `recipe` pada `useInventoryStore` baik di halaman `/menu` maupun `/pos`.
 3. **Pencegahan Akses Pelanggan ke Halaman Operasional Staf:**
    Agar pembeli yang membuka web menu tidak dapat masuk ke halaman Kasir POS dan Admin, seluruh tombol navigasi staf dihapus dari tampilan publik dan dipindahkan ke dalam modal rahasia **Tap Logo 5x (`SecretStaffModal`)**, disertai penjaga rute pasca-hidrasi IndexedDB (`useAuthStore.persist.hasHydrated()`).
+4. **Pemotongan Pesanan Baru pada Kueri `limitToLast(100)` Firebase RTDB dengan ID Acak (`nanoid`) & Rekonsiliasi *Shift*:**
+   Setelah jumlah transaksi historis mitra melampaui 100 pesanan, kueri `limitToLast(100)` tanpa indeks kronologis menyebabkan Firebase mengurutkan *node* `orders` berdasarkan alfabetis acak ID `nanoid`. Dampaknya, sebagian pesanan baru dengan karakter awal ID tertentu kadang terpotong oleh *listener* saat pembaruan, sehingga status pesanan tidak masuk ke rekap uang laci dan memicu kerancuan seusai pencetakan struk. Solusi teknis yang diterapkan pada [`components/FirebaseSync.tsx`](file:///d:/TEHRAJA/teh-raja/components/FirebaseSync.tsx), [`lib/store.ts`](file:///d:/TEHRAJA/teh-raja/lib/store.ts), dan [`app/globals.css`](file:///d:/TEHRAJA/teh-raja/app/globals.css) adalah: (a) membaca *node* `orders` secara penuh tanpa batasan `limitToLast(100)` yang keliru, (b) menerapkan *anti-regress merge* dan antrean sinkronisasi tunda (`pendingOrders` / `pendingOrderIds`), (c) menjalankan rekonsiliasi otomatis laporan *shift* tertutup (`tryReconcileClosedSessions`), serta (d) merapikan aturan cetak `@media print` agar modal konfirmasi selesai pesan tidak terganggu saat pencetakan struk kasir.
+5. **Galat Runtime API Browser pada Mode PWA Ponsel & Konsistensi Bahan Kustom BOM:**
+   Pada pengujian menggunakan ponsel mode *Standalone PWA*, pemanggilan langsung objek `Notification` memicu layar putih *client-side exception* pada peramban yang tidak mengekspos konstruktor notifikasi tersebut; di sisi lain, penambahan bahan baku kustom di lapangan (seperti *Sedotan*, *gula pasir*, dan produk *snack*) perlu perlakuan pengalian varian agar *Sedotan* pada ukuran *Large* tidak dikali $1{,}5\times$ dan *snack* tidak terhitung sebagai kemasan *cup*. Solusi yang diterapkan meliputi penambahan penjagaan tipe runtime `typeof Notification !== "undefined"` beserta *Error Boundary* pembersih cache otomatis ([`app/error.tsx`](file:///d:/TEHRAJA/teh-raja/app/error.tsx) dan [`app/global-error.tsx`](file:///d:/TEHRAJA/teh-raja/app/global-error.tsx)), serta peningkatan `calculateRecipeIngredientQty` dan `isCupDrink` berbasis pencocokan pola nama bahan kemasan dan validasi komponen `cup` pada resep.
 
 ---
 
@@ -556,18 +615,18 @@ Evaluasi ketercapaian project dilakukan dengan membandingkan spesifikasi target 
 
 | No | Komponen Target pada Formulir F-05 | Spesifikasi Target Awal | Realisasi Akhir yang Dicapai | Persentase Capaian |
 | :---: | :--- | :--- | :--- | :---: |
-| 1 | **Modul Katalog Menu & Pelacakan Struk Pelanggan** | Katalog menu digital untuk pembeli dengan fitur keranjang pesanan. | Katalog interaktif (`/menu`) dengan validasi stok bahan baku BOM *real-time*, kustomisasi varian lengkap, pembayaran QRIS/Tunai, serta fitur **Lacak Pesanan & Struk Digital**. | **100% (Melampaui Target)** |
-| 2 | **Modul Terminal Kasir POS (Kasir Merangkap Barista)** | Aplikasi kasir untuk mencatat transaksi penjualan dan mencetak struk. | Terminal *Smart POS* (`/pos`) dengan laci **Antrean & Racikan** dalam 1 layar, Buka/Tutup *Shift*, *Hold Order*, Kas Keluar (*Petty Cash*), QRIS dinamis, dan cetak struk *Web Bluetooth* / WhatsApp. | **100% (Melampaui Target)** |
-| 3 | **Modul Manajemen Inventori Resep BOM** | Pencatatan stok bahan baku dan pemotongan otomatis saat produk terjual. | Editor resep *Bill of Materials* (BOM) per produk di `/admin`, pemotongan & pengembalian bahan baku otomatis (`decrementIngredientsForOrder`), *Low-Stock Alert*, *Stock Opname*, dan *Restock PO* Suplier. | **100% (Melampaui Target)** |
-| 4 | **Modul Laporan Penjualan, Multi-Shift & Laba Rugi** | Rekapitulasi omzet penjualan harian bagi pemilik kedai. | *Dashboard* grafik penjualan, **Filter Per Hari & Per Sesi Shift** (mendukung 2+ *shift* dalam sehari), laporan **Laba Rugi & Kas (P&L)**, serta ekspor ke PDF dan CSV/Excel. | **100% (Melampaui Target)** |
-| 5 | **Keandalan Offline-First & Keamanan Akses** | Aplikasi tetap berjalan saat koneksi lambat dan halaman staf terlindungi login. | Arsitektur *Offline-First PWA* (IndexedDB + Firebase RTDB) serta penyembunyian akses POS & Admin di balik mekanisme rahasia **Tap Logo 5x (`SecretStaffModal`)**. | **100% (Melampaui Target)** |
+| 1 | **Modul Katalog Menu & Pelacakan Struk Pelanggan** | Katalog menu digital untuk pembeli dengan fitur keranjang pesanan. | Katalog interaktif (`/menu`) dengan validasi stok bahan baku BOM *real-time*, **Kunci Buka/Tutup Toko Online**, promo bundling otomatis, kustomisasi varian lengkap, pembayaran QRIS/Tunai, serta fitur **Lacak Pesanan & Struk Digital**. | **100% (Melampaui Target)** |
+| 2 | **Modul Terminal Kasir POS (Kasir Merangkap Barista)** | Aplikasi kasir untuk mencatat transaksi penjualan dan mencetak struk. | Terminal *Smart POS* (`/pos`) dengan laci **Antrean & Racikan** dalam 1 layar, penomoran `Customer N`, **Panduan Kemasan Kresek**, Buka/Tutup Multi-*Shift*, *Hold Order*, Kas Keluar, QRIS dinamis, dan cetak struk *Web Bluetooth* / WhatsApp. | **100% (Melampaui Target)** |
+| 3 | **Modul Manajemen Inventori Resep BOM** | Pencatatan stok bahan baku dan pemotongan otomatis saat produk terjual. | Editor resep *Bill of Materials* (BOM) dinamis per produk di `/admin`, pemotongan & pengembalian bahan baku + **plastik kresek otomatis** (`decrementIngredientsForOrder`), pencarian & urut *A–Z*, *Low-Stock Alert*, *Stock Opname*, dan *Restock PO* Suplier. | **100% (Melampaui Target)** |
+| 4 | **Modul Laporan Penjualan, Multi-Shift & Laba Rugi** | Rekapitulasi omzet penjualan harian bagi pemilik kedai. | *Dashboard* grafik penjualan, **Filter Per Hari & Per Sesi Shift**, **Rekening Toko Real-Time (Putaran Modal Restok)**, laporan **Laba Rugi & Kas (P&L)**, serta ekspor ke **PDF, Excel (`.xlsx`), CSV, dan Backup JSON**. | **100% (Melampaui Target)** |
+| 5 | **Keandalan Offline-First, PWA & Keamanan Akses** | Aplikasi tetap berjalan saat koneksi lambat dan halaman staf terlindungi login. | Arsitektur *Offline-First PWA* (IndexedDB + sinkronisasi penuh Firebase RTDB + rekonsiliasi *shift* otomatis + *Error Boundaries* `app/error.tsx`), serta isolasi akses POS & Admin di balik mekanisme rahasia **Tap Logo 5x (`SecretStaffModal`)**. | **100% (Melampaui Target)** |
 
 ## 4.3 Manfaat bagi Mitra dan Keterbatasan Sistem
 
 ### 4.3.1 Manfaat Nyata bagi Mitra Kedai Teh Raja
-1. **Mendukung Alur Kerja Kasir Merangkap Barista Secara Efisien:** Staf gerai cukup menggunakan satu perangkat di meja kasir (`/pos`) untuk menginput pesanan konter, menerima pesanan dari ponsel pembeli, memantau daftar minuman yang harus diracik, dan mencetak struk.
-2. **Akurasi Pengendalian Bahan Baku Tanpa Hitung Manual:** Pemilik kedai dapat mengetahui sisa stok daun teh (ml), gula cair (ml), susu, bubuk rasa (gram), dan kemasan *cup* (pcs) setiap saat karena setiap penjualan otomatis memotong bahan baku sesuai takaran resep BOM.
-3. **Transparansi Kas Laci Setiap Pergantian Shift:** Seluruh uang masuk (tunai maupun QRIS) dan uang keluar (*petty cash*) tercatat rapi sehingga meminimalkan selisih uang kas harian.
+1. **Mendukung Alur Kerja Kasir Merangkap Barista Secara Efisien:** Staf gerai cukup menggunakan satu perangkat di meja kasir (`/pos`) untuk menginput pesanan konter (lengkap dengan penomoran `Customer 1, 2, 3...` dan promo paket otomatis), menerima pesanan dari ponsel pembeli, melihat panduan plastik kresek yang harus dipakai, memantau daftar minuman yang harus diracik, dan mencetak struk.
+2. **Akurasi Pengendalian Bahan Baku Tanpa Hitung Manual:** Pemilik kedai dapat mengetahui sisa stok bahan minuman (ml/gram), kemasan *cup*, sedotan, dan plastik kresek (pcs) setiap saat karena setiap penjualan otomatis memotong bahan baku sesuai takaran resep BOM dinamis (termasuk skala ukuran *Large*, kadar gula, dan level es).
+3. **Transparansi Kas Laci & Putaran Modal Restok:** Seluruh uang masuk (tunai maupun QRIS), uang keluar (*petty cash*) antar *shift*, hingga kecukupan saldo **Rekening Toko Real-Time** untuk belanja ulang (*Restock PO*) tercatat rapi sehingga meminimalkan selisih uang kas harian.
 
 ### 4.3.2 Keterbatasan Sistem pada Lingkup PKL Saat Ini
 1. **Verifikasi Pembayaran QRIS Masih Konfirmasi Kasir:** Kode QRIS sudah dihasilkan secara dinamis sesuai nominal transaksi, namun perubahan status lunas masih dilakukan melalui tombol verifikasi oleh kasir setelah memeriksa bukti bayar pelanggan.
@@ -589,14 +648,14 @@ Pelaksanaan project PKL ini memberikan penguatan kompetensi yang selaras dengan 
 
 ## 5.1 Kesimpulan
 Berdasarkan hasil analisis kebutuhan, perancangan, implementasi, dan pengujian sistem yang telah dilaksanakan pada mitra Kedai Teh Raja, dapat disimpulkan tiga hal utama sebagai berikut:
-1. Sistem **Point of Sale (POS) Teh Raja** berbasis *Progressive Web App* (PWA) dengan arsitektur *Offline-First* berhasil dirancang dan dibangun menggunakan Next.js 16, TypeScript, IndexedDB, dan Firebase Realtime Database. Penyatuan fitur transaksi kasir, laci antrean racikan, pencatatan kas kecil, pembukuan *shift*, dan pencetakan struk Bluetooth di dalam satu layar `/pos` terbukti sangat efektif mendukung alur kerja staf **kasir yang merangkap sebagai barista**, serta tetap berjalan lancar meskipun koneksi internet terputus.
-2. Mekanisme manajemen inventori bahan baku berbasis **Bill of Materials (BOM)** berhasil diimplementasikan secara akurat pada modul Admin (`/admin`) dan `useInventoryStore`. Setiap transaksi penjualan secara otomatis memotong saldo bahan baku penyusun (dalam satuan `ml`, `gram`, dan `pcs`) sesuai komposisi resep per gelas, menandai menu **"BAHAN HABIS"** secara otomatis apabila salah satu bahan baku tidak mencukupi, serta memudahkan pemilik dalam melakukan *Restock PO* dan *Stock Opname*.
+1. Sistem **Point of Sale (POS) Teh Raja** berbasis *Progressive Web App* (PWA) dengan arsitektur *Offline-First* berhasil dirancang dan dibangun menggunakan Next.js 16, TypeScript, IndexedDB, dan sinkronisasi penuh Firebase Realtime Database (dilengkapi pemulihan galat PWA `app/error.tsx` serta rekonsiliasi sesi otomatis `tryReconcileClosedSessions`). Penyatuan fitur transaksi kasir, laci antrean racikan, penomoran otomatis pelanggan, pencatatan kas kecil, pembukuan multi-*shift*, kontrol kunci buka/tutup toko *online*, dan pencetakan struk Bluetooth ESC/POS (`lib/printer.ts`) di dalam satu layar `/pos` terbukti sangat efektif mendukung alur kerja staf **kasir yang merangkap sebagai barista**, serta tetap berjalan lancar meskipun koneksi internet terputus.
+2. Mekanisme manajemen inventori bahan baku berbasis **Bill of Materials (BOM)** dinamis berhasil diimplementasikan secara akurat pada modul Admin (`/admin`) dan `useInventoryStore` (`lib/store.ts`). Setiap transaksi penjualan secara otomatis memotong saldo bahan baku penyusun (dalam satuan `ml`, `gram`, dan `pcs`) beserta alokasi kantong plastik kresek otomatis sesuai jumlah *cup* minuman, menyesuaikan pengalian ukuran *Large* tanpa menggandakan komponen kemasan, menandai menu **"BAHAN HABIS"** secara otomatis apabila salah satu bahan baku tidak mencukupi, serta memudahkan pemilik mengelola **Rekening Toko Real-Time (Putaran Modal Restok)**, *Restock PO*, dan *Stock Opname*.
 3. Isolasi hak akses antarmuka berhasil diterapkan melalui pemisahan tampilan publik dan autentikasi rahasia **Tap Logo 5x (`SecretStaffModal`)** beserta proteksi pengalihan rute otomatis (*route guard*). Dengan mekanisme ini, pembeli hanya dapat mengakses katalog menu serta fitur **Lacak Pesanan & Struk Digital**, sedangkan halaman internal Kasir POS dan Admin terlindungi dari akses publik.
 
 ## 5.2 Saran dan Rencana Pengembangan Lanjutan (Penelitian Skripsi)
 Sebagai tindak lanjut dari hasil project PKL ini, penulis merumuskan saran operasional bagi mitra serta peta jalan pengembangan lanjutan untuk penelitian Tugas Akhir (Skripsi):
 1. **Saran Operasional bagi Mitra (Kedai Teh Raja):**
-   - Mengoperasikan aplikasi POS pada tablet atau ponsel Android dengan peramban Google Chrome serta melakukan *Stock Opname* fisik setiap akhir pekan agar saldo bahan baku digital pada sistem BOM senantiasa akurat.
+   - Mengoperasikan aplikasi POS pada tablet atau ponsel Android dengan peramban Google Chrome, melakukan *Stock Opname* fisik setiap akhir pekan agar saldo bahan baku digital pada sistem BOM senantiasa akurat, serta memastikan pengelompokan kategori produk baru sesuai jenisnya (produk camilan dimasukkan ke kategori `Snack` tanpa resep `Cup` dan memakai komponen plastik kresek bawaan sistem agar hitungan kemasan otomatis selalu presisi).
 2. **Rencana Pengembangan Lanjutan untuk Penelitian Skripsi (*Unlockable Advanced Modules*):**
    Sistem POS dan manajemen bahan baku BOM yang telah dibangun pada PKL ini menghasilkan basis data riwayat transaksi harian dan pemakaian bahan baku yang terstruktur. Fondasi ini telah dirancang secara modular (tersedia fitur *Unlock Pengembangan Lanjutan* pada panel Admin) untuk dikembangkan lebih lanjut pada penelitian Skripsi mendatang melalui penambahan:
    - **Implementasi Algoritma *Time-Series Demand Forecasting* (SMA, WMA, *Exponential Smoothing*, dan Evaluasi MAPE):** Mengolah data historis penjualan harian dari POS untuk memprediksi jumlah permintaan produk dan menghitung kebutuhan belanja bahan baku (*Safety Stock* & *Reorder Point*) secara ilmiah.
