@@ -30,7 +30,9 @@ import {
     useSupplierStore,
     useAuthStore,
     useStoreConfigStore,
+    usePklLogbookStore,
     DEFAULT_STORE_CONFIG,
+    DEFAULT_PKL_LOGBOOK,
     DEFAULT_INGREDIENTS,
     DEFAULT_JASMINE_BUNDLE_PROMO,
     LEGACY_DEMO_EXPENSE_IDS,
@@ -43,6 +45,7 @@ import {
     ExtendedProduct,
     StoreSession,
     StoreOperationConfig,
+    PklAttendanceEntry,
     Promo,
     Customer,
     Supplier,
@@ -788,6 +791,25 @@ export default function FirebaseSync() {
             console.debug("[FirebaseSync] storeConfig sync paused:", err.message);
         });
 
+        // Sinkronisasi Real-Time Logbook Kehadiran PKL (Formulir F-06)
+        const pklLogbookRef = ref(rtdb, 'pklLogbook');
+        const unsubPklLogbook = onValue(pklLogbookRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const list = (Array.isArray(data) ? data : Object.values(data)) as PklAttendanceEntry[];
+                const validList = list.filter(e => e && e.id && e.date);
+                if (validList.length > 0) {
+                    usePklLogbookStore.getState().syncLogbookFromServer(validList);
+                }
+            } else {
+                const localEntries = usePklLogbookStore.getState().entries;
+                const seedEntries = localEntries && localEntries.length > 0 ? localEntries : DEFAULT_PKL_LOGBOOK;
+                firebaseSet(pklLogbookRef, JSON.parse(JSON.stringify(seedEntries))).catch(() => {});
+            }
+        }, (err) => {
+            console.debug("[FirebaseSync] pklLogbook sync paused:", err.message);
+        });
+
         const hasAnyOfflinePending = () => {
             const s = useSalesStore.getState();
             const p = useProductStore.getState();
@@ -969,6 +991,7 @@ export default function FirebaseSync() {
             unsubDeletedMovements();
             unsubMovements();
             unsubStoreConfig();
+            unsubPklLogbook();
             unsubscribeStatus();
             clearInterval(retryInterval);
             if (typeof window !== 'undefined') {

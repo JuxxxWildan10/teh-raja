@@ -65,6 +65,7 @@ import Image from "next/image";
 import { nanoid } from "nanoid";
 import ReportGenerator from "@/components/ReportGenerator";
 import ForecastDashboard from "@/components/forecast/ForecastDashboard";
+import PklLogbookPanel from "@/components/PklLogbookPanel";
 
 ChartJS.register(
     CategoryScale,
@@ -211,7 +212,7 @@ export default function AdminPage() {
     });
 
     // UI State
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics' | 'keuangan'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'logs' | 'orders' | 'karyawan' | 'pkl-logbook' | 'ai-forecast' | 'promos' | 'loyalty' | 'inventory' | 'cabang' | 'analytics' | 'keuangan'>('dashboard');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -1372,6 +1373,7 @@ export default function AdminPage() {
         { id: 'orders' as const, label: 'Pesanan POS', badge: pendingCount },
         ...(user.role === 'admin' ? [{ id: 'keuangan' as const, label: 'Laba Rugi & Kas 💰', icon: <Wallet size={18} /> }] : []),
         ...(user.role === 'admin' ? [{ id: 'karyawan' as const, label: 'Karyawan' }] : []),
+        { id: 'pkl-logbook' as const, label: 'Logbook PKL 📋', icon: <ClipboardCheck size={18} /> },
         ...(user.role === 'admin' && isAdvancedUnlocked ? [
             { id: 'analytics' as const, label: 'Analitik BI', icon: <BarChart2 size={18} /> },
             { id: 'promos' as const, label: 'Promo Engine', icon: <Ticket size={18} /> },
@@ -4089,6 +4091,11 @@ export default function AdminPage() {
                             })}
                         </div>
                     </div>
+                )}
+
+                {/* ============ TAB: LOGBOOK KEHADIRAN PKL (FORMULIR F-06) ============ */}
+                {activeTab === 'pkl-logbook' && (
+                    <PklLogbookPanel />
                 )}
             </div>
 
